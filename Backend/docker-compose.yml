@@ -1,0 +1,30 @@
+version: "3.8"
+services:
+  eureka:
+    build: ./Eureka
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+    networks:
+      - moonside-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  gateway:
+    build: ./Gateway
+    container_name: gateway-service
+    ports:
+      - "8080:8080"
+    depends_on:
+      eureka:
+        condition: service_healthy
+    networks:
+      - moonside-network
+
+networks:
+  moonside-network:
+    driver: bridge
