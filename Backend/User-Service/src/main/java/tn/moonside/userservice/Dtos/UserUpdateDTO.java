@@ -1,4 +1,4 @@
-package tn.moonside.user.Dtos;
+package tn.moonside.userservice.Dtos;
 
 import lombok.Data;
 import lombok.Builder;

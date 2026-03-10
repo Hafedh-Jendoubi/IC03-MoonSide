@@ -1,6 +1,6 @@
-package tn.moonside.user.Dtos;
+package tn.moonside.userservice.Dtos;
 
-import tn.moonside.user.Entities.TypeScope;
+import tn.moonside.userservice.Enums.TypeScope;
 
 import lombok.Data;
 import lombok.Builder;
