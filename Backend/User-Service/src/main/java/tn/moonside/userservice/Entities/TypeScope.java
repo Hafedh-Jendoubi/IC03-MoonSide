@@ -1,4 +1,4 @@
-package tn.moonside.userservice.Enums;
+package tn.moonside.userservice.entities;
 
 public enum TypeScope {
     ALL,

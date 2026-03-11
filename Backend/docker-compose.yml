@@ -38,12 +38,15 @@ services:
 
   # User Microservice
   user-service:
-    build: ./User
+    build: ./User-Service
     container_name: user-service
     ports:
       - "8081:8081"
     environment:
       - MONGODB_HOST=mongodb
+      - MONGO_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+      - MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+      - MONGO_DATABASE=${MONGO_DATABASE}
       - EUREKA_URI=http://eureka:8761/eureka/
     depends_on:
       mongodb:
@@ -52,12 +55,6 @@ services:
         condition: service_healthy
     networks:
       - moonside-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
 
   # API Gateway
   gateway:
@@ -71,8 +68,6 @@ services:
       - EUREKA_INSTANCE_PREFER_IP_ADDRESS=true
     depends_on:
       eureka:
-        condition: service_healthy
-      user-service:
         condition: service_healthy
     networks:
       - moonside-network

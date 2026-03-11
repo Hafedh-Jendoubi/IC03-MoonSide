@@ -1,27 +1,29 @@
-package tn.moonside.userservice.Entities;
+package tn.moonside.userservice.entities;
 
-import lombok.Data;
-import lombok.Builder;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
-import tn.moonside.userservice.Enums.TypeScope;
+import org.springframework.data.mongodb.core.index.Indexed;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
+@Document(collection = "permissions")
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "permissions")
+@Builder
 public class Permission {
+
     @Id
     private String id;
-    private UUID permissionId; // Business identifier
+
+    @Indexed
     private String action;
+
     private TypeScope scopeType;
+
     private String description;
-    private LocalDateTime createdAt;
+
+    @Builder.Default
+    private LocalDateTime createdAt = LocalDateTime.now();
 }

@@ -1,4 +1,4 @@
-package tn.moonside.userservice.Exceptions;
+package tn.moonside.userservice.exceptions;
 
 public class DuplicateResourceException extends RuntimeException {
     public DuplicateResourceException(String message) {

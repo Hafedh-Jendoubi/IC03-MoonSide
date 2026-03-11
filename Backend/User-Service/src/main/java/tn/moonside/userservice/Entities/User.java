@@ -1,42 +1,54 @@
-package tn.moonside.userservice.Entities;
+package tn.moonside.userservice.entities;
 
-import lombok.Data;
-import lombok.Builder;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.DBRef;
+import org.springframework.data.mongodb.core.index.Indexed;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
 
+@Document(collection = "users")
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "users")
+@Builder
 public class User {
-    @Id
-    private String id; // MongoDB will generate this, but we'll also keep userId for business logic
-    private UUID userId; // This will be our business identifier
-    private String email;
-    private String password;
-    private String firstname;
-    private String lastname;
-    private LocalDateTime birthDate;
-    private String phoneNumber;
-    private String jobTitle;
-    private String bio;
-    private String avatar;
-    private boolean isActive;
-    private UUID updatedBy;
-    private LocalDateTime lastLogin;
-    private LocalDateTime createdAt;
 
-    // References to roles (many-to-many relationship)
-    @DBRef
-    private Set<Role> roles = new HashSet<>();
+    @Id
+    private String id;
+
+    private String roleId;
+
+    @Indexed(unique = true)
+    private String email;
+
+    private String password;
+
+    private String firstName;
+
+    private String lastName;
+
+    private LocalDate birthDate;
+
+    private String phoneNumber;
+
+    private String jobTitle;
+
+    private String bio;
+
+    private String avatar;
+
+    @Builder.Default
+    private boolean isActive = true;
+
+    private String updatedBy;
+
+    private LocalDateTime lastLogin;
+
+    @Builder.Default
+    private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Builder.Default
+    private LocalDateTime updatedAt = LocalDateTime.now();
 }

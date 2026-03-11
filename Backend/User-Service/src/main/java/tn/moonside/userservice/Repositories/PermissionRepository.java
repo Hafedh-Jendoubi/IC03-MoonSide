@@ -1,16 +1,16 @@
-package tn.moonside.userservice.Repositories;
+package tn.moonside.userservice.repositories;
 
-import tn.moonside.userservice.Entities.Permission;
-import tn.moonside.userservice.Enums.TypeScope;
+import tn.moonside.userservice.entities.Permission;
+import tn.moonside.userservice.entities.TypeScope;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 @Repository
 public interface PermissionRepository extends MongoRepository<Permission, String> {
-    Optional<Permission> findByPermissionId(UUID permissionId);
     Optional<Permission> findByActionAndScopeType(String action, TypeScope scopeType);
+    List<Permission> findByScopeType(TypeScope scopeType);
     boolean existsByActionAndScopeType(String action, TypeScope scopeType);
 }

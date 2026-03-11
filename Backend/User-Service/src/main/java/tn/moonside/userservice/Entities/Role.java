@@ -1,32 +1,27 @@
-package tn.moonside.userservice.Entities;
+package tn.moonside.userservice.entities;
 
-import lombok.Data;
-import lombok.Builder;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
-import org.springframework.data.mongodb.core.mapping.DBRef;
+import org.springframework.data.mongodb.core.index.Indexed;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
-import java.util.Set;
-import java.util.UUID;
 
+@Document(collection = "roles")
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Document(collection = "roles")
+@Builder
 public class Role {
+
     @Id
     private String id;
-    private UUID roleId; // Business identifier
-    private String name;
-    private String description;
-    private LocalDateTime createdAt;
 
-    // References to permissions
-    @DBRef
-    private Set<Permission> permissions = new HashSet<>();
+    @Indexed(unique = true)
+    private String name;
+
+    private String description;
+
+    @Builder.Default
+    private LocalDateTime createdAt = LocalDateTime.now();
 }
