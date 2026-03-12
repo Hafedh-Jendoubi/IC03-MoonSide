@@ -16,7 +16,6 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class DataSeeder implements CommandLineRunner {
-
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
 

@@ -17,21 +17,14 @@ import java.time.LocalDateTime;
         @CompoundIndex(name = "user_role_scope_idx", def = "{'userId': 1, 'roleId': 1, 'scopeType': 1, 'scopeId': 1}", unique = true)
 })
 public class UserRole {
-
     @Id
     private String id;
-
     private String userId;
-
     private String roleId;
-
     private TypeScope scopeType;
-
     private String scopeId;
-
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
-
     @Builder.Default
     private LocalDateTime assignedAt = LocalDateTime.now();
 }

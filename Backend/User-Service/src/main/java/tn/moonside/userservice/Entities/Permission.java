@@ -13,17 +13,12 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class Permission {
-
     @Id
     private String id;
-
     @Indexed
     private String action;
-
     private TypeScope scopeType;
-
     private String description;
-
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 }

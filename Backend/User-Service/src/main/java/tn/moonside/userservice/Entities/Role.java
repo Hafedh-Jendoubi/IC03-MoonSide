@@ -13,15 +13,11 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class Role {
-
     @Id
     private String id;
-
     @Indexed(unique = true)
     private String name;
-
     private String description;
-
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 }

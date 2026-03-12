@@ -14,41 +14,25 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class User {
-
     @Id
     private String id;
-
     private String roleId;
-
     @Indexed(unique = true)
     private String email;
-
     private String password;
-
     private String firstName;
-
     private String lastName;
-
     private LocalDate birthDate;
-
     private String phoneNumber;
-
     private String jobTitle;
-
     private String bio;
-
     private String avatar;
-
     @Builder.Default
     private boolean isActive = true;
-
     private String updatedBy;
-
     private LocalDateTime lastLogin;
-
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
-
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
 }
