@@ -1,51 +1,49 @@
 name: SonarQube — Code Quality
 
 on:
-push:
-branches:
-- main
-pull_request:
-branches:
-- main
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-sonar:
-name: SonarQube Analysis
-runs-on: ubuntu-latest
+  sonar:
+    name: SonarQube Analysis
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - Backend/Eureka
+          - Backend/Gateway
+          - Backend/User-Service
 
-```
-strategy:
-  matrix:
-    service:
-      - Backend/Eureka
-      - Backend/Gateway
-      - Backend/User-Service
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-steps:
-  - name: Checkout repository
-    uses: actions/checkout@v4
-    with:
-      fetch-depth: 0
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: 17
+          cache: maven
 
-  - name: Set up Java
-    uses: actions/setup-java@v4
-    with:
-      distribution: corretto
-      java-version: 17
-      cache: maven
+      - name: Build with coverage
+        working-directory: ${{ matrix.service }}
+        run: mvn clean verify -Pcoverage
 
-  - name: Build with coverage
-    working-directory: ${{ matrix.service }}
-    run: mvn clean verify -Pcoverage
-
-  - name: SonarCloud Scan
-    working-directory: ${{ matrix.service }}
-    env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-    run: |
-      mvn sonar:sonar \
-      -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}-${{ matrix.service }} \
-      -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
-      -Dsonar.host.url=https://sonarcloud.io \
-      -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+      - name: SonarCloud Scan
+        working-directory: ${{ matrix.service }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          mvn sonar:sonar \
+          -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}-${{ matrix.service }} \
+          -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
+          -Dsonar.host.url=https://sonarcloud.io \
+          -Dsonar.token=${{ secrets.SONAR_TOKEN }}
