@@ -1,0 +1,48 @@
+name: CI — Build & Test Microservices
+
+on:
+push:
+branches:
+- main
+- "feature/**"
+- "chore/**"
+- "fix/**"
+pull_request:
+branches:
+- main
+
+jobs:
+build:
+name: Build & Test Services
+runs-on: ubuntu-latest
+
+```
+strategy:
+  matrix:
+    service:
+      - Backend/Eureka
+      - Backend/Gateway
+      - Backend/User-Service
+
+steps:
+  - name: Checkout code
+    uses: actions/checkout@v4
+
+  - name: Set up JDK 17
+    uses: actions/setup-java@v4
+    with:
+      java-version: "17"
+      distribution: corretto
+      cache: maven
+
+  - name: Build service
+    working-directory: ${{ matrix.service }}
+    run: mvn clean verify
+
+  - name: Upload test results
+    if: always()
+    uses: actions/upload-artifact@v4
+    with:
+      name: test-results-${{ matrix.service }}
+      path: ${{ matrix.service }}/target/surefire-reports/
+
