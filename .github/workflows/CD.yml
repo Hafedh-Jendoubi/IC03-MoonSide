@@ -66,7 +66,9 @@ jobs:
 
       - name: Run tests
         working-directory: Backend/Eureka
-        run: ./mvnw verify -B
+        run: |
+          chmod +x mvnw
+          ./mvnw verify -B
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -110,7 +112,9 @@ jobs:
 
       - name: Run tests
         working-directory: Backend/Gateway
-        run: ./mvnw verify -B
+        run: |
+          chmod +x mvnw
+          ./mvnw verify -B
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -154,7 +158,9 @@ jobs:
 
       - name: Run tests
         working-directory: Backend/User-Service
-        run: ./mvnw verify -B
+        run: |
+          chmod +x mvnw
+          ./mvnw verify -B
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
