@@ -82,6 +82,8 @@ jobs:
 
   # ─────────────────────────────────────────────
   # 3. Build & Test – User-Service (Java 17)
+  #    Spins up a real MongoDB container so the
+  #    @SpringBootTest context can connect.
   # ─────────────────────────────────────────────
   build-user-service:
     name: Build & Test User-Service
@@ -89,6 +91,18 @@ jobs:
     defaults:
       run:
         working-directory: Backend/User-Service
+
+    # GitHub Actions service container – available at localhost:27017
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     steps:
       - name: Checkout code
@@ -102,6 +116,13 @@ jobs:
           cache: maven
 
       - name: Build & run tests
+        env:
+          # Points Spring Boot at the service container.
+          # Overrides whatever is in application.properties at test time.
+          SPRING_DATA_MONGODB_HOST: localhost
+          SPRING_DATA_MONGODB_PORT: 27017
+          # Activates application-test.properties (already in your repo)
+          SPRING_PROFILES_ACTIVE: test
         run: |
           chmod +x mvnw
           ./mvnw verify -B

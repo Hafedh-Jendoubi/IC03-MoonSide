@@ -145,6 +145,17 @@ jobs:
     needs: prepare
     environment: ${{ needs.prepare.outputs.env_name }}
 
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -158,6 +169,10 @@ jobs:
 
       - name: Run tests
         working-directory: Backend/User-Service
+        env:
+          SPRING_DATA_MONGODB_HOST: localhost
+          SPRING_DATA_MONGODB_PORT: 27017
+          SPRING_PROFILES_ACTIVE: test
         run: |
           chmod +x mvnw
           ./mvnw verify -B
