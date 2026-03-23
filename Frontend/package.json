@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "type-check": "tsc --noEmit",
+    "test": "echo \"No tests configured yet\" && exit 0"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
