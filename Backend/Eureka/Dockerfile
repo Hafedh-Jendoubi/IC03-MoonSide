@@ -1,9 +1,14 @@
-FROM eclipse-temurin:21-jdk-jammy
-
+# Stage 1: Build
+FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+COPY src ./src
+RUN mvn package -DskipTests -B
 
-COPY target/*.jar app.jar
-
+# Stage 2: Run
+FROM eclipse-temurin:21-jdk-jammy
+WORKDIR /app
+COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8761
-
 ENTRYPOINT ["java","-jar","app.jar"]
