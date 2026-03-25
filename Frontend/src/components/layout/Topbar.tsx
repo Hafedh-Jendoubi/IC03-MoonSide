@@ -4,7 +4,6 @@ import React from 'react';
 import { Bell, Search, Moon, Sun, Menu } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Avatar } from '@/components/ui/Avatar';
-import clsx from 'clsx';
 
 export function Topbar() {
   const { theme, setTheme } = useTheme();

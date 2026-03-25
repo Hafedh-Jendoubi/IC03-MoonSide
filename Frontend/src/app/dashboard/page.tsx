@@ -59,7 +59,7 @@ export default function DashboardPage() {
 
               {/* Post Content */}
               <p className="text-foreground mb-5 leading-relaxed">
-                Excited to announce that I've just completed the Professional Development course in UX Design! It's been an incredible journey learning from industry experts and building real-world projects. Here's what I learned...
+                Excited to announce that I&apos;ve just completed the Professional Development course in UX Design! It&apos;s been an incredible journey learning from industry experts and building real-world projects. Here&apos;s what I learned...
               </p>
 
               {/* Post Actions */}

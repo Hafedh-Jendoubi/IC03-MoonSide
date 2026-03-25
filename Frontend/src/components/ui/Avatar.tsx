@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import clsx from 'clsx';
 
 interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -13,6 +14,13 @@ const sizeClasses = {
   md: 'w-10 h-10 text-sm',
   lg: 'w-12 h-12 text-base',
   xl: 'w-16 h-16 text-lg',
+};
+
+const sizeNumbers = {
+  sm: 32,
+  md: 40,
+  lg: 48,
+  xl: 64,
 };
 
 const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
@@ -32,9 +40,11 @@ const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
         {...props}
       >
         {!showInitials && src ? (
-          <img
+          <Image
             src={src}
             alt={alt || 'Avatar'}
+            width={sizeNumbers[size]}
+            height={sizeNumbers[size]}
             className="w-full h-full object-cover"
             onError={() => setImageError(true)}
           />

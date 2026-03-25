@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
-import { Users, Sparkles, Globe, TrendingUp, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Users, Sparkles, Globe, TrendingUp, ArrowRight } from 'lucide-react';
 
 export default function Home() {
   return (
@@ -65,7 +65,7 @@ export default function Home() {
               Everything You Need to Succeed
             </h2>
             <p className="text-lg text-foreground-secondary max-w-2xl mx-auto">
-              Powerful tools and features designed to help professionals thrive in today's connected world.
+              Powerful tools and features designed to help professionals thrive in today&apos;s connected world.
             </p>
           </div>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -153,7 +153,7 @@ export default function Home() {
                       <div key={i} className="w-4 h-4 bg-primary rounded-full" />
                     ))}
                   </div>
-                  <p className="text-foreground-secondary mb-6 italic text-sm leading-relaxed">"{testimonial.quote}"</p>
+                  <p className="text-foreground-secondary mb-6 italic text-sm leading-relaxed">&ldquo;{testimonial.quote}&rdquo;</p>
                   <div className="border-t border-border/40 pt-4">
                     <p className="font-semibold text-foreground text-sm">{testimonial.author}</p>
                     <p className="text-foreground-secondary text-xs">{testimonial.role}</p>

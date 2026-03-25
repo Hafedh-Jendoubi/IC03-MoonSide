@@ -107,7 +107,7 @@ export default function MessagesPage() {
                             : 'bg-primary text-white'
                         }`}
                       >
-                        <p className="text-sm">That sounds great! Let's schedule a call for next week.</p>
+                        <p className="text-sm">That sounds great! Let&apos;s schedule a call for next week.</p>
                       </div>
                     </div>
                   ))}

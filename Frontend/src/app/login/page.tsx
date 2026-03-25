@@ -9,7 +9,6 @@ import { z } from 'zod';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
-import authService from '@/services/authService';
 import { useAuthStore } from '@/services/authStore';
 import { ArrowRight } from 'lucide-react';
 
@@ -108,7 +107,7 @@ export default function LoginPage() {
             </form>
 
             <div className="mt-6 text-center text-sm text-foreground-secondary">
-              Don't have an account?{' '}
+              Don&apos;t have an account?{' '}
               <Link href="/register" className="text-primary hover:text-primary-dark font-medium transition-colors">
                 Create one
               </Link>
