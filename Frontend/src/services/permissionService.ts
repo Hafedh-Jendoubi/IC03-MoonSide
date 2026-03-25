@@ -7,7 +7,7 @@ import {
   TypeScope,
 } from "@/types/api";
 
-const BASE = "/api/v1/permissions";
+const BASE = "/permissions";
 
 const permissionService = {
   /** POST /api/v1/permissions */
