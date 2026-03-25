@@ -32,11 +32,11 @@ public class SecurityConfig {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll()
+                        .requestMatchers("auth/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/roles/**").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/roles/**").authenticated()
-                        .requestMatchers("/api/v1/permissions/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/roles/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/roles/**").authenticated()
+                        .requestMatchers("/permissions/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .sessionManagement(session -> session
