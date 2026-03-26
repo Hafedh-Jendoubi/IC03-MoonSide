@@ -7,7 +7,7 @@ import {
   RegisterRequest,
 } from "@/types/api";
 
-const BASE = "/api/v1/auth";
+const BASE = "/auth";
 
 const authService = {
   /**

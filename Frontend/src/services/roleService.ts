@@ -2,7 +2,7 @@ import apiClient from "@/lib/axios";
 import { handleApiError } from "@/lib/apiError";
 import { ApiResponse, RoleRequest, RoleResponse } from "@/types/api";
 
-const BASE = "/api/v1/roles";
+const BASE = "/roles";
 
 const roleService = {
   /** POST /api/v1/roles */

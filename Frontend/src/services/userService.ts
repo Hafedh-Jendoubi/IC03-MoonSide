@@ -7,7 +7,7 @@ import {
   UserResponse,
 } from "@/types/api";
 
-const BASE = "/api/v1/users";
+const BASE = "/users";
 
 const userService = {
   /**
