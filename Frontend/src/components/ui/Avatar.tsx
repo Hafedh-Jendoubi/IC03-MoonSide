@@ -1,61 +1,53 @@
-import React from 'react';
-import Image from 'next/image';
-import clsx from 'clsx';
+'use client'
 
-interface AvatarProps extends React.HTMLAttributes<HTMLDivElement> {
-  src?: string;
-  alt?: string;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
-  initials?: string;
+import * as React from 'react'
+import * as AvatarPrimitive from '@radix-ui/react-avatar'
+
+import { cn } from '@/lib/utils'
+
+function Avatar({
+  className,
+  ...props
+}: React.ComponentProps<typeof AvatarPrimitive.Root>) {
+  return (
+    <AvatarPrimitive.Root
+      data-slot="avatar"
+      className={cn(
+        'relative flex size-8 shrink-0 overflow-hidden rounded-full',
+        className,
+      )}
+      {...props}
+    />
+  )
 }
 
-const sizeClasses = {
-  sm: 'w-8 h-8 text-xs',
-  md: 'w-10 h-10 text-sm',
-  lg: 'w-12 h-12 text-base',
-  xl: 'w-16 h-16 text-lg',
-};
+function AvatarImage({
+  className,
+  ...props
+}: React.ComponentProps<typeof AvatarPrimitive.Image>) {
+  return (
+    <AvatarPrimitive.Image
+      data-slot="avatar-image"
+      className={cn('aspect-square size-full', className)}
+      {...props}
+    />
+  )
+}
 
-const sizeNumbers = {
-  sm: 32,
-  md: 40,
-  lg: 48,
-  xl: 64,
-};
+function AvatarFallback({
+  className,
+  ...props
+}: React.ComponentProps<typeof AvatarPrimitive.Fallback>) {
+  return (
+    <AvatarPrimitive.Fallback
+      data-slot="avatar-fallback"
+      className={cn(
+        'bg-muted flex size-full items-center justify-center rounded-full',
+        className,
+      )}
+      {...props}
+    />
+  )
+}
 
-const Avatar = React.forwardRef<HTMLDivElement, AvatarProps>(
-  ({ src, alt, size = 'md', initials, className, ...props }, ref) => {
-    const [imageError, setImageError] = React.useState(false);
-
-    const showInitials = !src || imageError;
-
-    return (
-      <div
-        className={clsx(
-          'inline-flex items-center justify-center rounded-full bg-primary text-white font-semibold overflow-hidden',
-          sizeClasses[size],
-          className
-        )}
-        ref={ref}
-        {...props}
-      >
-        {!showInitials && src ? (
-          <Image
-            src={src}
-            alt={alt || 'Avatar'}
-            width={sizeNumbers[size]}
-            height={sizeNumbers[size]}
-            className="w-full h-full object-cover"
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          <span>{initials}</span>
-        )}
-      </div>
-    );
-  }
-);
-
-Avatar.displayName = 'Avatar';
-
-export { Avatar };
+export { Avatar, AvatarImage, AvatarFallback }

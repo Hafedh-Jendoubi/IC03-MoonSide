@@ -1,52 +1,27 @@
-import { AxiosError } from "axios";
-import { ApiResponse } from "@/types/api";
+import axios from "axios";
 
-// ─── Typed API error ───────────────────────────────────────────────────────────
-
-export class ApiError extends Error {
-  constructor(
-    public readonly status: number,
-    message: string,
-    public readonly raw?: unknown
-  ) {
-    super(message);
-    this.name = "ApiError";
-  }
-}
-
-// ─── Extract a human-readable message from any thrown value ───────────────────
-
-export function parseApiError(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
-
-  if (error instanceof AxiosError) {
-    // Backend returns ApiResponse-shaped error bodies
-    const body = error.response?.data as ApiResponse<null> | undefined;
-    if (body?.message) return body.message;
-
-    // Fallback to HTTP status text
-    if (error.response?.statusText) return error.response.statusText;
-
-    // Network / timeout
-    if (error.code === "ECONNABORTED") return "Request timed out. Please try again.";
-    if (!error.response) return "Network error. Check your connection.";
-  }
-
-  if (error instanceof Error) return error.message;
-
-  return "An unexpected error occurred.";
-}
-
-// ─── Wrap an Axios error and re-throw as ApiError ─────────────────────────────
-
+/**
+ * Normalises any error thrown by Axios into a plain Error with a
+ * human-readable message, then re-throws it so callers can catch it.
+ *
+ * Because this function always throws, TypeScript understands that
+ * code after a `handleApiError(error)` call is unreachable — which
+ * resolves the "function lacks ending return statement" errors in the
+ * service files.
+ */
 export function handleApiError(error: unknown): never {
-  if (error instanceof AxiosError && error.response) {
-    const body = error.response.data as ApiResponse<null> | undefined;
-    throw new ApiError(
-      error.response.status,
-      body?.message ?? error.response.statusText ?? "Request failed",
-      error
-    );
+  if (axios.isAxiosError(error)) {
+    const message: string =
+      error.response?.data?.message ??
+      error.response?.data?.error ??
+      error.message ??
+      "An unexpected error occurred";
+    throw new Error(message);
   }
-  throw error;
+
+  if (error instanceof Error) {
+    throw error;
+  }
+
+  throw new Error("An unexpected error occurred");
 }
