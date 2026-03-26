@@ -19,11 +19,9 @@ export function PostCard({ post, currentUserId, onLike }: PostCardProps) {
 
   if (!author) return null
 
-  const formatTime = (date: Date | string) => {
-    const parsedDate = typeof date === 'string' ? new Date(date) : date
-
+  const formatTime = (date: Date) => {
     const now = new Date()
-    const diffMs = now.getTime() - parsedDate.getTime()
+    const diffMs = now.getTime() - date.getTime()
     const diffMins = Math.floor(diffMs / 60000)
     const diffHours = Math.floor(diffMs / 3600000)
     const diffDays = Math.floor(diffMs / 86400000)

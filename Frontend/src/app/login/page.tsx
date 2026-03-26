@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import Link from 'next/link'
@@ -17,9 +17,10 @@ export default function LoginPage() {
   const router = useRouter()
 
   // If already logged in, redirect to feed
-  useEffect(() => {
-    if (user) router.replace('/feed')
-  }, [user])
+  if (user) {
+    router.push('/feed')
+    return null
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

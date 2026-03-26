@@ -7,11 +7,11 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Heart, MessageCircle, AtSign, Trash2 } from 'lucide-react'
 import { mockNotifications, mockUsers } from '@/lib/mock-data'
-import { Notification as AppNotification } from '@/lib/types'
+import { Notification } from '@/lib/types'
 
 export default function NotificationsPage() {
   const { user } = useAuth()
-  const [notifications, setNotifications] = useState<AppNotification[]>(mockNotifications)
+  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications)
 
   const getNotificationIcon = (type: string) => {
     switch (type) {

@@ -13,21 +13,11 @@ export default function FeedPage() {
   const [posts, setPosts] = useState<Post[]>(mockPosts)
 
   useEffect(() => {
+    // Load posts from localStorage or use mock data
     const storedPosts = localStorage.getItem('posts')
     if (storedPosts) {
       try {
-        const parsedPosts = JSON.parse(storedPosts)
-        
-        const normalizedPosts = parsedPosts.map((post: any) => ({
-          ...post,
-          timestamp: new Date(post.timestamp),
-          comments: post.comments.map((c: any) => ({
-            ...c,
-            timestamp: new Date(c.timestamp),
-          })),
-        }))
-
-        setPosts(normalizedPosts)
+        setPosts(JSON.parse(storedPosts))
       } catch (e) {
         console.error('Failed to parse stored posts')
       }
