@@ -15,7 +15,7 @@ on:
 
 jobs:
   # ─────────────────────────────────────────────
-  # 1. Lint, type-check & test
+  # 1. Prettier check, type-check & test
   # ─────────────────────────────────────────────
   build-and-test:
     name: Build & Test Frontend
@@ -38,13 +38,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Prettier check
+        run: npm run format:check
 
       - name: Type check
         run: npm run type-check
-        # Remove this step if you don't have a type-check script yet;
-        # add it to package.json as: "type-check": "tsc --noEmit"
 
       - name: Run tests
         run: npm test -- --passWithNoTests --ci
