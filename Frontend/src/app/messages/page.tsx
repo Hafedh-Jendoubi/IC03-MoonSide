@@ -11,50 +11,51 @@ import { mockUsers } from '@/lib/mock-data'
 export default function MessagesPage() {
   const { user } = useAuth()
 
-  const conversations = mockUsers.filter(u => u.id !== user?.id).slice(0, 5)
+  const conversations = mockUsers.filter((u) => u.id !== user?.id).slice(0, 5)
 
   return (
     <AuthLayout>
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Page Header */}
-        <div className="mb-8 flex items-center justify-between animate-fade-in">
+        <div className="animate-fade-in mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Messages</h1>
+            <h1 className="text-foreground mb-2 text-3xl font-bold">Messages</h1>
             <p className="text-muted-foreground">Stay in touch with your team</p>
           </div>
-          <Button className="bg-primary hover:bg-primary/90 text-white gap-2">
+          <Button className="bg-primary hover:bg-primary/90 gap-2 text-white">
             <Plus size={18} />
             New Message
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Conversation List */}
-          <Card className="lg:col-span-1 p-4 animate-slide-up">
+          <Card className="animate-slide-up p-4 lg:col-span-1">
             <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
-              <Input
-                type="text"
-                placeholder="Search conversations..."
-                className="pl-10 bg-muted"
+              <Search
+                className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 transform"
+                size={18}
               />
+              <Input type="text" placeholder="Search conversations..." className="bg-muted pl-10" />
             </div>
 
             <div className="space-y-2">
               {conversations.map((conv, index) => (
                 <button
                   key={conv.id}
-                  className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-muted transition-colors text-left animate-scale-in"
+                  className="hover:bg-muted animate-scale-in flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors"
                   style={{ animationDelay: `${index * 50}ms` }}
                 >
                   <img
                     src={conv.avatar}
                     alt={conv.name}
-                    className="w-12 h-12 rounded-full object-cover"
+                    className="h-12 w-12 rounded-full object-cover"
                   />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-foreground text-sm truncate">{conv.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">Last message preview...</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-foreground truncate text-sm font-semibold">{conv.name}</p>
+                    <p className="text-muted-foreground truncate text-xs">
+                      Last message preview...
+                    </p>
                   </div>
                 </button>
               ))}
@@ -62,9 +63,12 @@ export default function MessagesPage() {
           </Card>
 
           {/* Chat Area */}
-          <Card className="lg:col-span-2 p-6 flex flex-col items-center justify-center min-h-96 animate-slide-up" style={{ animationDelay: '100ms' }}>
+          <Card
+            className="animate-slide-up flex min-h-96 flex-col items-center justify-center p-6 lg:col-span-2"
+            style={{ animationDelay: '100ms' }}
+          >
             <MessageCircle size={48} className="text-muted-foreground mb-4" />
-            <h2 className="text-xl font-semibold text-foreground mb-2">Select a conversation</h2>
+            <h2 className="text-foreground mb-2 text-xl font-semibold">Select a conversation</h2>
             <p className="text-muted-foreground text-center">Choose someone to start messaging</p>
           </Card>
         </div>

@@ -14,7 +14,7 @@ interface PostCardProps {
 
 export function PostCard({ post, currentUserId, onLike }: PostCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const author = mockUsers.find(u => u.id === post.authorId)
+  const author = mockUsers.find((u) => u.id === post.authorId)
   const hasLiked = post.likes.includes(currentUserId)
 
   if (!author) return null
@@ -33,21 +33,21 @@ export function PostCard({ post, currentUserId, onLike }: PostCardProps) {
   }
 
   return (
-    <div className="bg-white border border-border rounded-lg p-6 hover:shadow-md transition-shadow animate-slide-up">
+    <div className="border-border animate-slide-up rounded-lg border bg-white p-6 transition-shadow hover:shadow-md">
       {/* Author Info */}
-      <div className="flex items-start gap-4 mb-4">
+      <div className="mb-4 flex items-start gap-4">
         <img
           src={author.avatar}
           alt={author.name}
-          className="w-12 h-12 rounded-full object-cover"
+          className="h-12 w-12 rounded-full object-cover"
         />
         <div className="flex-1">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-semibold text-foreground">{author.name}</p>
-              <p className="text-sm text-muted-foreground">{author.title}</p>
+              <p className="text-foreground font-semibold">{author.name}</p>
+              <p className="text-muted-foreground text-sm">{author.title}</p>
             </div>
-            <span className="text-xs text-muted-foreground">{formatTime(post.timestamp)}</span>
+            <span className="text-muted-foreground text-xs">{formatTime(post.timestamp)}</span>
           </div>
         </div>
       </div>
@@ -56,13 +56,13 @@ export function PostCard({ post, currentUserId, onLike }: PostCardProps) {
       <p className="text-foreground mb-4 leading-relaxed">{post.content}</p>
 
       {/* Stats */}
-      <div className="flex items-center gap-6 text-sm text-muted-foreground py-3 border-t border-b border-border">
+      <div className="text-muted-foreground border-border flex items-center gap-6 border-t border-b py-3 text-sm">
         <span>{post.likes.length} likes</span>
         <span>{post.comments.length} comments</span>
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 mt-4 mb-4">
+      <div className="mt-4 mb-4 flex items-center gap-2">
         <Button
           variant="ghost"
           size="sm"
@@ -72,11 +72,11 @@ export function PostCard({ post, currentUserId, onLike }: PostCardProps) {
           <Heart size={18} fill={hasLiked ? 'currentColor' : 'none'} className="transition-all" />
           Like
         </Button>
-        <Button variant="ghost" size="sm" className="flex items-center gap-2 text-muted-foreground">
+        <Button variant="ghost" size="sm" className="text-muted-foreground flex items-center gap-2">
           <MessageCircle size={18} />
           Comment
         </Button>
-        <Button variant="ghost" size="sm" className="flex items-center gap-2 text-muted-foreground">
+        <Button variant="ghost" size="sm" className="text-muted-foreground flex items-center gap-2">
           <Share2 size={18} />
           Share
         </Button>
@@ -84,18 +84,19 @@ export function PostCard({ post, currentUserId, onLike }: PostCardProps) {
 
       {/* Comments Section */}
       {post.comments.length > 0 && (
-        <div className="mt-4 pt-4 border-t border-border">
+        <div className="border-border mt-4 border-t pt-4">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-sm text-primary hover:underline mb-3"
+            className="text-primary mb-3 text-sm hover:underline"
           >
-            {isExpanded ? 'Hide' : `Show ${post.comments.length}`} comment{post.comments.length !== 1 ? 's' : ''}
+            {isExpanded ? 'Hide' : `Show ${post.comments.length}`} comment
+            {post.comments.length !== 1 ? 's' : ''}
           </button>
 
           {isExpanded && (
-            <div className="space-y-3 animate-slide-down">
-              {post.comments.map(comment => {
-                const commentAuthor = mockUsers.find(u => u.id === comment.authorId)
+            <div className="animate-slide-down space-y-3">
+              {post.comments.map((comment) => {
+                const commentAuthor = mockUsers.find((u) => u.id === comment.authorId)
                 if (!commentAuthor) return null
 
                 return (
@@ -103,14 +104,16 @@ export function PostCard({ post, currentUserId, onLike }: PostCardProps) {
                     <img
                       src={commentAuthor.avatar}
                       alt={commentAuthor.name}
-                      className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                      className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
                     />
                     <div className="flex-1">
-                      <div className="bg-muted p-3 rounded-lg">
-                        <p className="font-semibold text-sm text-foreground">{commentAuthor.name}</p>
-                        <p className="text-sm text-foreground mt-1">{comment.content}</p>
+                      <div className="bg-muted rounded-lg p-3">
+                        <p className="text-foreground text-sm font-semibold">
+                          {commentAuthor.name}
+                        </p>
+                        <p className="text-foreground mt-1 text-sm">{comment.content}</p>
                       </div>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                      <div className="text-muted-foreground mt-1 flex items-center gap-3 text-xs">
                         <span>{formatTime(comment.timestamp)}</span>
                         <span>{comment.likes.length} likes</span>
                       </div>

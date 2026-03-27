@@ -40,25 +40,22 @@ export function Navbar() {
   ]
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-border shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+    <nav className="border-border fixed top-0 right-0 left-0 z-50 border-b bg-white shadow-sm">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 items-center justify-between">
           {/* Logo */}
-          <Link href="/feed" className="flex items-center gap-2 font-bold text-xl text-primary">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-white text-sm font-bold">
+          <Link href="/feed" className="text-primary flex items-center gap-2 text-xl font-bold">
+            <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold text-white">
               C
             </div>
             <span>Connect</span>
           </Link>
 
           {/* Navigation Links */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden items-center gap-1 md:flex">
             {navLinks.map(({ href, label, icon: Icon }) => (
               <Link key={href} href={href}>
-                <Button
-                  variant={pathname === href ? 'default' : 'ghost'}
-                  className="gap-2"
-                >
+                <Button variant={pathname === href ? 'default' : 'ghost'} className="gap-2">
                   <Icon size={18} />
                   {label}
                 </Button>
@@ -67,14 +64,13 @@ export function Navbar() {
           </div>
 
           {/* Search Bar */}
-          <div className="hidden lg:flex flex-1 max-w-sm mx-8">
+          <div className="mx-8 hidden max-w-sm flex-1 lg:flex">
             <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
-              <Input
-                type="text"
-                placeholder="Search people, posts..."
-                className="pl-10 bg-muted"
+              <Search
+                className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 transform"
+                size={18}
               />
+              <Input type="text" placeholder="Search people, posts..." className="bg-muted pl-10" />
             </div>
           </div>
 
@@ -85,7 +81,7 @@ export function Navbar() {
               <Button variant="ghost" size="icon" className="relative">
                 <Bell size={20} />
                 {notificationCount > 0 && (
-                  <span className="absolute top-1 right-1 w-5 h-5 bg-destructive text-white text-xs rounded-full flex items-center justify-center animate-pulse-glow">
+                  <span className="bg-destructive animate-pulse-glow absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full text-xs text-white">
                     {notificationCount}
                   </span>
                 )}
@@ -97,35 +93,35 @@ export function Navbar() {
               <div className="relative" ref={dropdownRef}>
                 <button
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                  className="flex items-center gap-2 transition-opacity hover:opacity-80"
                 >
                   <img
                     src={user.avatar}
                     alt={user.name}
-                    className="w-10 h-10 rounded-full object-cover border-2 border-primary"
+                    className="border-primary h-10 w-10 rounded-full border-2 object-cover"
                   />
                 </button>
 
                 {/* Dropdown Menu */}
                 {isDropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg border border-border shadow-lg animate-slide-down">
+                  <div className="border-border animate-slide-down absolute right-0 mt-2 w-56 rounded-lg border bg-white shadow-lg">
                     {/* User Info */}
-                    <div className="px-4 py-3 border-b border-border">
-                      <p className="font-semibold text-sm text-foreground">{user.name}</p>
-                      <p className="text-xs text-muted-foreground">{user.email}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{user.title}</p>
+                    <div className="border-border border-b px-4 py-3">
+                      <p className="text-foreground text-sm font-semibold">{user.name}</p>
+                      <p className="text-muted-foreground text-xs">{user.email}</p>
+                      <p className="text-muted-foreground mt-1 text-xs">{user.title}</p>
                     </div>
 
                     {/* Menu Items */}
                     <div className="p-2">
                       <Link href={`/profile/${user.id}`}>
-                        <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-foreground hover:bg-muted rounded-md transition-colors">
+                        <button className="text-foreground hover:bg-muted flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors">
                           <User size={16} />
                           View Profile
                         </button>
                       </Link>
                       <Link href="/settings">
-                        <button className="w-full flex items-center gap-3 px-3 py-2 text-sm text-foreground hover:bg-muted rounded-md transition-colors">
+                        <button className="text-foreground hover:bg-muted flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors">
                           <Settings size={16} />
                           Settings
                         </button>
@@ -133,10 +129,10 @@ export function Navbar() {
                     </div>
 
                     {/* Logout */}
-                    <div className="px-2 py-2 border-t border-border">
+                    <div className="border-border border-t px-2 py-2">
                       <button
                         onClick={handleLogout}
-                        className="w-full flex items-center gap-3 px-3 py-2 text-sm text-destructive hover:bg-muted rounded-md transition-colors"
+                        className="text-destructive hover:bg-muted flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors"
                       >
                         <LogOut size={16} />
                         Sign Out

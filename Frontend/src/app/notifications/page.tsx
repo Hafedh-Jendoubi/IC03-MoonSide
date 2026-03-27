@@ -40,34 +40,28 @@ export default function NotificationsPage() {
   }
 
   const handleMarkAsRead = (id: string) => {
-    setNotifications(notifications.map(n =>
-      n.id === id ? { ...n, read: true } : n
-    ))
+    setNotifications(notifications.map((n) => (n.id === id ? { ...n, read: true } : n)))
   }
 
   const handleDelete = (id: string) => {
-    setNotifications(notifications.filter(n => n.id !== id))
+    setNotifications(notifications.filter((n) => n.id !== id))
   }
 
   const handleMarkAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, read: true })))
+    setNotifications(notifications.map((n) => ({ ...n, read: true })))
   }
 
   return (
     <AuthLayout>
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Page Header */}
-        <div className="mb-8 flex items-center justify-between animate-fade-in">
+        <div className="animate-fade-in mb-8 flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">Notifications</h1>
+            <h1 className="text-foreground mb-2 text-3xl font-bold">Notifications</h1>
             <p className="text-muted-foreground">Stay updated with what&apos;s happening</p>
           </div>
-          {notifications.some(n => !n.read) && (
-            <Button
-              variant="outline"
-              onClick={handleMarkAllAsRead}
-              className="text-primary"
-            >
+          {notifications.some((n) => !n.read) && (
+            <Button variant="outline" onClick={handleMarkAllAsRead} className="text-primary">
               Mark all as read
             </Button>
           )}
@@ -77,26 +71,29 @@ export default function NotificationsPage() {
         {notifications.length > 0 ? (
           <div className="space-y-3">
             {notifications.map((notif, index) => {
-              const notificationUser = mockUsers.find(u => u.name.includes('Sarah') || u.name.includes('Marcus') || u.name.includes('Emma'))
-              
+              const notificationUser = mockUsers.find(
+                (u) =>
+                  u.name.includes('Sarah') || u.name.includes('Marcus') || u.name.includes('Emma')
+              )
+
               return (
                 <Card
                   key={notif.id}
-                  className={`p-4 flex items-center gap-4 hover:shadow-md transition-all cursor-pointer animate-slide-down ${
-                    notif.read ? 'bg-white' : 'bg-blue-50 border-blue-200'
+                  className={`animate-slide-down flex cursor-pointer items-center gap-4 p-4 transition-all hover:shadow-md ${
+                    notif.read ? 'bg-white' : 'border-blue-200 bg-blue-50'
                   }`}
                   style={{ animationDelay: `${index * 50}ms` }}
                   onClick={() => handleMarkAsRead(notif.id)}
                 >
-                  <div className="flex-shrink-0">
-                    {getNotificationIcon(notif.type)}
-                  </div>
+                  <div className="flex-shrink-0">{getNotificationIcon(notif.type)}</div>
 
                   <div className="flex-1">
-                    <p className={`${notif.read ? 'text-muted-foreground' : 'text-foreground font-semibold'}`}>
+                    <p
+                      className={`${notif.read ? 'text-muted-foreground' : 'text-foreground font-semibold'}`}
+                    >
                       {notif.message}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-muted-foreground mt-1 text-xs">
                       {formatTime(notif.timestamp)}
                     </p>
                   </div>
@@ -106,23 +103,25 @@ export default function NotificationsPage() {
                       e.stopPropagation()
                       handleDelete(notif.id)
                     }}
-                    className="flex-shrink-0 p-2 text-muted-foreground hover:text-destructive transition-colors"
+                    className="text-muted-foreground hover:text-destructive flex-shrink-0 p-2 transition-colors"
                   >
                     <Trash2 size={18} />
                   </button>
 
                   {!notif.read && (
-                    <div className="flex-shrink-0 w-3 h-3 rounded-full bg-primary animate-pulse-glow"></div>
+                    <div className="bg-primary animate-pulse-glow h-3 w-3 flex-shrink-0 rounded-full"></div>
                   )}
                 </Card>
               )
             })}
           </div>
         ) : (
-          <Card className="p-12 text-center animate-fade-in">
-            <div className="text-5xl mb-4">🔔</div>
-            <h2 className="text-xl font-semibold text-foreground mb-2">No notifications</h2>
-            <p className="text-muted-foreground">You&apos;re all caught up! Check back later for updates.</p>
+          <Card className="animate-fade-in p-12 text-center">
+            <div className="mb-4 text-5xl">🔔</div>
+            <h2 className="text-foreground mb-2 text-xl font-semibold">No notifications</h2>
+            <p className="text-muted-foreground">
+              You&apos;re all caught up! Check back later for updates.
+            </p>
           </Card>
         )}
       </div>

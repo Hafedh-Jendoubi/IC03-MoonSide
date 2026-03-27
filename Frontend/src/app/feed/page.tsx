@@ -40,14 +40,12 @@ export default function FeedPage() {
   }
 
   const handleLike = (postId: string) => {
-    const updatedPosts = posts.map(post => {
+    const updatedPosts = posts.map((post) => {
       if (post.id === postId) {
         const hasLiked = post.likes.includes(user!.id)
         return {
           ...post,
-          likes: hasLiked
-            ? post.likes.filter(id => id !== user!.id)
-            : [...post.likes, user!.id],
+          likes: hasLiked ? post.likes.filter((id) => id !== user!.id) : [...post.likes, user!.id],
         }
       }
       return post
@@ -61,10 +59,10 @@ export default function FeedPage() {
 
   return (
     <AuthLayout>
-      <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Page Header */}
-        <div className="mb-8 animate-fade-in">
-          <h1 className="text-3xl font-bold text-foreground mb-2">Your Feed</h1>
+        <div className="animate-fade-in mb-8">
+          <h1 className="text-foreground mb-2 text-3xl font-bold">Your Feed</h1>
           <p className="text-muted-foreground">Stay connected with your team</p>
         </div>
 
@@ -75,20 +73,16 @@ export default function FeedPage() {
         <div className="space-y-6">
           {posts.map((post, index) => (
             <div key={post.id} style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}>
-              <PostCard
-                post={post}
-                currentUserId={user.id}
-                onLike={handleLike}
-              />
+              <PostCard post={post} currentUserId={user.id} onLike={handleLike} />
             </div>
           ))}
         </div>
 
         {/* Empty State */}
         {posts.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">📝</div>
-            <h2 className="text-xl font-semibold text-foreground mb-2">No posts yet</h2>
+          <div className="py-12 text-center">
+            <div className="mb-4 text-6xl">📝</div>
+            <h2 className="text-foreground mb-2 text-xl font-semibold">No posts yet</h2>
             <p className="text-muted-foreground">Be the first to share something with your team!</p>
           </div>
         )}

@@ -34,10 +34,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true)
     // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
     // Simple demo: find user by email from mock data
-    const foundUser = mockUsers.find(u => u.email === email)
+    const foundUser = mockUsers.find((u) => u.email === email)
     if (foundUser) {
       setUser(foundUser)
       localStorage.setItem('currentUser', JSON.stringify(foundUser))
@@ -50,8 +50,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signup = async (email: string, password: string, name: string) => {
     setIsLoading(true)
     // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
     // Create new user for demo
     const newUser: User = {
       id: Date.now().toString(),
@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       department: 'General',
       bio: 'Welcome to the company!',
     }
-    
+
     setUser(newUser)
     localStorage.setItem('currentUser', JSON.stringify(newUser))
     setIsLoading(false)

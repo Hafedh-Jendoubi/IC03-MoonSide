@@ -51,27 +51,27 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center px-4 animate-fade-in">
-      <Card className="w-full max-w-md p-8 animate-scale-in">
+    <div className="animate-fade-in flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4">
+      <Card className="animate-scale-in w-full max-w-md p-8">
         {/* Header */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-primary rounded-lg flex items-center justify-center text-white text-2xl font-bold mx-auto mb-4">
+        <div className="mb-8 text-center">
+          <div className="bg-primary mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg text-2xl font-bold text-white">
             C
           </div>
-          <h1 className="text-3xl font-bold text-foreground">Join Connect</h1>
+          <h1 className="text-foreground text-3xl font-bold">Join Connect</h1>
           <p className="text-muted-foreground mt-2">Create your account to get started</p>
         </div>
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-600 rounded-md text-sm animate-slide-down">
+            <div className="animate-slide-down rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">
               {error}
             </div>
           )}
 
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-foreground mb-2">
+            <label htmlFor="name" className="text-foreground mb-2 block text-sm font-medium">
               Full Name
             </label>
             <Input
@@ -86,7 +86,7 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
+            <label htmlFor="email" className="text-foreground mb-2 block text-sm font-medium">
               Email Address
             </label>
             <Input
@@ -101,7 +101,7 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-foreground mb-2">
+            <label htmlFor="password" className="text-foreground mb-2 block text-sm font-medium">
               Password
             </label>
             <Input
@@ -116,7 +116,10 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <label htmlFor="confirmPassword" className="block text-sm font-medium text-foreground mb-2">
+            <label
+              htmlFor="confirmPassword"
+              className="text-foreground mb-2 block text-sm font-medium"
+            >
               Confirm Password
             </label>
             <Input
@@ -133,7 +136,7 @@ export default function SignupPage() {
           <Button
             type="submit"
             disabled={isLoading}
-            className="w-full bg-primary hover:bg-primary/90 text-white transition-all"
+            className="bg-primary hover:bg-primary/90 w-full text-white transition-all"
           >
             {isLoading ? 'Creating account...' : 'Create Account'}
           </Button>
@@ -141,9 +144,9 @@ export default function SignupPage() {
 
         {/* Footer */}
         <div className="mt-6 text-center">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Already have an account?{' '}
-            <Link href="/login" className="text-primary hover:underline font-semibold">
+            <Link href="/login" className="text-primary font-semibold hover:underline">
               Sign in
             </Link>
           </p>

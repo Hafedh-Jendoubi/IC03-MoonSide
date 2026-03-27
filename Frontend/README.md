@@ -5,12 +5,14 @@ A professional internal employee collaboration platform built with Next.js 16, T
 ## Features
 
 ### 🔐 Authentication
+
 - Login and signup forms with email-based authentication
 - Demo accounts for testing
 - Session persistence with localStorage
 - Protected routes with automatic redirect
 
 ### 📱 Navbar
+
 - Fixed navigation header with Feed, Messages, and Notifications
 - Search functionality
 - Notification badge with unread count
@@ -20,6 +22,7 @@ A professional internal employee collaboration platform built with Next.js 16, T
   - Sign out
 
 ### 📰 Feed
+
 - Create posts with smooth animations
 - Like and comment on posts
 - Expandable comment threads
@@ -27,6 +30,7 @@ A professional internal employee collaboration platform built with Next.js 16, T
 - Staggered post loading animations
 
 ### 👤 User Profile
+
 - Profile cover image
 - User information and stats
 - Bio and department details
@@ -34,12 +38,14 @@ A professional internal employee collaboration platform built with Next.js 16, T
 - Action buttons to connect with others
 
 ### 💬 Messages
+
 - Conversation list with search
 - Message preview
 - User avatars and status
 - Ready for real-time messaging integration
 
 ### 🔔 Notifications
+
 - Activity notifications (likes, comments, mentions)
 - Notification icons and badges
 - Mark as read functionality
@@ -47,6 +53,7 @@ A professional internal employee collaboration platform built with Next.js 16, T
 - Animation-driven UI
 
 ### ⚙️ Settings
+
 - Profile management
 - Notification preferences
 - Privacy controls
@@ -83,6 +90,7 @@ Login with any of these demo accounts (password can be anything):
 ## Animations
 
 Smooth transitions throughout the app:
+
 - **Slide Down**: Dropdown menus and notifications
 - **Slide Up**: Post feed and expandable content
 - **Fade In**: Page load effects

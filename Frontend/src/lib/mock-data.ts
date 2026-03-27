@@ -52,14 +52,15 @@ export const mockPosts: Post[] = [
   {
     id: '1',
     authorId: '1',
-    content: 'Excited to announce our new product launch next week! 🚀 This has been a long journey and I cannot wait to share it with everyone.',
+    content:
+      'Excited to announce our new product launch next week! 🚀 This has been a long journey and I cannot wait to share it with everyone.',
     timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
     likes: ['2', '3', '4'],
     comments: [
       {
         id: 'c1',
         authorId: '2',
-        content: 'This is amazing! Can\'t wait to see what you\'ve built.',
+        content: "This is amazing! Can't wait to see what you've built.",
         timestamp: new Date(Date.now() - 1.5 * 60 * 60 * 1000),
         likes: ['1', '3'],
       },
@@ -75,7 +76,8 @@ export const mockPosts: Post[] = [
   {
     id: '2',
     authorId: '2',
-    content: 'Just finished the design system overhaul. Huge thanks to the entire team for the collaboration! The consistency across products is now much better.',
+    content:
+      'Just finished the design system overhaul. Huge thanks to the entire team for the collaboration! The consistency across products is now much better.',
     timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000),
     likes: ['1', '3', '5'],
     comments: [
@@ -91,7 +93,8 @@ export const mockPosts: Post[] = [
   {
     id: '3',
     authorId: '3',
-    content: 'Our backend services are now 40% faster after the recent optimization. Performance matters! 📊',
+    content:
+      'Our backend services are now 40% faster after the recent optimization. Performance matters! 📊',
     timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000),
     likes: ['1', '2', '4', '5'],
     comments: [],
@@ -99,7 +102,8 @@ export const mockPosts: Post[] = [
   {
     id: '4',
     authorId: '4',
-    content: 'New quarterly insights just released: user engagement is up 25% month-over-month. Huge milestone for our team!',
+    content:
+      'New quarterly insights just released: user engagement is up 25% month-over-month. Huge milestone for our team!',
     timestamp: new Date(Date.now() - 8 * 60 * 60 * 1000),
     likes: ['1', '2', '3', '5'],
     comments: [
@@ -115,7 +119,8 @@ export const mockPosts: Post[] = [
   {
     id: '5',
     authorId: '5',
-    content: 'Just wrapped up our annual company summit! Great discussions about the future direction. Thanks everyone for the amazing energy!',
+    content:
+      'Just wrapped up our annual company summit! Great discussions about the future direction. Thanks everyone for the amazing energy!',
     timestamp: new Date(Date.now() - 10 * 60 * 60 * 1000),
     likes: ['1', '2', '3', '4'],
     comments: [],
