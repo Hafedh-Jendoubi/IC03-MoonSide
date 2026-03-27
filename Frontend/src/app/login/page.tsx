@@ -1,126 +1,121 @@
-'use client';
+'use client'
 
-import React, { useState } from 'react';
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/Card';
-import { useAuthStore } from '@/services/authStore';
-import { ArrowRight } from 'lucide-react';
-
-const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-});
-
-type LoginFormData = z.infer<typeof loginSchema>;
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/lib/auth-context'
+import Link from 'next/link'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Card } from '@/components/ui/card'
 
 export default function LoginPage() {
-  const router = useRouter();
-  const login = useAuthStore((state) => state.login);
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const { login, user } = useAuth()
+  const router = useRouter()
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema),
-  });
+  // If already logged in, redirect to feed
+  if (user) {
+    router.push('/feed')
+    return null
+  }
 
-  const onSubmit = async (data: LoginFormData) => {
-    setIsLoading(true);
-    setError(null);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    setIsLoading(true)
 
     try {
-      await login(data);
-      router.push('/dashboard');
+      await login(email, password)
+      router.push('/feed')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      setError(err instanceof Error ? err.message : 'Login failed')
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4 py-8">
-      <div className="w-full max-w-md">
+    <div className="animate-fade-in flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4">
+      <Card className="animate-scale-in w-full max-w-md p-8">
+        {/* Header */}
         <div className="mb-8 text-center">
-          <Link href="/" className="inline-flex items-center justify-center gap-2 mb-8">
-            <div className="w-10 h-10 rounded-lg bg-primary text-white flex items-center justify-center font-bold">
-              C
-            </div>
-            <span className="font-bold text-lg text-foreground">Connect</span>
-          </Link>
+          <div className="bg-primary mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg text-2xl font-bold text-white">
+            C
+          </div>
+          <h1 className="text-foreground text-3xl font-bold">Connect</h1>
+          <p className="text-muted-foreground mt-2">Welcome back to your workspace</p>
         </div>
-        
-        <Card className="border-border/40 shadow-lg">
-          <CardHeader className="space-y-3 pb-6">
-            <CardTitle className="text-3xl font-bold">Welcome Back</CardTitle>
-            <CardDescription className="text-base">
-              Sign in to access your professional network
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
-              {error && (
-                <div className="p-4 rounded-lg bg-error/10 border border-error/20 text-error text-sm font-medium">
-                  {error}
-                </div>
-              )}
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Email</label>
-                <Input
-                  placeholder="you@example.com"
-                  type="email"
-                  {...register('email')}
-                  error={errors.email?.message}
-                  className="h-11"
-                />
-              </div>
+        {/* Demo Accounts Info */}
+        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm">
+          <p className="mb-2 font-semibold text-blue-900">Demo Accounts:</p>
+          <p className="text-xs text-blue-800">
+            <strong>Email:</strong> alex.johnson@company.com
+            <br />
+            <strong>Password:</strong> (any password)
+          </p>
+        </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Password</label>
-                <Input
-                  placeholder="••••••••"
-                  type="password"
-                  {...register('password')}
-                  error={errors.password?.message}
-                  className="h-11"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                className="w-full h-11 bg-primary hover:bg-primary-dark text-white font-medium gap-2 group"
-                disabled={isLoading}
-              >
-                {isLoading ? 'Signing in...' : 'Sign In'}
-                {!isLoading && <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
-              </Button>
-            </form>
-
-            <div className="mt-6 text-center text-sm text-foreground-secondary">
-              Don&apos;t have an account?{' '}
-              <Link href="/register" className="text-primary hover:text-primary-dark font-medium transition-colors">
-                Create one
-              </Link>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="animate-slide-down rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+              {error}
             </div>
-          </CardContent>
-        </Card>
+          )}
 
-        <p className="text-xs text-foreground-secondary text-center mt-6">
-          By signing in, you agree to our{' '}
-          <a href="#" className="text-primary hover:underline">Terms of Service</a> and{' '}
-          <a href="#" className="text-primary hover:underline">Privacy Policy</a>
-        </p>
-      </div>
+          <div>
+            <label htmlFor="email" className="text-foreground mb-2 block text-sm font-medium">
+              Email Address
+            </label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="text-foreground mb-2 block text-sm font-medium">
+              Password
+            </label>
+            <Input
+              id="password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="w-full"
+            />
+          </div>
+
+          <Button
+            type="submit"
+            disabled={isLoading}
+            className="bg-primary hover:bg-primary/90 w-full text-white transition-all"
+          >
+            {isLoading ? 'Signing in...' : 'Sign In'}
+          </Button>
+        </form>
+
+        {/* Footer */}
+        <div className="mt-6 text-center">
+          <p className="text-muted-foreground text-sm">
+            Don&apos;t have an account?{' '}
+            <Link href="/signup" className="text-primary font-semibold hover:underline">
+              Sign up
+            </Link>
+          </p>
+        </div>
+      </Card>
     </div>
-  );
+  )
 }
