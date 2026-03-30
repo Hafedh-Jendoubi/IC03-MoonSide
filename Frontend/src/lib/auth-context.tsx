@@ -2,14 +2,24 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { User } from './types'
-import { mockUsers } from './mock-data'
+import { authApi, userApi, tokenStorage, RegisterRequest } from './api'
 
 interface AuthContextType {
   user: User | null
   isLoading: boolean
   login: (email: string, password: string) => Promise<void>
-  signup: (email: string, password: string, name: string) => Promise<void>
+  signup: (data: SignupData) => Promise<void>
   logout: () => void
+  refreshUser: () => Promise<void>
+}
+
+export interface SignupData {
+  firstName: string
+  lastName: string
+  email: string
+  password: string
+  jobTitle?: string
+  bio?: string
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -18,63 +28,81 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Initialize from localStorage on mount
+  // On mount, rehydrate session from stored token
   useEffect(() => {
-    const storedUser = localStorage.getItem('currentUser')
-    if (storedUser) {
+    const initSession = async () => {
+      const token = tokenStorage.getAccessToken()
+      if (!token) {
+        setIsLoading(false)
+        return
+      }
       try {
-        setUser(JSON.parse(storedUser))
-      } catch (e) {
-        console.error('Failed to parse stored user')
+        const me = await userApi.getMe()
+        setUser(me)
+      } catch {
+        // Token invalid or expired — attempt refresh
+        const refreshToken = tokenStorage.getRefreshToken()
+        if (refreshToken) {
+          try {
+            const refreshed = await authApi.refreshToken(refreshToken)
+            tokenStorage.setTokens(refreshed.accessToken, refreshed.refreshToken)
+            setUser(refreshed.user)
+          } catch {
+            tokenStorage.clear()
+          }
+        } else {
+          tokenStorage.clear()
+        }
+      } finally {
+        setIsLoading(false)
       }
     }
-    setIsLoading(false)
+
+    initSession()
   }, [])
 
   const login = async (email: string, password: string) => {
     setIsLoading(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    // Simple demo: find user by email from mock data
-    const foundUser = mockUsers.find((u) => u.email === email)
-    if (foundUser) {
-      setUser(foundUser)
-      localStorage.setItem('currentUser', JSON.stringify(foundUser))
-    } else {
-      throw new Error('Invalid email or password')
+    try {
+      const response = await authApi.login({ email, password })
+      tokenStorage.setTokens(response.accessToken, response.refreshToken)
+      setUser(response.user)
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }
 
-  const signup = async (email: string, password: string, name: string) => {
+  const signup = async (data: SignupData) => {
     setIsLoading(true)
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    // Create new user for demo
-    const newUser: User = {
-      id: Date.now().toString(),
-      name,
-      email,
-      avatar: `https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop`,
-      title: 'New Member',
-      department: 'General',
-      bio: 'Welcome to the company!',
+    try {
+      const payload: RegisterRequest = {
+        firstName: data.firstName,
+        lastName: data.lastName,
+        email: data.email,
+        password: data.password,
+        jobTitle: data.jobTitle,
+        bio: data.bio,
+      }
+      const response = await authApi.register(payload)
+      tokenStorage.setTokens(response.accessToken, response.refreshToken)
+      setUser(response.user)
+    } finally {
+      setIsLoading(false)
     }
+  }
 
-    setUser(newUser)
-    localStorage.setItem('currentUser', JSON.stringify(newUser))
-    setIsLoading(false)
+  const refreshUser = async () => {
+    const me = await userApi.getMe()
+    setUser(me)
   }
 
   const logout = () => {
     setUser(null)
-    localStorage.removeItem('currentUser')
+    tokenStorage.clear()
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, signup, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )

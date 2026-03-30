@@ -1,13 +1,27 @@
+// Matches the backend UserResponse DTO from User-Service
 export interface User {
   id: string
-  name: string
+  roleId: string | null
   email: string
-  avatar: string
-  title: string
-  department: string
-  bio: string
+  firstName: string
+  lastName: string
+  birthDate: string | null
+  phoneNumber: string | null
+  jobTitle: string | null
+  bio: string | null
+  avatar: string | null
+  isActive: boolean
+  lastLogin: string | null
+  createdAt: string
+  updatedAt: string
 }
 
+// Computed helper — use wherever a display name is needed
+export function getFullName(user: User): string {
+  return `${user.firstName} ${user.lastName}`.trim()
+}
+
+// Post types — kept for future post service integration
 export interface Post {
   id: string
   authorId: string

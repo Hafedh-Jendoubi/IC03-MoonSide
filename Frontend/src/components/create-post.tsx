@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { User } from '@/lib/types'
+import { User, getFullName } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Smile, Image, FileText } from 'lucide-react'
@@ -24,15 +24,24 @@ export function CreatePost({ user, onPostCreate }: CreatePostProps) {
     }
   }
 
+  const firstName = user.firstName || getFullName(user).split(' ')[0]
+
   return (
     <Card className="animate-fade-in mb-6 p-6">
       <div className="flex gap-4">
         {/* Avatar */}
-        <img
-          src={user.avatar}
-          alt={user.name}
-          className="h-12 w-12 flex-shrink-0 rounded-full object-cover"
-        />
+        {user.avatar ? (
+          <img
+            src={user.avatar}
+            alt={getFullName(user)}
+            className="h-12 w-12 flex-shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <div className="bg-primary/10 text-primary flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full font-bold">
+            {user.firstName?.[0]?.toUpperCase()}
+            {user.lastName?.[0]?.toUpperCase()}
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex-1">
@@ -43,13 +52,12 @@ export function CreatePost({ user, onPostCreate }: CreatePostProps) {
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
-              placeholder={`What's on your mind, ${user.name.split(' ')[0]}?`}
+              placeholder={`What's on your mind, ${firstName}?`}
               className="text-foreground placeholder-muted-foreground w-full resize-none bg-transparent focus:outline-none"
               rows={isExpanded ? 3 : 1}
             />
           </div>
 
-          {/* Action Buttons */}
           {isExpanded && (
             <div className="animate-slide-up mt-4">
               <div className="mb-4 flex items-center gap-2">
