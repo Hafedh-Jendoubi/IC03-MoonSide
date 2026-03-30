@@ -13,7 +13,8 @@
   },
   "lint-staged": {
     "**/*.{ts,tsx,js,jsx,json,css,md}": [
-      "prettier --write"
+      "prettier --write",
+      "tsc --noEmit"
     ]
   },
   "dependencies": {
