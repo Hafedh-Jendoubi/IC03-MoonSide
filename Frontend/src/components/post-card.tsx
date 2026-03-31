@@ -1,27 +1,26 @@
 'use client'
 
 import { useState } from 'react'
-import { Post, User } from '@/lib/types'
+import { Post, User, getFullName } from '@/lib/types'
 import { Heart, MessageCircle, Share2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { mockUsers } from '@/lib/mock-data'
 
 interface PostCardProps {
   post: Post
   currentUserId: string
   onLike: (postId: string) => void
+  usersMap: Record<string, User>
 }
 
-export function PostCard({ post, currentUserId, onLike }: PostCardProps) {
+export function PostCard({ post, currentUserId, onLike, usersMap }: PostCardProps) {
   const [isExpanded, setIsExpanded] = useState(false)
-  const author = mockUsers.find((u) => u.id === post.authorId)
+  const author = usersMap[post.authorId]
   const hasLiked = post.likes.includes(currentUserId)
 
-  if (!author) return null
-
-  const formatTime = (date: Date) => {
+  const formatTime = (date: Date | string) => {
+    const d = date instanceof Date ? date : new Date(date)
     const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
+    const diffMs = now.getTime() - d.getTime()
     const diffMins = Math.floor(diffMs / 60000)
     const diffHours = Math.floor(diffMs / 3600000)
     const diffDays = Math.floor(diffMs / 86400000)
@@ -32,20 +31,50 @@ export function PostCard({ post, currentUserId, onLike }: PostCardProps) {
     return `${diffDays}d ago`
   }
 
+  const AuthorAvatar = ({ user, size = 'md' }: { user: User; size?: 'sm' | 'md' }) => {
+    const sizeClass = size === 'sm' ? 'h-8 w-8 text-xs' : 'h-12 w-12 text-sm'
+    const name = getFullName(user)
+    return user.avatar ? (
+      <img src={user.avatar} alt={name} className={`${sizeClass} rounded-full object-cover`} />
+    ) : (
+      <div
+        className={`${sizeClass} bg-primary/10 text-primary flex flex-shrink-0 items-center justify-center rounded-full font-bold`}
+      >
+        {user.firstName?.[0]?.toUpperCase()}
+        {user.lastName?.[0]?.toUpperCase()}
+      </div>
+    )
+  }
+
+  // Author not yet in map (still loading) — show skeleton
+  if (!author) {
+    return (
+      <div className="border-border animate-slide-up bg-background rounded-lg border p-6 dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex items-start gap-4">
+          <div className="bg-muted h-12 w-12 animate-pulse rounded-full dark:bg-slate-700" />
+          <div className="flex-1 space-y-2">
+            <div className="bg-muted h-4 w-32 animate-pulse rounded dark:bg-slate-700" />
+            <div className="bg-muted h-3 w-24 animate-pulse rounded dark:bg-slate-700" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const authorName = getFullName(author)
+
   return (
-    <div className="border-border animate-slide-up rounded-lg border bg-white p-6 transition-shadow hover:shadow-md">
+    <div className="border-border animate-slide-up bg-background rounded-lg border p-6 transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:shadow-slate-900/50">
       {/* Author Info */}
       <div className="mb-4 flex items-start gap-4">
-        <img
-          src={author.avatar}
-          alt={author.name}
-          className="h-12 w-12 rounded-full object-cover"
-        />
+        <AuthorAvatar user={author} />
         <div className="flex-1">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-foreground font-semibold">{author.name}</p>
-              <p className="text-muted-foreground text-sm">{author.title}</p>
+              <p className="text-foreground font-semibold">{authorName}</p>
+              {author.jobTitle && (
+                <p className="text-muted-foreground text-sm">{author.jobTitle}</p>
+              )}
             </div>
             <span className="text-muted-foreground text-xs">{formatTime(post.timestamp)}</span>
           </div>
@@ -56,7 +85,7 @@ export function PostCard({ post, currentUserId, onLike }: PostCardProps) {
       <p className="text-foreground mb-4 leading-relaxed">{post.content}</p>
 
       {/* Stats */}
-      <div className="text-muted-foreground border-border flex items-center gap-6 border-t border-b py-3 text-sm">
+      <div className="text-muted-foreground border-border flex items-center gap-6 border-t border-b py-3 text-sm dark:border-slate-700">
         <span>{post.likes.length} likes</span>
         <span>{post.comments.length} comments</span>
       </div>
@@ -84,7 +113,7 @@ export function PostCard({ post, currentUserId, onLike }: PostCardProps) {
 
       {/* Comments Section */}
       {post.comments.length > 0 && (
-        <div className="border-border mt-4 border-t pt-4">
+        <div className="border-border mt-4 border-t pt-4 dark:border-slate-700">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             className="text-primary mb-3 text-sm hover:underline"
@@ -96,20 +125,16 @@ export function PostCard({ post, currentUserId, onLike }: PostCardProps) {
           {isExpanded && (
             <div className="animate-slide-down space-y-3">
               {post.comments.map((comment) => {
-                const commentAuthor = mockUsers.find((u) => u.id === comment.authorId)
+                const commentAuthor = usersMap[comment.authorId]
                 if (!commentAuthor) return null
 
                 return (
                   <div key={comment.id} className="flex gap-3">
-                    <img
-                      src={commentAuthor.avatar}
-                      alt={commentAuthor.name}
-                      className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
-                    />
+                    <AuthorAvatar user={commentAuthor} size="sm" />
                     <div className="flex-1">
-                      <div className="bg-muted rounded-lg p-3">
+                      <div className="bg-muted rounded-lg p-3 dark:bg-slate-800">
                         <p className="text-foreground text-sm font-semibold">
-                          {commentAuthor.name}
+                          {getFullName(commentAuthor)}
                         </p>
                         <p className="text-foreground mt-1 text-sm">{comment.content}</p>
                       </div>

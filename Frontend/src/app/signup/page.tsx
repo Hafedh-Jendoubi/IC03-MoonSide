@@ -9,16 +9,17 @@ import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 
 export default function SignupPage() {
+  const [firstName, setFirstName] = useState('')
+  const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [name, setName] = useState('')
+  const [jobTitle, setJobTitle] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const { signup, user } = useAuth()
   const router = useRouter()
 
-  // If already logged in, redirect to feed
   if (user) {
     router.push('/feed')
     return null
@@ -33,15 +34,15 @@ export default function SignupPage() {
       return
     }
 
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters')
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters')
       return
     }
 
     setIsLoading(true)
 
     try {
-      await signup(email, password, name)
+      await signup({ firstName, lastName, email, password, jobTitle: jobTitle || undefined })
       router.push('/feed')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Signup failed')
@@ -56,13 +57,12 @@ export default function SignupPage() {
         {/* Header */}
         <div className="mb-8 text-center">
           <div className="bg-primary mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg text-2xl font-bold text-white">
-            C
+            WS
           </div>
-          <h1 className="text-foreground text-3xl font-bold">Join Connect</h1>
+          <h1 className="text-foreground text-3xl font-bold">Join WorkSphere</h1>
           <p className="text-muted-foreground mt-2">Create your account to get started</p>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
             <div className="animate-slide-down rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">
@@ -70,19 +70,33 @@ export default function SignupPage() {
             </div>
           )}
 
-          <div>
-            <label htmlFor="name" className="text-foreground mb-2 block text-sm font-medium">
-              Full Name
-            </label>
-            <Input
-              id="name"
-              type="text"
-              placeholder="John Doe"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="w-full"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label htmlFor="firstName" className="text-foreground mb-2 block text-sm font-medium">
+                First Name
+              </label>
+              <Input
+                id="firstName"
+                type="text"
+                placeholder="John"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <label htmlFor="lastName" className="text-foreground mb-2 block text-sm font-medium">
+                Last Name
+              </label>
+              <Input
+                id="lastName"
+                type="text"
+                placeholder="Doe"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           <div>
@@ -101,13 +115,27 @@ export default function SignupPage() {
           </div>
 
           <div>
+            <label htmlFor="jobTitle" className="text-foreground mb-2 block text-sm font-medium">
+              Job Title <span className="text-muted-foreground">(optional)</span>
+            </label>
+            <Input
+              id="jobTitle"
+              type="text"
+              placeholder="e.g. Software Engineer"
+              value={jobTitle}
+              onChange={(e) => setJobTitle(e.target.value)}
+              className="w-full"
+            />
+          </div>
+
+          <div>
             <label htmlFor="password" className="text-foreground mb-2 block text-sm font-medium">
               Password
             </label>
             <Input
               id="password"
               type="password"
-              placeholder="••••••••"
+              placeholder="Min. 8 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -142,7 +170,6 @@ export default function SignupPage() {
           </Button>
         </form>
 
-        {/* Footer */}
         <div className="mt-6 text-center">
           <p className="text-muted-foreground text-sm">
             Already have an account?{' '}

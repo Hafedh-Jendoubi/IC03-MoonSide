@@ -16,7 +16,6 @@ export default function LoginPage() {
   const { login, user } = useAuth()
   const router = useRouter()
 
-  // If already logged in, redirect to feed
   if (user) {
     router.push('/feed')
     return null
@@ -42,21 +41,8 @@ export default function LoginPage() {
       <Card className="animate-scale-in w-full max-w-md p-8">
         {/* Header */}
         <div className="mb-8 text-center">
-          <div className="bg-primary mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg text-2xl font-bold text-white">
-            C
-          </div>
-          <h1 className="text-foreground text-3xl font-bold">Connect</h1>
+          <h1 className="text-foreground text-3xl font-bold">WorkSphere</h1>
           <p className="text-muted-foreground mt-2">Welcome back to your workspace</p>
-        </div>
-
-        {/* Demo Accounts Info */}
-        <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm">
-          <p className="mb-2 font-semibold text-blue-900">Demo Accounts:</p>
-          <p className="text-xs text-blue-800">
-            <strong>Email:</strong> alex.johnson@company.com
-            <br />
-            <strong>Password:</strong> (any password)
-          </p>
         </div>
 
         {/* Form */}

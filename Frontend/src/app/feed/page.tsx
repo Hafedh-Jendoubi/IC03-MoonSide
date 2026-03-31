@@ -6,19 +6,20 @@ import { AuthLayout } from '@/components/auth-layout'
 import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
 import { Post } from '@/lib/types'
-import { mockPosts } from '@/lib/mock-data'
+import { User } from '@/lib/types'
 
 export default function FeedPage() {
   const { user } = useAuth()
-  const [posts, setPosts] = useState<Post[]>(mockPosts)
+  const [posts, setPosts] = useState<Post[]>([])
+  const [usersMap, setUsersMap] = useState<Record<string, User>>({})
 
+  // Load posts from localStorage (post service not yet implemented)
   useEffect(() => {
-    // Load posts from localStorage or use mock data
     const storedPosts = localStorage.getItem('posts')
     if (storedPosts) {
       try {
         setPosts(JSON.parse(storedPosts))
-      } catch (e) {
+      } catch {
         console.error('Failed to parse stored posts')
       }
     }
@@ -33,7 +34,6 @@ export default function FeedPage() {
       likes: [],
       comments: [],
     }
-
     const updatedPosts = [newPost, ...posts]
     setPosts(updatedPosts)
     localStorage.setItem('posts', JSON.stringify(updatedPosts))
@@ -41,16 +41,13 @@ export default function FeedPage() {
 
   const handleLike = (postId: string) => {
     const updatedPosts = posts.map((post) => {
-      if (post.id === postId) {
-        const hasLiked = post.likes.includes(user!.id)
-        return {
-          ...post,
-          likes: hasLiked ? post.likes.filter((id) => id !== user!.id) : [...post.likes, user!.id],
-        }
+      if (post.id !== postId) return post
+      const hasLiked = post.likes.includes(user!.id)
+      return {
+        ...post,
+        likes: hasLiked ? post.likes.filter((id) => id !== user!.id) : [...post.likes, user!.id],
       }
-      return post
     })
-
     setPosts(updatedPosts)
     localStorage.setItem('posts', JSON.stringify(updatedPosts))
   }
@@ -73,7 +70,12 @@ export default function FeedPage() {
         <div className="space-y-6">
           {posts.map((post, index) => (
             <div key={post.id} style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}>
-              <PostCard post={post} currentUserId={user.id} onLike={handleLike} />
+              <PostCard
+                post={post}
+                currentUserId={user.id}
+                onLike={handleLike}
+                usersMap={usersMap}
+              />
             </div>
           ))}
         </div>

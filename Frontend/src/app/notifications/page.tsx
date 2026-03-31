@@ -6,12 +6,14 @@ import { AuthLayout } from '@/components/auth-layout'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Heart, MessageCircle, AtSign, Trash2 } from 'lucide-react'
-import { mockNotifications, mockUsers } from '@/lib/mock-data'
 import { Notification } from '@/lib/types'
 
 export default function NotificationsPage() {
   const { user } = useAuth()
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications)
+
+  // Notifications will be wired to a notification service when available.
+  // For now we keep an empty local state — no mock data.
+  const [notifications, setNotifications] = useState<Notification[]>([])
 
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -26,9 +28,10 @@ export default function NotificationsPage() {
     }
   }
 
-  const formatTime = (date: Date) => {
+  const formatTime = (date: Date | string) => {
+    const d = date instanceof Date ? date : new Date(date)
     const now = new Date()
-    const diffMs = now.getTime() - date.getTime()
+    const diffMs = now.getTime() - d.getTime()
     const diffMins = Math.floor(diffMs / 60000)
     const diffHours = Math.floor(diffMs / 3600000)
     const diffDays = Math.floor(diffMs / 86400000)
@@ -70,50 +73,43 @@ export default function NotificationsPage() {
         {/* Notifications List */}
         {notifications.length > 0 ? (
           <div className="space-y-3">
-            {notifications.map((notif, index) => {
-              const notificationUser = mockUsers.find(
-                (u) =>
-                  u.name.includes('Sarah') || u.name.includes('Marcus') || u.name.includes('Emma')
-              )
+            {notifications.map((notif, index) => (
+              <Card
+                key={notif.id}
+                className={`animate-slide-down flex cursor-pointer items-center gap-4 p-4 transition-all hover:shadow-md ${
+                  notif.read ? 'bg-white' : 'border-blue-200 bg-blue-50'
+                }`}
+                style={{ animationDelay: `${index * 50}ms` }}
+                onClick={() => handleMarkAsRead(notif.id)}
+              >
+                <div className="flex-shrink-0">{getNotificationIcon(notif.type)}</div>
 
-              return (
-                <Card
-                  key={notif.id}
-                  className={`animate-slide-down flex cursor-pointer items-center gap-4 p-4 transition-all hover:shadow-md ${
-                    notif.read ? 'bg-white' : 'border-blue-200 bg-blue-50'
-                  }`}
-                  style={{ animationDelay: `${index * 50}ms` }}
-                  onClick={() => handleMarkAsRead(notif.id)}
-                >
-                  <div className="flex-shrink-0">{getNotificationIcon(notif.type)}</div>
-
-                  <div className="flex-1">
-                    <p
-                      className={`${notif.read ? 'text-muted-foreground' : 'text-foreground font-semibold'}`}
-                    >
-                      {notif.message}
-                    </p>
-                    <p className="text-muted-foreground mt-1 text-xs">
-                      {formatTime(notif.timestamp)}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handleDelete(notif.id)
-                    }}
-                    className="text-muted-foreground hover:text-destructive flex-shrink-0 p-2 transition-colors"
+                <div className="flex-1">
+                  <p
+                    className={`${notif.read ? 'text-muted-foreground' : 'text-foreground font-semibold'}`}
                   >
-                    <Trash2 size={18} />
-                  </button>
+                    {notif.message}
+                  </p>
+                  <p className="text-muted-foreground mt-1 text-xs">
+                    {formatTime(notif.timestamp)}
+                  </p>
+                </div>
 
-                  {!notif.read && (
-                    <div className="bg-primary animate-pulse-glow h-3 w-3 flex-shrink-0 rounded-full"></div>
-                  )}
-                </Card>
-              )
-            })}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleDelete(notif.id)
+                  }}
+                  className="text-muted-foreground hover:text-destructive flex-shrink-0 p-2 transition-colors"
+                >
+                  <Trash2 size={18} />
+                </button>
+
+                {!notif.read && (
+                  <div className="bg-primary animate-pulse-glow h-3 w-3 flex-shrink-0 rounded-full"></div>
+                )}
+              </Card>
+            ))}
           </div>
         ) : (
           <Card className="animate-fade-in p-12 text-center">

@@ -1,17 +1,30 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { AuthLayout } from '@/components/auth-layout'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { MessageCircle, Plus, Search } from 'lucide-react'
-import { mockUsers } from '@/lib/mock-data'
+import { User, getFullName } from '@/lib/types'
+import { userApi } from '@/lib/api'
 
 export default function MessagesPage() {
   const { user } = useAuth()
+  const [contacts, setContacts] = useState<User[]>([])
 
-  const conversations = mockUsers.filter((u) => u.id !== user?.id).slice(0, 5)
+  useEffect(() => {
+    const fetchContacts = async () => {
+      try {
+        const all = await userApi.getAll()
+        setContacts(all.filter((u) => u.id !== user?.id))
+      } catch (err) {
+        console.error('Failed to load contacts', err)
+      }
+    }
+    fetchContacts()
+  }, [user?.id])
 
   return (
     <AuthLayout>
@@ -40,25 +53,41 @@ export default function MessagesPage() {
             </div>
 
             <div className="space-y-2">
-              {conversations.map((conv, index) => (
-                <button
-                  key={conv.id}
-                  className="hover:bg-muted animate-scale-in flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors"
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  <img
-                    src={conv.avatar}
-                    alt={conv.name}
-                    className="h-12 w-12 rounded-full object-cover"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-foreground truncate text-sm font-semibold">{conv.name}</p>
-                    <p className="text-muted-foreground truncate text-xs">
-                      Last message preview...
-                    </p>
-                  </div>
-                </button>
-              ))}
+              {contacts.map((contact, index) => {
+                const name = getFullName(contact)
+                return (
+                  <button
+                    key={contact.id}
+                    className="hover:bg-muted animate-scale-in flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors"
+                    style={{ animationDelay: `${index * 50}ms` }}
+                  >
+                    {contact.avatar ? (
+                      <img
+                        src={contact.avatar}
+                        alt={name}
+                        className="h-12 w-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="bg-primary/10 text-primary flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full font-bold">
+                        {contact.firstName?.[0]?.toUpperCase()}
+                        {contact.lastName?.[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-foreground truncate text-sm font-semibold">{name}</p>
+                      {contact.jobTitle && (
+                        <p className="text-muted-foreground truncate text-xs">{contact.jobTitle}</p>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+
+              {contacts.length === 0 && (
+                <p className="text-muted-foreground py-4 text-center text-sm">
+                  No other users found
+                </p>
+              )}
             </div>
           </Card>
 

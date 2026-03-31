@@ -39,7 +39,24 @@ jobs:
         run: npm ci
 
       - name: Prettier check
+        id: prettier-check
         run: npm run format:check
+        continue-on-error: true
+
+      - name: Auto-fix with Prettier
+        if: steps.prettier-check.outcome == 'failure'
+        run: npx prettier --write .
+
+      - name: Commit Prettier fixes
+        if: steps.prettier-check.outcome == 'failure'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: auto-fix with Prettier"
+          branch: ${{ github.head_ref }}
+
+      - name: Fail job if formatting was required
+        if: steps.prettier-check.outcome == 'failure'
+        run: exit 1
 
       - name: Type check
         run: npm run type-check
