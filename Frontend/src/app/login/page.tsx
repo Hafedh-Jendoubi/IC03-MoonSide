@@ -41,10 +41,7 @@ export default function LoginPage() {
       <Card className="animate-scale-in w-full max-w-md p-8">
         {/* Header */}
         <div className="mb-8 text-center">
-          <div className="bg-primary mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg text-2xl font-bold text-white">
-            C
-          </div>
-          <h1 className="text-foreground text-3xl font-bold">Connect</h1>
+          <h1 className="text-foreground text-3xl font-bold">WorkSphere</h1>
           <p className="text-muted-foreground mt-2">Welcome back to your workspace</p>
         </div>
 

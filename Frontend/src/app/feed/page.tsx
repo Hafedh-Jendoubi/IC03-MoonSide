@@ -7,29 +7,11 @@ import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
 import { Post } from '@/lib/types'
 import { User } from '@/lib/types'
-import { userApi } from '@/lib/api'
 
 export default function FeedPage() {
   const { user } = useAuth()
   const [posts, setPosts] = useState<Post[]>([])
   const [usersMap, setUsersMap] = useState<Record<string, User>>({})
-
-  // Fetch all users once for author resolution in PostCard
-  useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const allUsers = await userApi.getAll()
-        const map: Record<string, User> = {}
-        allUsers.forEach((u) => {
-          map[u.id] = u
-        })
-        setUsersMap(map)
-      } catch (err) {
-        console.error('Failed to fetch users', err)
-      }
-    }
-    fetchUsers()
-  }, [])
 
   // Load posts from localStorage (post service not yet implemented)
   useEffect(() => {

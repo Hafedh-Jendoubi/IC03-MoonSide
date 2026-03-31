@@ -47,7 +47,7 @@ export function CreatePost({ user, onPostCreate }: CreatePostProps) {
         <form onSubmit={handleSubmit} className="flex-1">
           <div
             onClick={() => setIsExpanded(true)}
-            className="bg-muted hover:bg-muted/80 cursor-text rounded-full px-4 py-3 transition-colors"
+            className="bg-muted hover:bg-muted/80 cursor-text rounded-full px-4 py-3 transition-colors dark:bg-slate-800 dark:hover:bg-slate-800/80"
           >
             <textarea
               value={content}

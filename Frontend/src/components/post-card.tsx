@@ -49,12 +49,12 @@ export function PostCard({ post, currentUserId, onLike, usersMap }: PostCardProp
   // Author not yet in map (still loading) — show skeleton
   if (!author) {
     return (
-      <div className="border-border animate-slide-up rounded-lg border bg-white p-6">
+      <div className="border-border animate-slide-up bg-background rounded-lg border p-6 dark:border-slate-700 dark:bg-slate-900">
         <div className="flex items-start gap-4">
-          <div className="bg-muted h-12 w-12 animate-pulse rounded-full" />
+          <div className="bg-muted h-12 w-12 animate-pulse rounded-full dark:bg-slate-700" />
           <div className="flex-1 space-y-2">
-            <div className="bg-muted h-4 w-32 animate-pulse rounded" />
-            <div className="bg-muted h-3 w-24 animate-pulse rounded" />
+            <div className="bg-muted h-4 w-32 animate-pulse rounded dark:bg-slate-700" />
+            <div className="bg-muted h-3 w-24 animate-pulse rounded dark:bg-slate-700" />
           </div>
         </div>
       </div>
@@ -64,7 +64,7 @@ export function PostCard({ post, currentUserId, onLike, usersMap }: PostCardProp
   const authorName = getFullName(author)
 
   return (
-    <div className="border-border animate-slide-up rounded-lg border bg-white p-6 transition-shadow hover:shadow-md">
+    <div className="border-border animate-slide-up bg-background rounded-lg border p-6 transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:shadow-slate-900/50">
       {/* Author Info */}
       <div className="mb-4 flex items-start gap-4">
         <AuthorAvatar user={author} />
@@ -85,7 +85,7 @@ export function PostCard({ post, currentUserId, onLike, usersMap }: PostCardProp
       <p className="text-foreground mb-4 leading-relaxed">{post.content}</p>
 
       {/* Stats */}
-      <div className="text-muted-foreground border-border flex items-center gap-6 border-t border-b py-3 text-sm">
+      <div className="text-muted-foreground border-border flex items-center gap-6 border-t border-b py-3 text-sm dark:border-slate-700">
         <span>{post.likes.length} likes</span>
         <span>{post.comments.length} comments</span>
       </div>
@@ -113,7 +113,7 @@ export function PostCard({ post, currentUserId, onLike, usersMap }: PostCardProp
 
       {/* Comments Section */}
       {post.comments.length > 0 && (
-        <div className="border-border mt-4 border-t pt-4">
+        <div className="border-border mt-4 border-t pt-4 dark:border-slate-700">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
             className="text-primary mb-3 text-sm hover:underline"
@@ -132,7 +132,7 @@ export function PostCard({ post, currentUserId, onLike, usersMap }: PostCardProp
                   <div key={comment.id} className="flex gap-3">
                     <AuthorAvatar user={commentAuthor} size="sm" />
                     <div className="flex-1">
-                      <div className="bg-muted rounded-lg p-3">
+                      <div className="bg-muted rounded-lg p-3 dark:bg-slate-800">
                         <p className="text-foreground text-sm font-semibold">
                           {getFullName(commentAuthor)}
                         </p>

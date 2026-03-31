@@ -57,9 +57,9 @@ export default function SignupPage() {
         {/* Header */}
         <div className="mb-8 text-center">
           <div className="bg-primary mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-lg text-2xl font-bold text-white">
-            C
+            WS
           </div>
-          <h1 className="text-foreground text-3xl font-bold">Join Connect</h1>
+          <h1 className="text-foreground text-3xl font-bold">Join WorkSphere</h1>
           <p className="text-muted-foreground mt-2">Create your account to get started</p>
         </div>
 

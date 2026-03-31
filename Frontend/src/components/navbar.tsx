@@ -7,7 +7,8 @@ import { useAuth } from '@/lib/auth-context'
 import { getFullName } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Heart, Mail, Bell, Search, LogOut, Settings, User } from 'lucide-react'
+import { ThemeToggle } from '@/components/theme-toggle'
+import { Heart, Mail, Bell, Search, LogOut, Settings, User, Shield } from 'lucide-react'
 
 export function Navbar() {
   const { user, logout } = useAuth()
@@ -41,15 +42,15 @@ export function Navbar() {
   const avatarSrc = user?.avatar || '/placeholder-user.jpg'
 
   return (
-    <nav className="border-border fixed top-0 right-0 left-0 z-50 border-b bg-white shadow-sm">
+    <nav className="border-border bg-background fixed top-0 right-0 left-0 z-50 border-b shadow-sm dark:shadow-lg">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/feed" className="text-primary flex items-center gap-2 text-xl font-bold">
             <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold text-white">
-              C
+              WS
             </div>
-            <span>Connect</span>
+            <span>WorkSphere</span>
           </Link>
 
           {/* Navigation Links */}
@@ -77,6 +78,16 @@ export function Navbar() {
 
           {/* Right Side */}
           <div className="flex items-center gap-4">
+            {/* Theme Toggle */}
+            <ThemeToggle />
+
+            {/* Admin Panel Link */}
+            <Link href="/admin/dashboard">
+              <Button variant="outline" size="icon" title="Admin Panel">
+                <Shield size={20} />
+              </Button>
+            </Link>
+
             {/* Notification Bell */}
             <Link href="/notifications">
               <Button variant="ghost" size="icon" className="relative">
@@ -106,7 +117,7 @@ export function Navbar() {
                 </button>
 
                 {isDropdownOpen && (
-                  <div className="border-border animate-slide-down absolute right-0 mt-2 w-56 rounded-lg border bg-white shadow-lg">
+                  <div className="border-border animate-slide-down bg-background absolute right-0 mt-2 w-56 rounded-lg border shadow-lg dark:shadow-xl">
                     {/* User Info */}
                     <div className="border-border border-b px-4 py-3">
                       <p className="text-foreground text-sm font-semibold">{displayName}</p>
