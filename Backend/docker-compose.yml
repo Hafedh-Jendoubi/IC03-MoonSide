@@ -48,6 +48,12 @@ services:
       - MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
       - MONGO_DATABASE=${MONGO_DATABASE}
       - EUREKA_URI=http://eureka:8761/eureka/
+      - MAIL_HOST=${MAIL_HOST}
+      - MAIL_PORT=${MAIL_PORT}
+      - MAIL_USERNAME=${MAIL_USERNAME}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - APP_NAME=${APP_NAME}
+
     depends_on:
       mongodb:
         condition: service_healthy

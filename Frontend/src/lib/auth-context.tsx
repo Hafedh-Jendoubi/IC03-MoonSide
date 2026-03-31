@@ -7,7 +7,9 @@ import { authApi, userApi, tokenStorage, RegisterRequest } from './api'
 interface AuthContextType {
   user: User | null
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
+  // returns twoFactorRequired flag so login page can show 2FA step
+  login: (email: string, password: string) => Promise<{ twoFactorRequired: boolean }>
+  complete2FALogin: (email: string, code: string) => Promise<void>
   signup: (data: SignupData) => Promise<void>
   logout: () => void
   refreshUser: () => Promise<void>
@@ -28,7 +30,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // On mount, rehydrate session from stored token
   useEffect(() => {
     const initSession = async () => {
       const token = tokenStorage.getAccessToken()
@@ -40,7 +41,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const me = await userApi.getMe()
         setUser(me)
       } catch {
-        // Token invalid or expired — attempt refresh
         const refreshToken = tokenStorage.getRefreshToken()
         if (refreshToken) {
           try {
@@ -57,7 +57,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false)
       }
     }
-
     initSession()
   }, [])
 
@@ -65,6 +64,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true)
     try {
       const response = await authApi.login({ email, password })
+      if (response.twoFactorRequired) {
+        // Don't store tokens yet — user must verify 2FA first
+        setUser(response.user) // partial user for display
+        return { twoFactorRequired: true }
+      }
+      tokenStorage.setTokens(response.accessToken, response.refreshToken)
+      setUser(response.user)
+      return { twoFactorRequired: false }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const complete2FALogin = async (email: string, code: string) => {
+    setIsLoading(true)
+    try {
+      const response = await authApi.verify2FALogin({ email, code })
       tokenStorage.setTokens(response.accessToken, response.refreshToken)
       setUser(response.user)
     } finally {
@@ -102,7 +118,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, login, complete2FALogin, signup, logout, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   )
@@ -110,8 +128,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
+  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider')
   return context
 }

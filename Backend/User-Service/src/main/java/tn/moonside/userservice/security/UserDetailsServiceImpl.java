@@ -2,13 +2,16 @@ package tn.moonside.userservice.security;
 
 import tn.moonside.userservice.entities.User;
 import tn.moonside.userservice.repositories.UserRepository;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.Collections;
 
 @Service
@@ -21,17 +24,31 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found with email: " + email));
+        return new CustomUserDetails(user);
+    }
 
-        return org.springframework.security.core.userdetails.User.builder()
-                .username(user.getEmail())
-                .password(user.getPassword())
-                .authorities(Collections.singletonList(
-                        new SimpleGrantedAuthority("ROLE_USER")
-                ))
-                .accountExpired(false)
-                .accountLocked(!user.isActive())
-                .credentialsExpired(false)
-                .disabled(!user.isActive())
-                .build();
+    /** UserDetails wrapper that also exposes the Mongo user ID. */
+    public static class CustomUserDetails implements UserDetails {
+        @Getter private final String userId;
+        private final String email;
+        private final String password;
+        private final boolean active;
+        private final Collection<? extends GrantedAuthority> authorities;
+
+        public CustomUserDetails(User user) {
+            this.userId     = user.getId();
+            this.email      = user.getEmail();
+            this.password   = user.getPassword();
+            this.active     = user.isActive();
+            this.authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_USER"));
+        }
+
+        @Override public Collection<? extends GrantedAuthority> getAuthorities() { return authorities; }
+        @Override public String getPassword()                                      { return password; }
+        @Override public String getUsername()                                      { return email; }
+        @Override public boolean isAccountNonExpired()                             { return true; }
+        @Override public boolean isAccountNonLocked()                              { return active; }
+        @Override public boolean isCredentialsNonExpired()                         { return true; }
+        @Override public boolean isEnabled()                                       { return active; }
     }
 }

@@ -35,4 +35,13 @@ public class User {
     private LocalDateTime createdAt = LocalDateTime.now();
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    // ── Password Reset ────────────────────────────────────────────────────────
+    private String passwordResetOtp;
+    private LocalDateTime passwordResetOtpExpiry;
+
+    // ── Two-Factor Authentication (TOTP) ──────────────────────────────────────
+    @Builder.Default
+    private boolean twoFactorEnabled = false;
+    private String twoFactorSecret;           // base32-encoded TOTP secret
 }
