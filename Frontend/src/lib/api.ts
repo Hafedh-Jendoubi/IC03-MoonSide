@@ -8,6 +8,7 @@ export interface AuthResponse {
   tokenType: string
   expiresIn: number
   user: UserResponse
+  twoFactorRequired: boolean
 }
 
 export interface UserResponse {
@@ -60,6 +61,40 @@ export interface UpdateUserRequest {
   avatar?: string
 }
 
+// ── Password Reset DTOs ───────────────────────────────────────────────────────
+
+export interface ForgotPasswordRequest {
+  email: string
+}
+
+export interface VerifyOtpRequest {
+  email: string
+  otp: string
+}
+
+export interface ResetPasswordRequest {
+  email: string
+  otp: string
+  newPassword: string
+}
+
+// ── 2FA DTOs ─────────────────────────────────────────────────────────────────
+
+export interface TwoFactorVerifyRequest {
+  email: string
+  code: string
+}
+
+export interface TwoFactorSetupResponse {
+  secret: string
+  qrCodeUri: string
+  qrCodeImage: string // data:image/png;base64,...
+}
+
+export interface TwoFactorStatusResponse {
+  twoFactorEnabled: boolean
+}
+
 // ─── Token storage helpers ────────────────────────────────────────────────────
 
 export const tokenStorage = {
@@ -95,7 +130,6 @@ async function apiFetch<T>(
   const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })
 
   if (res.status === 401 && authenticated) {
-    // Try refresh token once
     const refreshToken = tokenStorage.getRefreshToken()
     if (refreshToken) {
       try {
@@ -109,12 +143,8 @@ async function apiFetch<T>(
         if (refreshRes.ok) {
           const refreshData: ApiResponse<AuthResponse> = await refreshRes.json()
           tokenStorage.setTokens(refreshData.data.accessToken, refreshData.data.refreshToken)
-          // Retry original request with new token
           headers['Authorization'] = `Bearer ${refreshData.data.accessToken}`
-          const retryRes = await fetch(`${API_BASE_URL}${path}`, {
-            ...options,
-            headers,
-          })
+          const retryRes = await fetch(`${API_BASE_URL}${path}`, { ...options, headers })
           if (!retryRes.ok) {
             const err = await retryRes.json().catch(() => ({}))
             throw new Error(err.message || `Request failed: ${retryRes.status}`)
@@ -123,7 +153,6 @@ async function apiFetch<T>(
           return retryData.data
         }
       } catch {
-        // Refresh failed — clear tokens
         tokenStorage.clear()
         window.location.href = '/login'
       }
@@ -146,54 +175,58 @@ async function apiFetch<T>(
 
 export const authApi = {
   login: (data: LoginRequest) =>
-    apiFetch<AuthResponse>(
-      '/auth/login',
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      },
-      false
-    ),
+    apiFetch<AuthResponse>('/auth/login', { method: 'POST', body: JSON.stringify(data) }, false),
 
   register: (data: RegisterRequest) =>
-    apiFetch<AuthResponse>(
-      '/auth/register',
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      },
-      false
-    ),
+    apiFetch<AuthResponse>('/auth/register', { method: 'POST', body: JSON.stringify(data) }, false),
 
   refreshToken: (refreshToken: string) =>
     apiFetch<AuthResponse>(
       '/auth/refresh',
-      {
-        method: 'POST',
-        headers: { 'X-Refresh-Token': refreshToken },
-      },
+      { method: 'POST', headers: { 'X-Refresh-Token': refreshToken } },
       false
     ),
+
+  // ── Password Reset ──────────────────────────────────────────────────────────
+
+  forgotPassword: (data: ForgotPasswordRequest) =>
+    apiFetch<null>('/auth/forgot-password', { method: 'POST', body: JSON.stringify(data) }, false),
+
+  verifyOtp: (data: VerifyOtpRequest) =>
+    apiFetch<null>('/auth/verify-otp', { method: 'POST', body: JSON.stringify(data) }, false),
+
+  resetPassword: (data: ResetPasswordRequest) =>
+    apiFetch<null>('/auth/reset-password', { method: 'POST', body: JSON.stringify(data) }, false),
+
+  // ── 2FA ─────────────────────────────────────────────────────────────────────
+
+  verify2FALogin: (data: TwoFactorVerifyRequest) =>
+    apiFetch<AuthResponse>(
+      '/auth/2fa/verify-login',
+      { method: 'POST', body: JSON.stringify(data) },
+      false
+    ),
+
+  setup2FA: () => apiFetch<TwoFactorSetupResponse>('/auth/2fa/setup', { method: 'POST' }),
+
+  enable2FA: (code: string) =>
+    apiFetch<null>(`/auth/2fa/enable?code=${encodeURIComponent(code)}`, { method: 'POST' }),
+
+  disable2FA: (code: string) =>
+    apiFetch<null>(`/auth/2fa/disable?code=${encodeURIComponent(code)}`, { method: 'POST' }),
+
+  get2FAStatus: () => apiFetch<TwoFactorStatusResponse>('/auth/2fa/status'),
 }
 
 // ─── User endpoints ───────────────────────────────────────────────────────────
 
 export const userApi = {
   getAll: () => apiFetch<UserResponse[]>('/users'),
-
   getById: (id: string) => apiFetch<UserResponse>(`/users/${id}`),
-
   getMe: () => apiFetch<UserResponse>('/users/me'),
-
   update: (id: string, data: UpdateUserRequest) =>
-    apiFetch<UserResponse>(`/users/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-
+    apiFetch<UserResponse>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id: string) => apiFetch<void>(`/users/${id}`, { method: 'DELETE' }),
-
   deactivate: (id: string) => apiFetch<void>(`/users/${id}/deactivate`, { method: 'PATCH' }),
-
   activate: (id: string) => apiFetch<void>(`/users/${id}/activate`, { method: 'PATCH' }),
 }
