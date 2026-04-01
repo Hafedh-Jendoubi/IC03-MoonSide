@@ -20,4 +20,7 @@ public class UpdateUserRequest {
     private String bio;
 
     private String avatar;
+
+    /** Optional: set/change the user's primary role (flat denormalized field on User). */
+    private String roleId;
 }

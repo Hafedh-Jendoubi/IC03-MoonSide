@@ -59,6 +59,8 @@ export interface UpdateUserRequest {
   jobTitle?: string
   bio?: string
   avatar?: string
+  /** Set/change the user's primary role. Pass empty string to clear. */
+  roleId?: string
 }
 
 // ── Password Reset DTOs ───────────────────────────────────────────────────────
@@ -229,8 +231,11 @@ export const userApi = {
   delete: (id: string) => apiFetch<void>(`/users/${id}`, { method: 'DELETE' }),
   deactivate: (id: string) => apiFetch<void>(`/users/${id}/deactivate`, { method: 'PATCH' }),
   activate: (id: string) => apiFetch<void>(`/users/${id}/activate`, { method: 'PATCH' }),
-  assignRole: (userId: string, data: { roleId: string }) =>
-    apiFetch<void>(`/users/${userId}/roles`, { method: 'POST', body: JSON.stringify(data) }),
+  assignRole: (userId: string, data: { roleId: string; scopeType?: string; scopeId?: string }) =>
+    apiFetch<void>(`/users/${userId}/roles`, {
+      method: 'POST',
+      body: JSON.stringify({ scopeType: 'GLOBAL', scopeId: 'GLOBAL', ...data }),
+    }),
   revokeRole: (userId: string, roleId: string) =>
     apiFetch<void>(`/users/${userId}/roles/${roleId}`, { method: 'DELETE' }),
 }

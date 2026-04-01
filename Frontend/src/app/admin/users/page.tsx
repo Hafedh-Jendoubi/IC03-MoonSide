@@ -129,10 +129,9 @@ export default function UsersPage() {
         lastName: editForm.lastName,
         jobTitle: editForm.jobTitle || undefined,
         bio: editForm.bio || undefined,
+        // roleId: '' means "clear", undefined means "don't touch"
+        roleId: assignRoleId !== (editingUser.roleId ?? '') ? assignRoleId : undefined,
       })
-      if (assignRoleId && assignRoleId !== editingUser.roleId) {
-        await userApi.assignRole(editingUser.id, { roleId: assignRoleId })
-      }
       await fetchData()
       setEditingUser(null)
     } catch (err) {
