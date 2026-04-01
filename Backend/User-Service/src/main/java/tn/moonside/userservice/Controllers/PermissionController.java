@@ -28,7 +28,7 @@ public class PermissionController {
                 .body(ApiResponse.success(permission, "Permission created successfully"));
     }
 
-    @GetMapping
+    @GetMapping("/get-all")
     public ResponseEntity<ApiResponse<List<PermissionResponse>>> getAllPermissions(
             @RequestParam(required = false) TypeScope scopeType) {
         if (scopeType != null) {

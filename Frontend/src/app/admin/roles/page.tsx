@@ -1,99 +1,168 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Edit2, Trash2, Plus } from 'lucide-react'
+import { Edit2, Trash2, Plus, Loader2, RefreshCw } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
-
-// Mock roles and permissions data
-const mockRoles = [
-  {
-    id: 'admin',
-    name: 'Admin',
-    description: 'Full system access and management capabilities',
-    userCount: 2,
-    permissions: [
-      { id: 'users.read', name: 'Read Users', resource: 'users', action: 'read' },
-      { id: 'users.write', name: 'Create/Edit Users', resource: 'users', action: 'write' },
-      { id: 'users.delete', name: 'Delete Users', resource: 'users', action: 'delete' },
-      { id: 'roles.read', name: 'Read Roles', resource: 'roles', action: 'read' },
-      { id: 'roles.write', name: 'Manage Roles', resource: 'roles', action: 'write' },
-      { id: 'posts.delete', name: 'Delete Posts', resource: 'posts', action: 'delete' },
-      { id: 'settings.write', name: 'System Settings', resource: 'settings', action: 'write' },
-    ],
-  },
-  {
-    id: 'moderator',
-    name: 'Moderator',
-    description: 'Content moderation and user management',
-    userCount: 3,
-    permissions: [
-      { id: 'users.read', name: 'Read Users', resource: 'users', action: 'read' },
-      { id: 'posts.read', name: 'Read Posts', resource: 'posts', action: 'read' },
-      { id: 'posts.delete', name: 'Delete Posts', resource: 'posts', action: 'delete' },
-      { id: 'comments.delete', name: 'Delete Comments', resource: 'comments', action: 'delete' },
-    ],
-  },
-  {
-    id: 'user',
-    name: 'User',
-    description: 'Regular user with basic permissions',
-    userCount: 615,
-    permissions: [
-      { id: 'posts.read', name: 'Read Posts', resource: 'posts', action: 'read' },
-      { id: 'posts.write', name: 'Create Posts', resource: 'posts', action: 'write' },
-      { id: 'comments.write', name: 'Comment', resource: 'comments', action: 'write' },
-      { id: 'profile.write', name: 'Edit Profile', resource: 'profile', action: 'write' },
-    ],
-  },
-]
-
-const allAvailablePermissions = [
-  { id: 'users.read', name: 'Read Users', resource: 'users', action: 'read' },
-  { id: 'users.write', name: 'Create/Edit Users', resource: 'users', action: 'write' },
-  { id: 'users.delete', name: 'Delete Users', resource: 'users', action: 'delete' },
-  { id: 'roles.read', name: 'Read Roles', resource: 'roles', action: 'read' },
-  { id: 'roles.write', name: 'Manage Roles', resource: 'roles', action: 'write' },
-  { id: 'posts.read', name: 'Read Posts', resource: 'posts', action: 'read' },
-  { id: 'posts.write', name: 'Create Posts', resource: 'posts', action: 'write' },
-  { id: 'posts.delete', name: 'Delete Posts', resource: 'posts', action: 'delete' },
-  { id: 'comments.read', name: 'Read Comments', resource: 'comments', action: 'read' },
-  { id: 'comments.write', name: 'Create Comments', resource: 'comments', action: 'write' },
-  { id: 'comments.delete', name: 'Delete Comments', resource: 'comments', action: 'delete' },
-  { id: 'profile.read', name: 'View Profiles', resource: 'profile', action: 'read' },
-  { id: 'profile.write', name: 'Edit Profile', resource: 'profile', action: 'write' },
-  { id: 'settings.read', name: 'View Settings', resource: 'settings', action: 'read' },
-  { id: 'settings.write', name: 'System Settings', resource: 'settings', action: 'write' },
-]
+import { roleApi, permissionApi, RoleResponse, PermissionResponse } from '@/lib/api'
 
 export default function RolesPage() {
-  const [selectedRole, setSelectedRole] = useState<string | null>(null)
-  const [editingRole, setEditingRole] = useState<string | null>(null)
-  const [isOpen, setIsOpen] = useState(false)
+  const [roles, setRoles] = useState<RoleResponse[]>([])
+  const [allPermissions, setAllPermissions] = useState<PermissionResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const currentRole = selectedRole ? mockRoles.find((r) => r.id === selectedRole) : null
+  const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
 
-  const groupPermissionsByResource = (permissions: typeof allAvailablePermissions) => {
+  // Create / edit dialog
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [editingRole, setEditingRole] = useState<RoleResponse | null>(null)
+  const [formName, setFormName] = useState('')
+  const [formDescription, setFormDescription] = useState('')
+  const [formPermissions, setFormPermissions] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+
+  // Delete dialog
+  const [deletingRole, setDeletingRole] = useState<RoleResponse | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [rolesData, permsData] = await Promise.all([roleApi.getAll(), permissionApi.getAll()])
+      setRoles(rolesData)
+      setAllPermissions(permsData)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  const selectedRole = selectedRoleId ? roles.find((r) => r.id === selectedRoleId) : null
+
+  const groupPermissionsByScopeType = (permissions: PermissionResponse[]) => {
     return permissions.reduce(
       (acc, perm) => {
-        if (!acc[perm.resource]) {
-          acc[perm.resource] = []
-        }
-        acc[perm.resource].push(perm)
+        const key = perm.scopeType ?? 'OTHER'
+        if (!acc[key]) acc[key] = []
+        acc[key].push(perm)
         return acc
       },
-      {} as Record<string, typeof allAvailablePermissions>
+      {} as Record<string, PermissionResponse[]>
+    )
+  }
+
+  const openCreate = () => {
+    setEditingRole(null)
+    setFormName('')
+    setFormDescription('')
+    setFormPermissions(new Set())
+    setDialogOpen(true)
+  }
+
+  const openEdit = (role: RoleResponse) => {
+    setEditingRole(role)
+    setFormName(role.name)
+    setFormDescription(role.description ?? '')
+    setFormPermissions(new Set(role.permissions.map((p) => p.id)))
+    setDialogOpen(true)
+  }
+
+  const togglePermission = (permId: string) => {
+    setFormPermissions((prev) => {
+      const next = new Set(prev)
+      if (next.has(permId)) next.delete(permId)
+      else next.add(permId)
+      return next
+    })
+  }
+
+  const handleSave = async () => {
+    if (!formName.trim()) return
+    setSaving(true)
+    try {
+      if (editingRole) {
+        // Update role info
+        const updated = await roleApi.update(editingRole.id, {
+          name: formName,
+          description: formDescription || undefined,
+        })
+
+        // Sync permissions: revoke removed, assign added
+        const currentPermIds = new Set(editingRole.permissions.map((p) => p.id))
+        const toRevoke = [...currentPermIds].filter((id) => !formPermissions.has(id))
+        const toAssign = [...formPermissions].filter((id) => !currentPermIds.has(id))
+
+        await Promise.all([
+          ...toRevoke.map((pid) => roleApi.revokePermission(updated.id, pid)),
+          ...toAssign.map((pid) => roleApi.assignPermission(updated.id, pid)),
+        ])
+      } else {
+        // Create role then assign permissions
+        const created = await roleApi.create({
+          name: formName,
+          description: formDescription || undefined,
+        })
+        await Promise.all(
+          [...formPermissions].map((pid) => roleApi.assignPermission(created.id, pid))
+        )
+        setSelectedRoleId(created.id)
+      }
+      await fetchData()
+      setDialogOpen(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save role')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deletingRole) return
+    setDeleting(true)
+    try {
+      await roleApi.delete(deletingRole.id)
+      if (selectedRoleId === deletingRole.id) setSelectedRoleId(null)
+      await fetchData()
+      setDeletingRole(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete role')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
+      </div>
     )
   }
 
@@ -105,63 +174,23 @@ export default function RolesPage() {
           <h1 className="text-3xl font-bold">Roles & Permissions</h1>
           <p className="text-muted-foreground">Manage system roles and their permissions</p>
         </div>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="h-4 w-4" />
-              New Role
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl dark:border-slate-700">
-            <DialogHeader>
-              <DialogTitle>Create New Role</DialogTitle>
-              <DialogDescription>Define a new role with specific permissions</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Role Name</label>
-                <Input placeholder="e.g., Content Editor" className="mt-2" />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Description</label>
-                <textarea
-                  placeholder="Describe the purpose of this role..."
-                  className="border-border bg-background mt-2 w-full rounded-md border px-3 py-2 text-sm dark:bg-slate-900"
-                  rows={3}
-                />
-              </div>
-              <div>
-                <label className="mb-3 block text-sm font-medium">Permissions</label>
-                <div className="border-border bg-muted/30 max-h-64 space-y-4 overflow-y-auto rounded-lg border p-4 dark:border-slate-700">
-                  {Object.entries(groupPermissionsByResource(allAvailablePermissions)).map(
-                    ([resource, perms]) => (
-                      <div key={resource} className="space-y-2">
-                        <h4 className="text-sm font-semibold capitalize">{resource}</h4>
-                        <div className="space-y-2 pl-4">
-                          {perms.map((perm) => (
-                            <div key={perm.id} className="flex items-center gap-2">
-                              <Checkbox id={perm.id} />
-                              <label htmlFor={perm.id} className="cursor-pointer text-sm">
-                                {perm.name}
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setIsOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={() => setIsOpen(false)}>Create Role</Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+          <Button className="gap-2" onClick={openCreate}>
+            <Plus className="h-4 w-4" />
+            New Role
+          </Button>
+        </div>
       </div>
+
+      {error && (
+        <div className="bg-destructive/10 text-destructive rounded-md px-4 py-2 text-sm">
+          {error}
+        </div>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Roles List */}
@@ -169,38 +198,49 @@ export default function RolesPage() {
           <Card className="dark:border-slate-700">
             <CardHeader>
               <CardTitle>Roles</CardTitle>
-              <CardDescription>{mockRoles.length} roles defined</CardDescription>
+              <CardDescription>{roles.length} roles defined</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              {mockRoles.map((role) => (
-                <button
-                  key={role.id}
-                  onClick={() => setSelectedRole(role.id)}
-                  className={`w-full rounded-lg border px-4 py-3 text-left transition-colors dark:border-slate-700 ${
-                    selectedRole === role.id
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:bg-muted'
-                  }`}
-                >
-                  <p className="font-medium">{role.name}</p>
-                  <p className="text-muted-foreground text-xs">{role.userCount} users</p>
-                </button>
-              ))}
+              {roles.length === 0 ? (
+                <p className="text-muted-foreground text-sm">No roles yet. Create one!</p>
+              ) : (
+                roles.map((role) => (
+                  <button
+                    key={role.id}
+                    onClick={() => setSelectedRoleId(role.id)}
+                    className={`w-full rounded-lg border px-4 py-3 text-left transition-colors dark:border-slate-700 ${
+                      selectedRoleId === role.id
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    <p className="font-medium">{role.name}</p>
+                    <p className="text-muted-foreground text-xs">
+                      {role.permissions.length} permissions
+                    </p>
+                  </button>
+                ))
+              )}
             </CardContent>
           </Card>
         </div>
 
         {/* Role Details */}
         <div className="lg:col-span-2">
-          {currentRole ? (
+          {selectedRole ? (
             <Card className="dark:border-slate-700">
               <CardHeader className="flex flex-row items-start justify-between space-y-0">
                 <div className="space-y-2">
-                  <CardTitle>{currentRole.name}</CardTitle>
-                  <CardDescription>{currentRole.description}</CardDescription>
+                  <CardTitle>{selectedRole.name}</CardTitle>
+                  <CardDescription>{selectedRole.description ?? 'No description'}</CardDescription>
                 </div>
                 <div className="flex gap-2">
-                  <Button size="sm" variant="outline" className="gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1"
+                    onClick={() => openEdit(selectedRole)}
+                  >
                     <Edit2 className="h-4 w-4" />
                     Edit
                   </Button>
@@ -208,6 +248,7 @@ export default function RolesPage() {
                     size="sm"
                     variant="outline"
                     className="text-destructive hover:text-destructive gap-1"
+                    onClick={() => setDeletingRole(selectedRole)}
                   >
                     <Trash2 className="h-4 w-4" />
                     Delete
@@ -218,36 +259,46 @@ export default function RolesPage() {
                 {/* Role Stats */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="border-border bg-muted/30 rounded-lg border p-4 dark:border-slate-700">
-                    <p className="text-muted-foreground text-xs">Users with this role</p>
-                    <p className="text-2xl font-bold">{currentRole.userCount}</p>
+                    <p className="text-muted-foreground text-xs">Created At</p>
+                    <p className="font-semibold">
+                      {new Date(selectedRole.createdAt).toLocaleDateString()}
+                    </p>
                   </div>
                   <div className="border-border bg-muted/30 rounded-lg border p-4 dark:border-slate-700">
                     <p className="text-muted-foreground text-xs">Permissions</p>
-                    <p className="text-2xl font-bold">{currentRole.permissions.length}</p>
+                    <p className="text-2xl font-bold">{selectedRole.permissions.length}</p>
                   </div>
                 </div>
 
-                {/* Permissions by Resource */}
+                {/* Permissions by Scope */}
                 <div className="space-y-4">
                   <h3 className="font-semibold">Permissions</h3>
-                  <div className="space-y-3">
-                    {Object.entries(groupPermissionsByResource(currentRole.permissions)).map(
-                      ([resource, perms]) => (
-                        <div key={resource} className="space-y-2">
-                          <h4 className="text-muted-foreground text-sm font-medium capitalize">
-                            {resource}
-                          </h4>
-                          <div className="flex flex-wrap gap-2">
-                            {perms.map((perm) => (
-                              <Badge key={perm.id} variant="secondary">
-                                {perm.action}
-                              </Badge>
-                            ))}
+                  {selectedRole.permissions.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">No permissions assigned.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {Object.entries(groupPermissionsByScopeType(selectedRole.permissions)).map(
+                        ([scope, perms]) => (
+                          <div key={scope} className="space-y-2">
+                            <h4 className="text-muted-foreground text-sm font-medium capitalize">
+                              {scope}
+                            </h4>
+                            <div className="flex flex-wrap gap-2">
+                              {perms.map((perm) => (
+                                <Badge
+                                  key={perm.id}
+                                  variant="secondary"
+                                  title={perm.description ?? ''}
+                                >
+                                  {perm.action}
+                                </Badge>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      )
-                    )}
-                  </div>
+                        )
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -260,6 +311,111 @@ export default function RolesPage() {
           )}
         </div>
       </div>
+
+      {/* Create / Edit Role Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={(open) => !open && setDialogOpen(false)}>
+        <DialogContent className="max-w-2xl dark:border-slate-700">
+          <DialogHeader>
+            <DialogTitle>{editingRole ? 'Edit Role' : 'Create New Role'}</DialogTitle>
+            <DialogDescription>
+              {editingRole
+                ? 'Update role details and permissions'
+                : 'Define a new role with specific permissions'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Role Name</label>
+              <Input
+                placeholder="e.g., Content Editor"
+                className="mt-2"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Description</label>
+              <textarea
+                placeholder="Describe the purpose of this role..."
+                className="border-border bg-background mt-2 w-full rounded-md border px-3 py-2 text-sm dark:bg-slate-900"
+                rows={3}
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="mb-3 block text-sm font-medium">
+                Permissions
+                {allPermissions.length === 0 && (
+                  <span className="text-muted-foreground ml-2 font-normal">(none available)</span>
+                )}
+              </label>
+              {allPermissions.length > 0 && (
+                <div className="border-border bg-muted/30 max-h-64 space-y-4 overflow-y-auto rounded-lg border p-4 dark:border-slate-700">
+                  {Object.entries(groupPermissionsByScopeType(allPermissions)).map(
+                    ([scope, perms]) => (
+                      <div key={scope} className="space-y-2">
+                        <h4 className="text-sm font-semibold capitalize">{scope}</h4>
+                        <div className="space-y-2 pl-4">
+                          {perms.map((perm) => (
+                            <div key={perm.id} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`perm-${perm.id}`}
+                                checked={formPermissions.has(perm.id)}
+                                onCheckedChange={() => togglePermission(perm.id)}
+                              />
+                              <label
+                                htmlFor={`perm-${perm.id}`}
+                                className="cursor-pointer text-sm"
+                                title={perm.description ?? ''}
+                              >
+                                {perm.action}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave} disabled={saving || !formName.trim()}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {editingRole ? 'Save Changes' : 'Create Role'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deletingRole} onOpenChange={(open) => !open && setDeletingRole(null)}>
+        <AlertDialogContent className="dark:border-slate-700">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Role</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the role <strong>{deletingRole?.name}</strong>? This
+              action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
