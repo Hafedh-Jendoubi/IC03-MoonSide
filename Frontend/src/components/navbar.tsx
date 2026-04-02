@@ -7,24 +7,42 @@ import { useAuth } from '@/lib/auth-context'
 import { getFullName } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ThemeToggle } from '@/components/theme-toggle'
 import { Heart, Mail, Bell, Search, LogOut, Settings, User, Shield } from 'lucide-react'
+import { Notification } from '@/lib/types'
 
 export function Navbar() {
   const { user, logout } = useAuth()
   const router = useRouter()
   const pathname = usePathname()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const notificationsRef = useRef<HTMLDivElement>(null)
+  const [notifications, setNotifications] = useState<Notification[]>([])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false)
       }
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setIsNotificationsOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Load notifications from localStorage
+  useEffect(() => {
+    const storedNotifications = localStorage.getItem('notifications')
+    if (storedNotifications) {
+      try {
+        setNotifications(JSON.parse(storedNotifications))
+      } catch {
+        console.error('Failed to parse notifications')
+      }
+    }
   }, [])
 
   const handleLogout = () => {
@@ -35,7 +53,6 @@ export function Navbar() {
   const navLinks = [
     { href: '/feed', label: 'Feed', icon: Heart },
     { href: '/messages', label: 'Messages', icon: Mail },
-    { href: '/notifications', label: 'Notifications', icon: Bell },
   ]
 
   const displayName = user ? getFullName(user) : ''
@@ -54,7 +71,7 @@ export function Navbar() {
           </Link>
 
           {/* Navigation Links */}
-          <div className="hidden items-center gap-1 md:flex">
+          <div className="hidden items-center gap-2 md:flex">
             {navLinks.map(({ href, label, icon: Icon }) => (
               <Link key={href} href={href}>
                 <Button variant={pathname === href ? 'default' : 'ghost'} className="gap-2">
@@ -78,22 +95,69 @@ export function Navbar() {
 
           {/* Right Side */}
           <div className="flex items-center gap-4">
-            {/* Theme Toggle */}
-            <ThemeToggle />
+            {/* Notifications Dropdown */}
+            {user && (
+              <div className="relative" ref={notificationsRef}>
+                <button
+                  onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  className="relative transition-opacity hover:opacity-80"
+                >
+                  <Bell size={20} />
+                  {notifications.some((n) => !n.read) && (
+                    <div className="bg-destructive absolute -top-1 -right-1 h-2 w-2 rounded-full" />
+                  )}
+                </button>
 
-            {/* Admin Panel Link */}
-            <Link href="/admin/dashboard">
-              <Button variant="outline" size="icon" title="Admin Panel">
-                <Shield size={20} />
-              </Button>
-            </Link>
+                {isNotificationsOpen && (
+                  <div className="border-border animate-slide-down bg-background absolute right-0 mt-2 w-80 rounded-lg border shadow-lg dark:shadow-xl">
+                    {/* Notifications Header */}
+                    <div className="border-border border-b px-4 py-3">
+                      <p className="text-foreground text-sm font-semibold">Notifications</p>
+                    </div>
 
-            {/* Notification Bell */}
-            <Link href="/notifications">
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell size={20} />
-              </Button>
-            </Link>
+                    {/* Notifications List */}
+                    <div className="max-h-96 overflow-y-auto">
+                      {notifications.slice(0, 5).length > 0 ? (
+                        notifications.slice(0, 5).map((notif) => (
+                          <div
+                            key={notif.id}
+                            className={`border-border hover:bg-muted border-b px-4 py-3 text-sm transition-colors ${
+                              notif.read ? '' : 'bg-blue-50 dark:bg-blue-950'
+                            }`}
+                          >
+                            <p
+                              className={
+                                notif.read ? 'text-muted-foreground' : 'text-foreground font-medium'
+                              }
+                            >
+                              {notif.message}
+                            </p>
+                            <p className="text-muted-foreground mt-1 text-xs">
+                              {new Date(notif.timestamp).toLocaleDateString()}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="text-muted-foreground px-4 py-6 text-center text-sm">
+                          No notifications
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Load More Button */}
+                    {notifications.length > 5 && (
+                      <div className="border-border border-t p-2">
+                        <Link href="/notifications" onClick={() => setIsNotificationsOpen(false)}>
+                          <button className="text-primary hover:bg-muted flex w-full items-center justify-center rounded-md px-3 py-2 text-sm font-medium transition-colors">
+                            View All Notifications
+                          </button>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Avatar Dropdown */}
             {user && (
@@ -147,6 +211,17 @@ export function Navbar() {
                           Settings
                         </button>
                       </Link>
+                      {user.roleId && (
+                        <Link href="/admin/dashboard">
+                          <button
+                            onClick={() => setIsDropdownOpen(false)}
+                            className="text-foreground hover:bg-muted flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors"
+                          >
+                            <Shield size={16} />
+                            Admin Panel
+                          </button>
+                        </Link>
+                      )}
                     </div>
 
                     {/* Logout */}

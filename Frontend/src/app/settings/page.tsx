@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useTheme } from 'next-themes'
 import { useAuth } from '@/lib/auth-context'
 import { AuthLayout } from '@/components/auth-layout'
 import { Card } from '@/components/ui/card'
@@ -262,6 +263,7 @@ function TwoFactorPanel() {
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth()
+  const { theme, setTheme } = useTheme()
 
   const [profileForm, setProfileForm] = useState({
     firstName: user?.firstName ?? '',
@@ -280,7 +282,6 @@ export default function SettingsPage() {
     emailNotifications: true,
     pushNotifications: true,
     privateProfile: false,
-    darkMode: false,
   })
 
   const handleToggle = (key: keyof typeof settings) => {
@@ -499,14 +500,17 @@ export default function SettingsPage() {
             <label className="hover:bg-muted flex cursor-pointer items-center gap-4 rounded-lg p-3 transition-colors">
               <input
                 type="checkbox"
-                checked={settings.darkMode}
-                onChange={() => handleToggle('darkMode')}
-                disabled
-                className="border-border accent-primary h-5 w-5 rounded opacity-50"
+                checked={theme === 'dark'}
+                onChange={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="border-border accent-primary h-5 w-5 rounded"
               />
               <div className="flex-1">
                 <p className="text-foreground font-medium">Dark Mode</p>
-                <p className="text-muted-foreground text-sm">Coming soon</p>
+                <p className="text-muted-foreground text-sm">
+                  {theme === 'dark'
+                    ? 'Dark mode is enabled'
+                    : 'Enable dark mode for your interface'}
+                </p>
               </div>
             </label>
           </div>
