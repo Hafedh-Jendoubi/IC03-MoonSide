@@ -16,4 +16,6 @@ public interface UserService {
     void revokeRole(String userId, String roleId);
     void deactivateUser(String id);
     void activateUser(String id);
+    /** Returns the role names (e.g. ["ADMIN", "EMPLOYEE"]) for a given user. */
+    List<String> getUserRoleNames(String userId);
 }

@@ -13,7 +13,7 @@ export interface AuthResponse {
 
 export interface UserResponse {
   id: string
-  roleId: string | null
+  roles: string[]
   email: string
   firstName: string
   lastName: string
@@ -59,8 +59,6 @@ export interface UpdateUserRequest {
   jobTitle?: string
   bio?: string
   avatar?: string
-  /** Set/change the user's primary role. Pass empty string to clear. */
-  roleId?: string
 }
 
 // ── Password Reset DTOs ───────────────────────────────────────────────────────

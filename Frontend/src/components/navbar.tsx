@@ -211,7 +211,7 @@ export function Navbar() {
                           Settings
                         </button>
                       </Link>
-                      {user.roleId && (
+                      {user.roles.some((r) => r.toLowerCase() === 'admin') && (
                         <Link href="/admin/dashboard">
                           <button
                             onClick={() => setIsDropdownOpen(false)}

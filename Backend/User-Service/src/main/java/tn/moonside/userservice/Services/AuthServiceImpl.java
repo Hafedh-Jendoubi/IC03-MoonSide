@@ -5,8 +5,11 @@ import tn.moonside.userservice.dtos.responses.*;
 import tn.moonside.userservice.exceptions.DuplicateResourceException;
 import tn.moonside.userservice.exceptions.ResourceNotFoundException;
 import tn.moonside.userservice.exceptions.UnauthorizedException;
+import tn.moonside.userservice.entities.Role;
 import tn.moonside.userservice.entities.User;
+import tn.moonside.userservice.repositories.RoleRepository;
 import tn.moonside.userservice.repositories.UserRepository;
+import tn.moonside.userservice.repositories.UserRoleRepository;
 import tn.moonside.userservice.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +34,9 @@ import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Random;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -39,6 +44,8 @@ import java.util.Random;
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
@@ -161,7 +168,6 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("No account found"));
         validateResetOtp(user, request.getOtp());
-        // OTP is valid — frontend can now show the "new password" form
     }
 
     // ─── Password Reset: Step 3 — set new password ───────────────────────────
@@ -181,7 +187,7 @@ public class AuthServiceImpl implements AuthService {
         log.info("Password reset for {}", user.getEmail());
     }
 
-    // ─── 2FA: Setup (generate secret + QR code) ───────────────────────────────
+    // ─── 2FA: Setup ───────────────────────────────────────────────────────────
 
     @Override
     @Transactional
@@ -205,7 +211,7 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
-    // ─── 2FA: Enable (confirm with first TOTP code) ───────────────────────────
+    // ─── 2FA: Enable ──────────────────────────────────────────────────────────
 
     @Override
     @Transactional
@@ -290,6 +296,34 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
+    private List<String> resolveRoleNames(String userId) {
+        return userRoleRepository.findByUserId(userId).stream()
+                .map(ur -> roleRepository.findById(ur.getRoleId()).map(Role::getName).orElse(null))
+                .filter(name -> name != null)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    private UserResponse mapToUserResponse(User user) {
+        List<String> roles = user.getId() != null ? resolveRoleNames(user.getId()) : List.of();
+        return UserResponse.builder()
+                .id(user.getId())
+                .roles(roles)
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .birthDate(user.getBirthDate())
+                .phoneNumber(user.getPhoneNumber())
+                .jobTitle(user.getJobTitle())
+                .bio(user.getBio())
+                .avatar(user.getAvatar())
+                .isActive(user.isActive())
+                .lastLogin(user.getLastLogin())
+                .createdAt(user.getCreatedAt())
+                .updatedAt(user.getUpdatedAt())
+                .build();
+    }
+
     private String generateNumericOtp(int length) {
         Random rnd = new Random();
         StringBuilder sb = new StringBuilder(length);
@@ -313,7 +347,6 @@ public class AuthServiceImpl implements AuthService {
         mailSender.send(msg);
     }
 
-    /** Generate a random base32-encoded TOTP secret (160-bit) */
     private String generateTotpSecret() {
         byte[] buffer = new byte[20];
         new SecureRandom().nextBytes(buffer);
@@ -329,10 +362,6 @@ public class AuthServiceImpl implements AuthService {
                 + "&algorithm=SHA1&digits=6&period=30";
     }
 
-    /**
-     * Generate a simple QR code PNG using the ZXing library (pure Java).
-     * Returns base64-encoded PNG bytes.
-     */
     private String generateQrCodeBase64(String content) {
         try {
             com.google.zxing.qrcode.QRCodeWriter writer = new com.google.zxing.qrcode.QRCodeWriter();
@@ -349,10 +378,6 @@ public class AuthServiceImpl implements AuthService {
         }
     }
 
-    /**
-     * RFC 6238 TOTP verification (SHA-1, 6 digits, 30-second window).
-     * Accepts current window ± 1 (i.e., 90-second tolerance for clock skew).
-     */
     private boolean verifyTotp(String base32Secret, String code) {
         if (code == null || code.length() != 6) return false;
         long timeStep = System.currentTimeMillis() / 1000L / 30L;
@@ -377,24 +402,5 @@ public class AuthServiceImpl implements AuthService {
                 | ((hash[offset + 2] & 0xFF) << 8)
                 | (hash[offset + 3]  & 0xFF);
         return String.format("%06d", otp % 1_000_000);
-    }
-
-    private UserResponse mapToUserResponse(User user) {
-        return UserResponse.builder()
-                .id(user.getId())
-                .roleId(user.getRoleId())
-                .email(user.getEmail())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
-                .birthDate(user.getBirthDate())
-                .phoneNumber(user.getPhoneNumber())
-                .jobTitle(user.getJobTitle())
-                .bio(user.getBio())
-                .avatar(user.getAvatar())
-                .isActive(user.isActive())
-                .lastLogin(user.getLastLogin())
-                .createdAt(user.getCreatedAt())
-                .updatedAt(user.getUpdatedAt())
-                .build();
     }
 }

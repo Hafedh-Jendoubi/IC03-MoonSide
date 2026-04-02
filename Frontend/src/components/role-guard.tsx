@@ -1,13 +1,15 @@
 'use client'
 
 import { useAuth } from '@/lib/auth-context'
+import { isAdmin } from '@/lib/types'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { Spinner } from '@/components/ui/spinner'
 
 interface RoleGuardProps {
   children: React.ReactNode
-  requiredRole?: 'admin' | 'moderator'
+  /** Which role is required to see the children. Defaults to 'admin'. */
+  requiredRole?: string
   fallback?: React.ReactNode
 }
 
@@ -35,8 +37,10 @@ export function RoleGuard({ children, requiredRole = 'admin', fallback }: RoleGu
     )
   }
 
-  // Check if user has required role
-  if (requiredRole === 'admin') {
+  // Check if user holds the required role (case-insensitive)
+  const hasRequiredRole = user.roles.some((r) => r.toLowerCase() === requiredRole.toLowerCase())
+
+  if (!hasRequiredRole) {
     return (
       fallback || (
         <div className="flex h-screen flex-col items-center justify-center gap-4">

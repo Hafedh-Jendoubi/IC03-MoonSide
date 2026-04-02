@@ -5,6 +5,7 @@ import tn.moonside.userservice.dtos.requests.UpdateUserRequest;
 import tn.moonside.userservice.dtos.responses.UserResponse;
 import tn.moonside.userservice.exceptions.DuplicateResourceException;
 import tn.moonside.userservice.exceptions.ResourceNotFoundException;
+import tn.moonside.userservice.entities.Role;
 import tn.moonside.userservice.entities.User;
 import tn.moonside.userservice.entities.UserRole;
 import tn.moonside.userservice.repositories.RoleRepository;
@@ -53,22 +54,13 @@ public class UserServiceImpl implements UserService {
     public UserResponse updateUser(String id, UpdateUserRequest request, String currentUserEmail) {
         User user = findUserById(id);
 
-        if (request.getFirstName() != null) user.setFirstName(request.getFirstName());
-        if (request.getLastName() != null) user.setLastName(request.getLastName());
-        if (request.getBirthDate() != null) user.setBirthDate(request.getBirthDate());
+        if (request.getFirstName()   != null) user.setFirstName(request.getFirstName());
+        if (request.getLastName()    != null) user.setLastName(request.getLastName());
+        if (request.getBirthDate()   != null) user.setBirthDate(request.getBirthDate());
         if (request.getPhoneNumber() != null) user.setPhoneNumber(request.getPhoneNumber());
-        if (request.getJobTitle() != null) user.setJobTitle(request.getJobTitle());
-        if (request.getBio() != null) user.setBio(request.getBio());
-        if (request.getAvatar() != null) user.setAvatar(request.getAvatar());
-
-        // Allow updating the flat denormalized roleId field directly
-        if (request.getRoleId() != null) {
-            if (!request.getRoleId().isEmpty()) {
-                roleRepository.findById(request.getRoleId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + request.getRoleId()));
-            }
-            user.setRoleId(request.getRoleId().isEmpty() ? null : request.getRoleId());
-        }
+        if (request.getJobTitle()    != null) user.setJobTitle(request.getJobTitle());
+        if (request.getBio()         != null) user.setBio(request.getBio());
+        if (request.getAvatar()      != null) user.setAvatar(request.getAvatar());
 
         user.setUpdatedBy(currentUserEmail);
         user.setUpdatedAt(LocalDateTime.now());
@@ -82,7 +74,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void deleteUser(String id) {
         User user = findUserById(id);
-        userRoleRepository.findByUserId(id).forEach(ur -> userRoleRepository.delete(ur));
+        userRoleRepository.findByUserId(id).forEach(userRoleRepository::delete);
         userRepository.delete(user);
         log.info("Deleted user: {}", id);
     }
@@ -143,15 +135,29 @@ public class UserServiceImpl implements UserService {
         log.info("Activated user: {}", id);
     }
 
+    @Override
+    public List<String> getUserRoleNames(String userId) {
+        return userRoleRepository.findByUserId(userId).stream()
+                .map(userRole -> roleRepository.findById(userRole.getRoleId())
+                        .map(Role::getName)
+                        .orElse(null))
+                .filter(name -> name != null)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
     private User findUserById(String id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
     }
 
     private UserResponse mapToUserResponse(User user) {
+        List<String> roles = getUserRoleNames(user.getId());
         return UserResponse.builder()
                 .id(user.getId())
-                .roleId(user.getRoleId())
+                .roles(roles)
                 .email(user.getEmail())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())

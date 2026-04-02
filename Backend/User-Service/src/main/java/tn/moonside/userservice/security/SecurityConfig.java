@@ -34,7 +34,7 @@ public class SecurityConfig {
             .csrf(AbstractHttpConfigurer::disable)
             .cors(Customizer.withDefaults())
             .authorizeHttpRequests(auth -> auth
-                // Public auth endpoints
+                // ── Public auth endpoints ───────────────────────────────────
                 .requestMatchers(
                     "/auth/login",
                     "/auth/register",
@@ -42,14 +42,29 @@ public class SecurityConfig {
                     "/auth/forgot-password",
                     "/auth/verify-otp",
                     "/auth/reset-password",
-                    "/auth/2fa/verify-login"   // public — called before tokens are issued
+                    "/auth/2fa/verify-login"
                 ).permitAll()
-                // Actuator health
+                // ── Actuator ────────────────────────────────────────────────
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                // Everything else needs authentication
-                .requestMatchers(HttpMethod.GET,  "/roles/**").authenticated()
-                .requestMatchers(HttpMethod.POST, "/roles/**").authenticated()
-                .requestMatchers("/permissions/**").authenticated()
+                // ── Admin-only routes ────────────────────────────────────────
+                // Role management (create/update/delete) — ADMIN only
+                .requestMatchers(HttpMethod.POST,   "/roles/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT,    "/roles/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/roles/**").hasRole("ADMIN")
+                // Permission management — ADMIN only
+                .requestMatchers("/permissions/**").hasRole("ADMIN")
+                // Assign / revoke roles on users — ADMIN only
+                .requestMatchers(HttpMethod.POST,   "/users/*/roles").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/users/*/roles/**").hasRole("ADMIN")
+                // Activate / deactivate users — ADMIN only
+                .requestMatchers(HttpMethod.PATCH,  "/users/*/deactivate").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PATCH,  "/users/*/activate").hasRole("ADMIN")
+                // Delete users — ADMIN only
+                .requestMatchers(HttpMethod.DELETE, "/users/**").hasRole("ADMIN")
+                // ── Authenticated read-only routes ───────────────────────────
+                .requestMatchers(HttpMethod.GET, "/roles/**").authenticated()
+                .requestMatchers(HttpMethod.GET, "/users/**").authenticated()
+                // ── Everything else needs authentication ─────────────────────
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session
