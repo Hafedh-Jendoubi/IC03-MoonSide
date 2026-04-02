@@ -297,11 +297,23 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private List<String> resolveRoleNames(String userId) {
-        return userRoleRepository.findByUserId(userId).stream()
-                .map(ur -> roleRepository.findById(ur.getRoleId()).map(Role::getName).orElse(null))
-                .filter(name -> name != null)
+        return userRoleRepository.findByUserIdFlexible(userId).stream()
+                .map(ur -> findRoleById(ur.getRoleId()))
+                .filter(java.util.Optional::isPresent)
+                .map(java.util.Optional::get)
+                .map(Role::getName)
                 .distinct()
                 .collect(Collectors.toList());
+    }
+
+    private java.util.Optional<Role> findRoleById(String roleId) {
+        if (roleId == null) return java.util.Optional.empty();
+        java.util.Optional<Role> role = roleRepository.findById(roleId);
+        if (role.isPresent()) return role;
+        if (org.bson.types.ObjectId.isValid(roleId)) {
+            return roleRepository.findById(new org.bson.types.ObjectId(roleId).toHexString());
+        }
+        return java.util.Optional.empty();
     }
 
     private UserResponse mapToUserResponse(User user) {
