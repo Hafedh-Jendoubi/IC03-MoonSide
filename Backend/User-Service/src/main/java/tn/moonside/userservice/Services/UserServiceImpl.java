@@ -61,6 +61,15 @@ public class UserServiceImpl implements UserService {
         if (request.getBio() != null) user.setBio(request.getBio());
         if (request.getAvatar() != null) user.setAvatar(request.getAvatar());
 
+        // Allow updating the flat denormalized roleId field directly
+        if (request.getRoleId() != null) {
+            if (!request.getRoleId().isEmpty()) {
+                roleRepository.findById(request.getRoleId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + request.getRoleId()));
+            }
+            user.setRoleId(request.getRoleId().isEmpty() ? null : request.getRoleId());
+        }
+
         user.setUpdatedBy(currentUserEmail);
         user.setUpdatedAt(LocalDateTime.now());
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartContainer, ChartTooltip, ChartLegend } from '@/components/ui/chart'
 import {
@@ -17,18 +18,10 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { Users, MessageSquare, Heart, TrendingUp } from 'lucide-react'
+import { Users, MessageSquare, Heart, TrendingUp, Loader2 } from 'lucide-react'
+import { userApi, roleApi, UserResponse, RoleResponse } from '@/lib/api'
 
-// Mock data for charts
-const userGrowthData = [
-  { month: 'Jan', users: 120, active: 80 },
-  { month: 'Feb', users: 180, active: 120 },
-  { month: 'Mar', users: 250, active: 180 },
-  { month: 'Apr', users: 380, active: 290 },
-  { month: 'May', users: 480, active: 380 },
-  { month: 'Jun', users: 620, active: 510 },
-]
-
+// Static chart data (no posts service yet)
 const postsPerDayData = [
   { day: 'Mon', posts: 12, comments: 24 },
   { day: 'Tue', posts: 18, comments: 31 },
@@ -53,34 +46,94 @@ const chartConfig = {
   comments: { label: 'Comments', color: 'hsl(var(--chart-2))' },
 }
 
-const metrics = [
-  {
-    title: 'Total Users',
-    value: '620',
-    change: '+12.5%',
-    icon: Users,
-  },
-  {
-    title: 'Posts Created',
-    value: '126',
-    change: '+8.2%',
-    icon: TrendingUp,
-  },
-  {
-    title: 'Comments',
-    value: '222',
-    change: '+15.3%',
-    icon: MessageSquare,
-  },
-  {
-    title: 'Engagement Rate',
-    value: '68.5%',
-    change: '+3.1%',
-    icon: Heart,
-  },
-]
-
 export default function AdminDashboard() {
+  const [users, setUsers] = useState<UserResponse[]>([])
+  const [roles, setRoles] = useState<RoleResponse[]>([])
+  const [loading, setLoading] = useState(true)
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [usersData, rolesData] = await Promise.all([userApi.getAll(), roleApi.getAll()])
+      setUsers(usersData)
+      setRoles(rolesData)
+    } catch {
+      // silently fail – dashboard still renders with partial data
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  const activeUsers = users.filter((u) => u.isActive)
+
+  // Build user growth chart from real createdAt timestamps
+  const userGrowthData = (() => {
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ]
+    const now = new Date()
+    const last6: { month: string; users: number; active: number }[] = []
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const monthLabel = months[d.getMonth()]
+      const cutoff = new Date(d.getFullYear(), d.getMonth() + 1, 1)
+      const total = users.filter((u) => new Date(u.createdAt) < cutoff).length
+      const active = users.filter((u) => new Date(u.createdAt) < cutoff && u.isActive).length
+      last6.push({ month: monthLabel, users: total, active })
+    }
+    return last6
+  })()
+
+  // Top users by earliest joiners (real data – posts not available yet)
+  const recentUsers = [...users]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5)
+
+  const metrics = [
+    {
+      title: 'Total Users',
+      value: loading ? '—' : users.length.toString(),
+      change: `${activeUsers.length} active`,
+      icon: Users,
+    },
+    {
+      title: 'Active Users',
+      value: loading ? '—' : activeUsers.length.toString(),
+      change:
+        users.length > 0
+          ? `${Math.round((activeUsers.length / users.length) * 100)}% of total`
+          : '—',
+      icon: TrendingUp,
+    },
+    {
+      title: 'Roles',
+      value: loading ? '—' : roles.length.toString(),
+      change: `${roles.reduce((sum, r) => sum + r.permissions.length, 0)} total permissions`,
+      icon: MessageSquare,
+    },
+    {
+      title: 'Inactive Users',
+      value: loading ? '—' : (users.length - activeUsers.length).toString(),
+      change: 'Accounts deactivated',
+      icon: Heart,
+    },
+  ]
+
   return (
     <div className="space-y-8 p-8">
       {/* Header */}
@@ -90,6 +143,13 @@ export default function AdminDashboard() {
           Welcome to the admin dashboard. Track key metrics and user activities.
         </p>
       </div>
+
+      {loading && (
+        <div className="text-muted-foreground flex items-center gap-2 text-sm">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading live data…
+        </div>
+      )}
 
       {/* Metrics Cards */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -101,7 +161,7 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{value}</div>
-              <p className="text-muted-foreground text-xs">{change} from last month</p>
+              <p className="text-muted-foreground text-xs">{change}</p>
             </CardContent>
           </Card>
         ))}
@@ -109,11 +169,11 @@ export default function AdminDashboard() {
 
       {/* Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* User Growth Chart */}
+        {/* User Growth Chart (real data) */}
         <Card className="dark:border-slate-700">
           <CardHeader>
             <CardTitle>User Growth</CardTitle>
-            <CardDescription>Total and active users over time</CardDescription>
+            <CardDescription>Total and active users over last 6 months</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-80 w-full">
@@ -214,38 +274,48 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Activity Heatmap */}
+        {/* Recently Joined Users (real data) */}
         <Card className="dark:border-slate-700">
           <CardHeader>
-            <CardTitle>Top Users</CardTitle>
-            <CardDescription>Most active users this month</CardDescription>
+            <CardTitle>Recently Joined Users</CardTitle>
+            <CardDescription>Newest members from database</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {[
-                { name: 'John Doe', posts: 45, comments: 89 },
-                { name: 'Jane Smith', posts: 38, comments: 72 },
-                { name: 'Alex Johnson', posts: 32, comments: 65 },
-                { name: 'Maria Garcia', posts: 28, comments: 54 },
-                { name: 'David Chen', posts: 22, comments: 41 },
-              ].map((user) => (
-                <div
-                  key={user.name}
-                  className="border-border flex items-center justify-between border-b pb-2 last:border-0"
-                >
-                  <div>
-                    <p className="font-medium">{user.name}</p>
-                    <p className="text-muted-foreground text-sm">
-                      {user.posts} posts • {user.comments} comments
-                    </p>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+              </div>
+            ) : recentUsers.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No users found.</p>
+            ) : (
+              <div className="space-y-4">
+                {recentUsers.map((user) => (
+                  <div
+                    key={user.id}
+                    className="border-border flex items-center justify-between border-b pb-2 last:border-0"
+                  >
+                    <div>
+                      <p className="font-medium">
+                        {user.firstName} {user.lastName}
+                      </p>
+                      <p className="text-muted-foreground text-sm">{user.email}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold">
+                        {user.isActive ? (
+                          <span className="text-green-500">Active</span>
+                        ) : (
+                          <span className="text-muted-foreground">Inactive</span>
+                        )}
+                      </p>
+                      <p className="text-muted-foreground text-xs">
+                        {new Date(user.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold">{user.posts + user.comments}</p>
-                    <p className="text-muted-foreground text-xs">total activities</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

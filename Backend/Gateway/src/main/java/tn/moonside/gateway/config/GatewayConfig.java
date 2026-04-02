@@ -14,7 +14,7 @@ public class GatewayConfig {
 
                 // User Service: User, UserRole, UserTeam, Role, Permission, PermissionRole
                 .route("user-service", r -> r
-                        .path("/users/**", "/auth/**")
+                        .path("/users/**", "/auth/**", "/roles/**", "/permissions/**")
                         .uri("lb://USER-SERVICE"))
 
                 // Organization Service: Department, Team

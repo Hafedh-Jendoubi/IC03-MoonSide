@@ -59,6 +59,8 @@ export interface UpdateUserRequest {
   jobTitle?: string
   bio?: string
   avatar?: string
+  /** Set/change the user's primary role. Pass empty string to clear. */
+  roleId?: string
 }
 
 // ── Password Reset DTOs ───────────────────────────────────────────────────────
@@ -229,4 +231,71 @@ export const userApi = {
   delete: (id: string) => apiFetch<void>(`/users/${id}`, { method: 'DELETE' }),
   deactivate: (id: string) => apiFetch<void>(`/users/${id}/deactivate`, { method: 'PATCH' }),
   activate: (id: string) => apiFetch<void>(`/users/${id}/activate`, { method: 'PATCH' }),
+  assignRole: (userId: string, data: { roleId: string; scopeType?: string; scopeId?: string }) =>
+    apiFetch<void>(`/users/${userId}/roles`, {
+      method: 'POST',
+      body: JSON.stringify({ scopeType: 'GLOBAL', scopeId: 'GLOBAL', ...data }),
+    }),
+  revokeRole: (userId: string, roleId: string) =>
+    apiFetch<void>(`/users/${userId}/roles/${roleId}`, { method: 'DELETE' }),
+}
+
+// ─── Role & Permission types ───────────────────────────────────────────────────
+
+export interface PermissionResponse {
+  id: string
+  action: string
+  scopeType: 'ALL' | 'GLOBAL' | 'DEPARTMENT' | 'TEAM' | 'OWN'
+  description: string | null
+  createdAt: string
+}
+
+export interface RoleResponse {
+  id: string
+  name: string
+  description: string | null
+  createdAt: string
+  permissions: PermissionResponse[]
+}
+
+export interface RoleRequest {
+  name: string
+  description?: string
+}
+
+export interface PermissionRequest {
+  action: string
+  scopeType: 'ALL' | 'GLOBAL' | 'DEPARTMENT' | 'TEAM' | 'OWN'
+  description?: string
+}
+
+// ─── Role endpoints ────────────────────────────────────────────────────────────
+
+export const roleApi = {
+  getAll: () => apiFetch<RoleResponse[]>('/roles'),
+  getById: (id: string) => apiFetch<RoleResponse>(`/roles/${id}`),
+  create: (data: RoleRequest) =>
+    apiFetch<RoleResponse>('/roles', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: RoleRequest) =>
+    apiFetch<RoleResponse>(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id: string) => apiFetch<void>(`/roles/${id}`, { method: 'DELETE' }),
+  assignPermission: (roleId: string, permissionId: string) =>
+    apiFetch<void>(`/roles/${roleId}/permissions/${permissionId}`, { method: 'POST' }),
+  revokePermission: (roleId: string, permissionId: string) =>
+    apiFetch<void>(`/roles/${roleId}/permissions/${permissionId}`, { method: 'DELETE' }),
+}
+
+// ─── Permission endpoints ──────────────────────────────────────────────────────
+
+export const permissionApi = {
+  getAll: () => apiFetch<PermissionResponse[]>('/permissions'),
+  getById: (id: string) => apiFetch<PermissionResponse>(`/permissions/${id}`),
+  create: (data: PermissionRequest) =>
+    apiFetch<PermissionResponse>('/permissions', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id: string, data: PermissionRequest) =>
+    apiFetch<PermissionResponse>(`/permissions/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  delete: (id: string) => apiFetch<void>(`/permissions/${id}`, { method: 'DELETE' }),
 }
