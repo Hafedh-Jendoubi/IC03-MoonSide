@@ -29,16 +29,26 @@ public class UserRoleRepositoryCustomImpl implements UserRoleRepositoryCustom {
 
     @Override
     public List<UserRole> findByUserIdFlexible(String userId) {
-        // Try String match first
-        Query q = Query.query(Criteria.where("userId").is(userId));
-        List<UserRole> results = mongoTemplate.find(q, UserRole.class);
+        // Always query BOTH string and ObjectId representations and merge,
+        // because different records may have been stored in different formats
+        // (e.g. legacy data stored as ObjectId, newer data stored as String).
+        // An early-return on the first non-empty result would miss records
+        // stored in the other format.
+        List<UserRole> results = new ArrayList<>();
 
-        if (!results.isEmpty()) return results;
+        // Query by String value
+        Query qString = Query.query(Criteria.where("userId").is(userId));
+        results.addAll(mongoTemplate.find(qString, UserRole.class));
 
-        // Fallback: stored as ObjectId
+        // Also query by ObjectId if the value is a valid ObjectId hex string
         if (ObjectId.isValid(userId)) {
-            Query q2 = Query.query(Criteria.where("userId").is(new ObjectId(userId)));
-            results = mongoTemplate.find(q2, UserRole.class);
+            Query qObjectId = Query.query(Criteria.where("userId").is(new ObjectId(userId)));
+            List<UserRole> objectIdResults = mongoTemplate.find(qObjectId, UserRole.class);
+            // Deduplicate by document id to avoid returning the same record twice
+            // (in case MongoDB returns the same doc for both queries)
+            objectIdResults.stream()
+                    .filter(r -> results.stream().noneMatch(existing -> existing.getId().equals(r.getId())))
+                    .forEach(results::add);
         }
 
         return results;
