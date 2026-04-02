@@ -84,7 +84,7 @@ export default function AdminSettingsPage() {
     }
   }
 
-  const activeUsers = users.filter((u) => u.isActive)
+  const activeUsers = users.filter((u) => u.active)
   const totalPermissions = permissions.length
 
   return (
