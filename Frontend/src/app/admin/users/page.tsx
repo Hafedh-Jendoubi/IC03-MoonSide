@@ -91,8 +91,8 @@ export default function UsersPage() {
         user.email.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesStatus =
         filterStatus === 'all' ||
-        (filterStatus === 'active' && user.isActive) ||
-        (filterStatus === 'inactive' && !user.isActive)
+        (filterStatus === 'active' && user.active) ||
+        (filterStatus === 'inactive' && !user.active)
       return matchesSearch && matchesStatus
     })
   }, [users, searchQuery, filterStatus])
@@ -172,7 +172,7 @@ export default function UsersPage() {
 
   const handleToggleActive = async (user: UserResponse) => {
     try {
-      if (user.isActive) {
+      if (user.active) {
         await userApi.deactivate(user.id)
       } else {
         await userApi.activate(user.id)
@@ -312,8 +312,8 @@ export default function UsersPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.isActive ? 'default' : 'secondary'}>
-                          {user.isActive ? 'Active' : 'Inactive'}
+                        <Badge variant={user.active ? 'default' : 'secondary'}>
+                          {user.active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
@@ -336,15 +336,15 @@ export default function UsersPage() {
                             variant="ghost"
                             className="h-8 w-8 p-0"
                             onClick={() => handleToggleActive(user)}
-                            title={user.isActive ? 'Deactivate' : 'Activate'}
+                            title={user.active ? 'Deactivate' : 'Activate'}
                           >
-                            {user.isActive ? (
+                            {user.active ? (
                               <UserX className="h-4 w-4 text-yellow-500" />
                             ) : (
                               <UserCheck className="h-4 w-4 text-green-500" />
                             )}
                             <span className="sr-only">
-                              {user.isActive ? 'Deactivate' : 'Activate'}
+                              {user.active ? 'Deactivate' : 'Activate'}
                             </span>
                           </Button>
                           <Button

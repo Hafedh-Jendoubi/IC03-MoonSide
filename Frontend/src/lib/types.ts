@@ -11,7 +11,7 @@ export interface User {
   jobTitle: string | null
   bio: string | null
   avatar: string | null
-  isActive: boolean
+  active: boolean
   lastLogin: string | null
   createdAt: string
   updatedAt: string
