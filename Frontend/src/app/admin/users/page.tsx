@@ -15,6 +15,7 @@ import {
   RefreshCw,
   UserCheck,
   UserX,
+  X,
 } from 'lucide-react'
 import {
   Table,
@@ -54,7 +55,10 @@ export default function UsersPage() {
   // Edit user state
   const [editingUser, setEditingUser] = useState<UserResponse | null>(null)
   const [editForm, setEditForm] = useState({ firstName: '', lastName: '', jobTitle: '', bio: '' })
-  const [assignRoleId, setAssignRoleId] = useState('')
+  /** Role IDs currently assigned to the user being edited */
+  const [assignedRoleIds, setAssignedRoleIds] = useState<Set<string>>(new Set())
+  /** Role IDs that were originally assigned (to diff on save) */
+  const [originalRoleIds, setOriginalRoleIds] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
 
   // Delete user state
@@ -87,25 +91,23 @@ export default function UsersPage() {
         user.email.toLowerCase().includes(searchQuery.toLowerCase())
       const matchesStatus =
         filterStatus === 'all' ||
-        (filterStatus === 'active' && user.isActive) ||
-        (filterStatus === 'inactive' && !user.isActive)
+        (filterStatus === 'active' && user.active) ||
+        (filterStatus === 'inactive' && !user.active)
       return matchesSearch && matchesStatus
     })
   }, [users, searchQuery, filterStatus])
 
-  const getRoleNameById = (roleId: string | null) => {
-    if (!roleId) return 'No Role'
-    const role = roles.find((r) => r.id === roleId)
-    return role ? role.name : 'Unknown'
-  }
+  /** Returns the Role object for a given role name */
+  const getRoleByName = (name: string) => roles.find((r) => r.name === name)
 
+  /** Badge variant based on first role */
   const getRoleBadgeVariant = (
-    roleId: string | null
+    roleNames: string[]
   ): 'default' | 'secondary' | 'destructive' | 'outline' => {
-    if (!roleId) return 'outline'
-    const roleName = getRoleNameById(roleId).toLowerCase()
-    if (roleName === 'admin') return 'default'
-    if (roleName === 'moderator') return 'secondary'
+    if (roleNames.length === 0) return 'outline'
+    const first = roleNames[0].toLowerCase()
+    if (first === 'admin') return 'default'
+    if (first === 'manager') return 'secondary'
     return 'outline'
   }
 
@@ -117,21 +119,48 @@ export default function UsersPage() {
       jobTitle: user.jobTitle ?? '',
       bio: user.bio ?? '',
     })
-    setAssignRoleId(user.roleId ?? '')
+    // Convert role names → IDs using the roles list
+    const ids = new Set(
+      user.roles
+        .map((name) => roles.find((r) => r.name === name)?.id)
+        .filter((id): id is string => !!id)
+    )
+    setAssignedRoleIds(new Set(ids))
+    setOriginalRoleIds(new Set(ids))
+  }
+
+  const toggleRole = (roleId: string) => {
+    setAssignedRoleIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(roleId)) next.delete(roleId)
+      else next.add(roleId)
+      return next
+    })
   }
 
   const handleSaveEdit = async () => {
     if (!editingUser) return
     setSaving(true)
     try {
+      // 1. Update basic user info
       await userApi.update(editingUser.id, {
         firstName: editForm.firstName,
         lastName: editForm.lastName,
         jobTitle: editForm.jobTitle || undefined,
         bio: editForm.bio || undefined,
-        // roleId: '' means "clear", undefined means "don't touch"
-        roleId: assignRoleId !== (editingUser.roleId ?? '') ? assignRoleId : undefined,
       })
+
+      // 2. Assign newly-added roles
+      const toAssign = [...assignedRoleIds].filter((id) => !originalRoleIds.has(id))
+      const toRevoke = [...originalRoleIds].filter((id) => !assignedRoleIds.has(id))
+
+      await Promise.all([
+        ...toAssign.map((roleId) =>
+          userApi.assignRole(editingUser.id, { roleId, scopeType: 'GLOBAL', scopeId: 'GLOBAL' })
+        ),
+        ...toRevoke.map((roleId) => userApi.revokeRole(editingUser.id, roleId)),
+      ])
+
       await fetchData()
       setEditingUser(null)
     } catch (err) {
@@ -143,7 +172,7 @@ export default function UsersPage() {
 
   const handleToggleActive = async (user: UserResponse) => {
     try {
-      if (user.isActive) {
+      if (user.active) {
         await userApi.deactivate(user.id)
       } else {
         await userApi.activate(user.id)
@@ -241,7 +270,7 @@ export default function UsersPage() {
                 <TableRow className="dark:border-slate-700">
                   <TableHead className="font-semibold">Name</TableHead>
                   <TableHead className="font-semibold">Email</TableHead>
-                  <TableHead className="font-semibold">Role</TableHead>
+                  <TableHead className="font-semibold">Roles</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
                   <TableHead className="font-semibold">Joined</TableHead>
                   <TableHead className="text-right font-semibold">Actions</TableHead>
@@ -262,18 +291,29 @@ export default function UsersPage() {
                       </TableCell>
                       <TableCell className="text-muted-foreground">{user.email}</TableCell>
                       <TableCell>
-                        <Badge variant={getRoleBadgeVariant(user.roleId)} className="gap-1">
-                          {user.roleId ? (
-                            <Shield className="h-3 w-3" />
-                          ) : (
+                        {user.roles.length === 0 ? (
+                          <Badge variant="outline" className="gap-1">
                             <User className="h-3 w-3" />
-                          )}
-                          {getRoleNameById(user.roleId)}
-                        </Badge>
+                            No Role
+                          </Badge>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {user.roles.map((roleName) => (
+                              <Badge
+                                key={roleName}
+                                variant={getRoleBadgeVariant([roleName])}
+                                className="gap-1"
+                              >
+                                <Shield className="h-3 w-3" />
+                                {roleName}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={user.isActive ? 'default' : 'secondary'}>
-                          {user.isActive ? 'Active' : 'Inactive'}
+                        <Badge variant={user.active ? 'default' : 'secondary'}>
+                          {user.active ? 'Active' : 'Inactive'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
@@ -296,15 +336,15 @@ export default function UsersPage() {
                             variant="ghost"
                             className="h-8 w-8 p-0"
                             onClick={() => handleToggleActive(user)}
-                            title={user.isActive ? 'Deactivate' : 'Activate'}
+                            title={user.active ? 'Deactivate' : 'Activate'}
                           >
-                            {user.isActive ? (
+                            {user.active ? (
                               <UserX className="h-4 w-4 text-yellow-500" />
                             ) : (
                               <UserCheck className="h-4 w-4 text-green-500" />
                             )}
                             <span className="sr-only">
-                              {user.isActive ? 'Deactivate' : 'Activate'}
+                              {user.active ? 'Deactivate' : 'Activate'}
                             </span>
                           </Button>
                           <Button
@@ -330,10 +370,10 @@ export default function UsersPage() {
 
       {/* Edit User Dialog */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-        <DialogContent className="dark:border-slate-700">
+        <DialogContent className="max-w-lg dark:border-slate-700">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
-            <DialogDescription>Update user information and role</DialogDescription>
+            <DialogDescription>Update user information and roles</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -371,21 +411,52 @@ export default function UsersPage() {
                 onChange={(e) => setEditForm((f) => ({ ...f, bio: e.target.value }))}
               />
             </div>
+
+            {/* Multi-role checkboxes */}
             <div>
-              <label className="text-sm font-medium">Assign Role</label>
-              <select
-                className="border-border bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm dark:bg-slate-900"
-                value={assignRoleId}
-                onChange={(e) => setAssignRoleId(e.target.value)}
-              >
-                <option value="">No Role</option>
+              <label className="text-sm font-medium">Roles</label>
+              <p className="text-muted-foreground mb-2 text-xs">
+                Select one or more roles for this user
+              </p>
+              <div className="border-border grid grid-cols-2 gap-2 rounded-md border p-3 dark:border-slate-700">
                 {roles.map((role) => (
-                  <option key={role.id} value={role.id}>
-                    {role.name}
-                  </option>
+                  <label
+                    key={role.id}
+                    className="flex cursor-pointer items-center gap-2 rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={assignedRoleIds.has(role.id)}
+                      onChange={() => toggleRole(role.id)}
+                      className="accent-primary h-4 w-4"
+                    />
+                    <span className="text-sm">{role.name}</span>
+                  </label>
                 ))}
-              </select>
+              </div>
+              {/* Show currently selected roles as badges */}
+              {assignedRoleIds.size > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {[...assignedRoleIds].map((id) => {
+                    const role = roles.find((r) => r.id === id)
+                    if (!role) return null
+                    return (
+                      <Badge key={id} variant="secondary" className="gap-1 pr-1">
+                        {role.name}
+                        <button
+                          onClick={() => toggleRole(id)}
+                          className="hover:text-destructive ml-1"
+                          title={`Remove ${role.name}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    )
+                  })}
+                </div>
+              )}
             </div>
+
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setEditingUser(null)}>
                 Cancel

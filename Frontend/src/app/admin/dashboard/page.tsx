@@ -68,7 +68,7 @@ export default function AdminDashboard() {
     fetchData()
   }, [fetchData])
 
-  const activeUsers = users.filter((u) => u.isActive)
+  const activeUsers = users.filter((u) => u.active)
 
   // Build user growth chart from real createdAt timestamps
   const userGrowthData = (() => {
@@ -93,7 +93,7 @@ export default function AdminDashboard() {
       const monthLabel = months[d.getMonth()]
       const cutoff = new Date(d.getFullYear(), d.getMonth() + 1, 1)
       const total = users.filter((u) => new Date(u.createdAt) < cutoff).length
-      const active = users.filter((u) => new Date(u.createdAt) < cutoff && u.isActive).length
+      const active = users.filter((u) => new Date(u.createdAt) < cutoff && u.active).length
       last6.push({ month: monthLabel, users: total, active })
     }
     return last6
@@ -302,7 +302,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-semibold">
-                        {user.isActive ? (
+                        {user.active ? (
                           <span className="text-green-500">Active</span>
                         ) : (
                           <span className="text-muted-foreground">Inactive</span>

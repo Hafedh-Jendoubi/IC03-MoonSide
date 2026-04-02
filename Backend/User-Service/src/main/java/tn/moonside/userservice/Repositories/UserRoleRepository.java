@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface UserRoleRepository extends MongoRepository<UserRole, String> {
+public interface UserRoleRepository extends MongoRepository<UserRole, String>, UserRoleRepositoryCustom {
     List<UserRole> findByUserId(String userId);
     List<UserRole> findByRoleId(String roleId);
     List<UserRole> findByUserIdAndScopeType(String userId, TypeScope scopeType);

@@ -5,6 +5,7 @@ import tn.moonside.userservice.dtos.requests.UpdateUserRequest;
 import tn.moonside.userservice.dtos.responses.UserResponse;
 import tn.moonside.userservice.exceptions.DuplicateResourceException;
 import tn.moonside.userservice.exceptions.ResourceNotFoundException;
+import tn.moonside.userservice.entities.Role;
 import tn.moonside.userservice.entities.User;
 import tn.moonside.userservice.entities.UserRole;
 import tn.moonside.userservice.repositories.RoleRepository;
@@ -12,11 +13,13 @@ import tn.moonside.userservice.repositories.UserRepository;
 import tn.moonside.userservice.repositories.UserRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.bson.types.ObjectId;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -30,8 +33,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserResponse getUserById(String id) {
-        User user = findUserById(id);
-        return mapToUserResponse(user);
+        return mapToUserResponse(findUserById(id));
     }
 
     @Override
@@ -52,27 +54,15 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse updateUser(String id, UpdateUserRequest request, String currentUserEmail) {
         User user = findUserById(id);
-
-        if (request.getFirstName() != null) user.setFirstName(request.getFirstName());
-        if (request.getLastName() != null) user.setLastName(request.getLastName());
-        if (request.getBirthDate() != null) user.setBirthDate(request.getBirthDate());
+        if (request.getFirstName()   != null) user.setFirstName(request.getFirstName());
+        if (request.getLastName()    != null) user.setLastName(request.getLastName());
+        if (request.getBirthDate()   != null) user.setBirthDate(request.getBirthDate());
         if (request.getPhoneNumber() != null) user.setPhoneNumber(request.getPhoneNumber());
-        if (request.getJobTitle() != null) user.setJobTitle(request.getJobTitle());
-        if (request.getBio() != null) user.setBio(request.getBio());
-        if (request.getAvatar() != null) user.setAvatar(request.getAvatar());
-
-        // Allow updating the flat denormalized roleId field directly
-        if (request.getRoleId() != null) {
-            if (!request.getRoleId().isEmpty()) {
-                roleRepository.findById(request.getRoleId())
-                        .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + request.getRoleId()));
-            }
-            user.setRoleId(request.getRoleId().isEmpty() ? null : request.getRoleId());
-        }
-
+        if (request.getJobTitle()    != null) user.setJobTitle(request.getJobTitle());
+        if (request.getBio()         != null) user.setBio(request.getBio());
+        if (request.getAvatar()      != null) user.setAvatar(request.getAvatar());
         user.setUpdatedBy(currentUserEmail);
         user.setUpdatedAt(LocalDateTime.now());
-
         User updated = userRepository.save(user);
         log.info("Updated user: {}", updated.getId());
         return mapToUserResponse(updated);
@@ -82,7 +72,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void deleteUser(String id) {
         User user = findUserById(id);
-        userRoleRepository.findByUserId(id).forEach(ur -> userRoleRepository.delete(ur));
+        userRoleRepository.findByUserIdFlexible(id).forEach(userRoleRepository::delete);
         userRepository.delete(user);
         log.info("Deleted user: {}", id);
     }
@@ -91,15 +81,12 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void assignRole(String userId, AssignRoleRequest request) {
         findUserById(userId);
-
         roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + request.getRoleId()));
 
         String scopeId = request.getScopeId() != null ? request.getScopeId() : "GLOBAL";
 
-        boolean alreadyAssigned = userRoleRepository.existsByUserIdAndRoleIdAndScopeTypeAndScopeId(
-                userId, request.getRoleId(), request.getScopeType(), scopeId);
-
+        boolean alreadyAssigned = userRoleRepository.existsByUserIdAndRoleIdFlexible(userId, request.getRoleId());
         if (alreadyAssigned) {
             throw new DuplicateResourceException("Role already assigned to user with this scope");
         }
@@ -110,7 +97,6 @@ public class UserServiceImpl implements UserService {
                 .scopeType(request.getScopeType())
                 .scopeId(scopeId)
                 .build();
-
         userRoleRepository.save(userRole);
         log.info("Assigned role {} to user {}", request.getRoleId(), userId);
     }
@@ -119,7 +105,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void revokeRole(String userId, String roleId) {
         findUserById(userId);
-        userRoleRepository.deleteByUserIdAndRoleId(userId, roleId);
+        userRoleRepository.deleteByUserIdAndRoleIdFlexible(userId, roleId);
         log.info("Revoked role {} from user {}", roleId, userId);
     }
 
@@ -130,7 +116,6 @@ public class UserServiceImpl implements UserService {
         user.setActive(false);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
-        log.info("Deactivated user: {}", id);
     }
 
     @Override
@@ -140,18 +125,46 @@ public class UserServiceImpl implements UserService {
         user.setActive(true);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
-        log.info("Activated user: {}", id);
     }
+
+    @Override
+    public List<String> getUserRoleNames(String userId) {
+        return userRoleRepository.findByUserIdFlexible(userId).stream()
+                .map(ur -> findRoleById(ur.getRoleId()))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(Role::getName)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
 
     private User findUserById(String id) {
         return userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
     }
 
+    /**
+     * Looks up a role by its stored ID value, which might be either a plain
+     * hex string (new records) or the string representation of an ObjectId
+     * that was stored natively as ObjectId (legacy records).
+     */
+    private Optional<Role> findRoleById(String roleId) {
+        if (roleId == null) return Optional.empty();
+        Optional<Role> role = roleRepository.findById(roleId);
+        if (role.isPresent()) return role;
+        if (ObjectId.isValid(roleId)) {
+            return roleRepository.findById(new ObjectId(roleId).toHexString());
+        }
+        return Optional.empty();
+    }
+
     private UserResponse mapToUserResponse(User user) {
+        List<String> roles = user.getId() != null ? getUserRoleNames(user.getId()) : List.of();
         return UserResponse.builder()
                 .id(user.getId())
-                .roleId(user.getRoleId())
+                .roles(roles)
                 .email(user.getEmail())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())

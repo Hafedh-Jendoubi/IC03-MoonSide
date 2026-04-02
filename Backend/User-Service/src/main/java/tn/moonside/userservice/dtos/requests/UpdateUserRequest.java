@@ -6,21 +6,11 @@ import java.time.LocalDate;
 
 @Data
 public class UpdateUserRequest {
-
     private String firstName;
-
     private String lastName;
-
     private LocalDate birthDate;
-
     private String phoneNumber;
-
     private String jobTitle;
-
     private String bio;
-
     private String avatar;
-
-    /** Optional: set/change the user's primary role (flat denormalized field on User). */
-    private String roleId;
 }

@@ -92,7 +92,7 @@ export default function ProfilePage() {
                   )}
                   <p className="text-muted-foreground mt-1 flex items-center gap-1">
                     <MapPin size={16} />
-                    {profileUser.isActive ? 'Active Member' : 'Inactive'}
+                    {profileUser.active ? 'Active Member' : 'Inactive'}
                   </p>
                 </div>
 

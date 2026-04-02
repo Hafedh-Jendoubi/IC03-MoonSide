@@ -37,6 +37,12 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserByEmail(userDetails.getUsername())));
     }
 
+    /** Returns the list of role names for the given user — used by the frontend. */
+    @GetMapping("/{id}/roles")
+    public ResponseEntity<ApiResponse<List<String>>> getUserRoles(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getUserRoleNames(id)));
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(
             @PathVariable String id,
