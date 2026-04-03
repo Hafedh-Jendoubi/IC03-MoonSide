@@ -85,6 +85,16 @@ public class AuthServiceImpl implements AuthService {
         User saved = userRepository.save(user);
         log.info("Registered new user: {}", saved.getEmail());
 
+        // Auto-assign the "EMPLOYEE" role to every new user
+        roleRepository.findByName("EMPLOYEE").ifPresent(employeeRole -> {
+            tn.moonside.userservice.entities.UserRole userRole = tn.moonside.userservice.entities.UserRole.builder()
+                    .userId(saved.getId())
+                    .roleId(employeeRole.getId())
+                    .build();
+            userRoleRepository.save(userRole);
+            log.info("Assigned EMPLOYEE role to new user: {}", saved.getEmail());
+        });
+
         sendEmailVerificationOtpEmail(saved.getEmail(), saved.getFirstName(), otp);
 
         // Return a response without tokens — user must verify email first
