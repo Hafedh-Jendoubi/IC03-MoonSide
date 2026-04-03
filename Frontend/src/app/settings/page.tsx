@@ -1,15 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useTheme } from 'next-themes'
 import { useAuth } from '@/lib/auth-context'
 import { AuthLayout } from '@/components/auth-layout'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Bell, Lock, Eye, Palette, ShieldCheck, ShieldOff, Smartphone } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { Bell, Lock, Eye, Palette, Save, ShieldCheck, ShieldOff, Smartphone } from 'lucide-react'
-import { userApi, authApi, UpdateUserRequest, TwoFactorSetupResponse } from '@/lib/api'
+import { authApi, TwoFactorSetupResponse } from '@/lib/api'
 import { getFullName } from '@/lib/types'
+import { useRouter } from 'next/navigation'
 
 // ─── 2FA sub-panel ────────────────────────────────────────────────────────────
 
@@ -17,11 +18,9 @@ function TwoFactorPanel() {
   const [status, setStatus] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Setup flow
   const [setupData, setSetupData] = useState<TwoFactorSetupResponse | null>(null)
   const [confirmCode, setConfirmCode] = useState('')
 
-  // Disable flow
   const [disableCode, setDisableCode] = useState('')
   const [showDisable, setShowDisable] = useState(false)
 
@@ -31,13 +30,13 @@ function TwoFactorPanel() {
   const clearMsg = () => setMsg(null)
 
   // Load status on mount
-  useEffect(() => {
+  useState(() => {
     authApi
       .get2FAStatus()
       .then((s) => setStatus(s.twoFactorEnabled))
       .catch(() => setStatus(false))
       .finally(() => setLoading(false))
-  }, [])
+  })
 
   const startSetup = async () => {
     clearMsg()
@@ -92,7 +91,6 @@ function TwoFactorPanel() {
 
   return (
     <div className="space-y-4">
-      {/* Status badge */}
       <div className="flex items-center gap-3">
         <div
           className={`flex h-9 w-9 items-center justify-center rounded-full ${status ? 'bg-green-100' : 'bg-muted'}`}
@@ -115,7 +113,6 @@ function TwoFactorPanel() {
         </div>
       </div>
 
-      {/* Feedback */}
       {msg && (
         <div
           className={`rounded-md border p-3 text-sm ${
@@ -128,7 +125,6 @@ function TwoFactorPanel() {
         </div>
       )}
 
-      {/* ── Not enabled — show setup flow ─────────────────────────────────── */}
       {!status && !setupData && (
         <Button
           onClick={startSetup}
@@ -140,7 +136,6 @@ function TwoFactorPanel() {
         </Button>
       )}
 
-      {/* ── Setup: show QR code + confirm ─────────────────────────────────── */}
       {!status && setupData && (
         <div className="space-y-4 rounded-lg border p-4">
           <p className="text-foreground text-sm font-medium">
@@ -149,7 +144,6 @@ function TwoFactorPanel() {
               (Google Authenticator, Authy, etc.)
             </span>
           </p>
-
           {setupData.qrCodeImage ? (
             <img
               src={setupData.qrCodeImage}
@@ -157,18 +151,15 @@ function TwoFactorPanel() {
               className="mx-auto h-48 w-48 rounded-md border"
             />
           ) : null}
-
           <div>
             <p className="text-muted-foreground mb-1 text-xs">Or enter this key manually:</p>
             <code className="bg-muted block rounded px-3 py-2 text-center text-sm tracking-widest break-all">
               {setupData.secret}
             </code>
           </div>
-
           <p className="text-foreground text-sm font-medium">
             Step 2 — Enter the 6-digit code from your app to confirm
           </p>
-
           <form onSubmit={confirmEnable} className="flex gap-2">
             <Input
               type="text"
@@ -188,7 +179,6 @@ function TwoFactorPanel() {
               {actionLoading ? 'Verifying…' : 'Enable 2FA'}
             </Button>
           </form>
-
           <button
             type="button"
             onClick={() => {
@@ -203,7 +193,6 @@ function TwoFactorPanel() {
         </div>
       )}
 
-      {/* ── Enabled — show disable option ─────────────────────────────────── */}
       {status && !showDisable && (
         <Button
           variant="outline"
@@ -262,21 +251,9 @@ function TwoFactorPanel() {
 // ─── Main Settings page ───────────────────────────────────────────────────────
 
 export default function SettingsPage() {
-  const { user, refreshUser } = useAuth()
+  const { user } = useAuth()
   const { theme, setTheme } = useTheme()
-
-  const [profileForm, setProfileForm] = useState({
-    firstName: user?.firstName ?? '',
-    lastName: user?.lastName ?? '',
-    jobTitle: user?.jobTitle ?? '',
-    bio: user?.bio ?? '',
-    phoneNumber: user?.phoneNumber ?? '',
-  })
-  const [profileSaving, setProfileSaving] = useState(false)
-  const [profileMessage, setProfileMessage] = useState<{
-    type: 'success' | 'error'
-    text: string
-  } | null>(null)
+  const router = useRouter()
 
   const [settings, setSettings] = useState({
     emailNotifications: true,
@@ -286,35 +263,6 @@ export default function SettingsPage() {
 
   const handleToggle = (key: keyof typeof settings) => {
     setSettings((prev) => ({ ...prev, [key]: !prev[key] }))
-  }
-
-  const handleProfileChange = (field: keyof typeof profileForm, value: string) => {
-    setProfileForm((prev) => ({ ...prev, [field]: value }))
-  }
-
-  const handleProfileSave = async () => {
-    if (!user) return
-    setProfileSaving(true)
-    setProfileMessage(null)
-    try {
-      const payload: UpdateUserRequest = {
-        firstName: profileForm.firstName || undefined,
-        lastName: profileForm.lastName || undefined,
-        jobTitle: profileForm.jobTitle || undefined,
-        bio: profileForm.bio || undefined,
-        phoneNumber: profileForm.phoneNumber || undefined,
-      }
-      await userApi.update(user.id, payload)
-      await refreshUser()
-      setProfileMessage({ type: 'success', text: 'Profile updated successfully.' })
-    } catch (err) {
-      setProfileMessage({
-        type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to save changes.',
-      })
-    } finally {
-      setProfileSaving(false)
-    }
   }
 
   const displayName = user ? getFullName(user) : ''
@@ -328,102 +276,32 @@ export default function SettingsPage() {
           <p className="text-muted-foreground">Manage your account preferences</p>
         </div>
 
-        {/* Profile Section */}
-        <Card className="animate-scale-in mb-6 p-6">
-          <h2 className="text-foreground mb-6 flex items-center gap-2 text-2xl font-bold">
-            <div className="bg-primary/20 flex h-8 w-8 items-center justify-center rounded-full">
-              👤
-            </div>
-            Profile
-          </h2>
-
-          <div className="mb-6 flex items-center gap-4">
+        {/* Profile Quick-link Card */}
+        <Card className="animate-scale-in mb-6 p-5">
+          <div className="flex items-center gap-4">
             {user?.avatar ? (
               <img
                 src={user.avatar}
                 alt={displayName}
-                className="h-16 w-16 rounded-full object-cover"
+                className="h-14 w-14 rounded-full object-cover"
               />
             ) : (
-              <div className="bg-primary/10 text-primary flex h-16 w-16 items-center justify-center rounded-full text-xl font-bold">
+              <div className="bg-primary/10 text-primary flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold">
                 {user?.firstName?.[0]?.toUpperCase()}
                 {user?.lastName?.[0]?.toUpperCase()}
               </div>
             )}
-            <div>
+            <div className="flex-1">
               <p className="text-foreground font-semibold">{displayName}</p>
               <p className="text-muted-foreground text-sm">{user?.email}</p>
             </div>
-          </div>
-
-          {profileMessage && (
-            <div
-              className={`mb-4 rounded-md border p-3 text-sm ${
-                profileMessage.type === 'success'
-                  ? 'border-green-200 bg-green-50 text-green-700'
-                  : 'border-red-200 bg-red-50 text-red-600'
-              }`}
-            >
-              {profileMessage.text}
-            </div>
-          )}
-
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-foreground mb-1 block text-sm font-medium">First Name</label>
-                <Input
-                  value={profileForm.firstName}
-                  onChange={(e) => handleProfileChange('firstName', e.target.value)}
-                  placeholder="First name"
-                />
-              </div>
-              <div>
-                <label className="text-foreground mb-1 block text-sm font-medium">Last Name</label>
-                <Input
-                  value={profileForm.lastName}
-                  onChange={(e) => handleProfileChange('lastName', e.target.value)}
-                  placeholder="Last name"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-foreground mb-1 block text-sm font-medium">Job Title</label>
-              <Input
-                value={profileForm.jobTitle}
-                onChange={(e) => handleProfileChange('jobTitle', e.target.value)}
-                placeholder="e.g. Software Engineer"
-              />
-            </div>
-
-            <div>
-              <label className="text-foreground mb-1 block text-sm font-medium">Phone Number</label>
-              <Input
-                value={profileForm.phoneNumber}
-                onChange={(e) => handleProfileChange('phoneNumber', e.target.value)}
-                placeholder="+1 (555) 000-0000"
-              />
-            </div>
-
-            <div>
-              <label className="text-foreground mb-1 block text-sm font-medium">Bio</label>
-              <textarea
-                value={profileForm.bio}
-                onChange={(e) => handleProfileChange('bio', e.target.value)}
-                placeholder="Tell people a bit about yourself..."
-                rows={3}
-                className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
-              />
-            </div>
-
             <Button
-              onClick={handleProfileSave}
-              disabled={profileSaving}
-              className="bg-primary hover:bg-primary/90 gap-2 text-white"
+              variant="outline"
+              size="sm"
+              onClick={() => user && router.push(`/profile/${user.id}`)}
+              className="shrink-0"
             >
-              <Save size={16} />
-              {profileSaving ? 'Saving...' : 'Save Profile'}
+              Edit Profile
             </Button>
           </div>
         </Card>
@@ -516,7 +394,7 @@ export default function SettingsPage() {
           </div>
         </Card>
 
-        {/* Security Section — 2FA lives here */}
+        {/* Security Section */}
         <Card className="animate-slide-up mb-6 p-6" style={{ animationDelay: '300ms' }}>
           <h2 className="text-foreground mb-6 flex items-center gap-2 text-2xl font-bold">
             <Lock size={24} className="text-primary" />

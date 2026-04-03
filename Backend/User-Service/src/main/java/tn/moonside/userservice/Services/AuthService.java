@@ -10,6 +10,10 @@ public interface AuthService {
     AuthResponse login(LoginRequest request);
     AuthResponse refreshToken(String refreshToken);
 
+    // ── Email Verification ────────────────────────────────────────────────────
+    void verifyEmail(VerifyEmailRequest request);
+    void resendEmailVerificationOtp(String email);
+
     // ── Password Reset ────────────────────────────────────────────────────────
     void sendPasswordResetOtp(ForgotPasswordRequest request);
     void verifyPasswordResetOtp(VerifyOtpRequest request);

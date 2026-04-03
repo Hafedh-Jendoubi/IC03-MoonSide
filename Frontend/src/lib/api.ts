@@ -9,6 +9,7 @@ export interface AuthResponse {
   expiresIn: number
   user: UserResponse
   twoFactorRequired: boolean
+  emailVerificationRequired: boolean
 }
 
 export interface UserResponse {
@@ -44,7 +45,7 @@ export interface RegisterRequest {
   lastName: string
   email: string
   password: string
-  birthDate?: string
+  birthDate: string // ISO date string e.g. "1995-06-15"
   phoneNumber?: string
   jobTitle?: string
   bio?: string
@@ -59,6 +60,13 @@ export interface UpdateUserRequest {
   jobTitle?: string
   bio?: string
   avatar?: string
+}
+
+// ── Email Verification DTOs ───────────────────────────────────────────────────
+
+export interface VerifyEmailRequest {
+  email: string
+  otp: string
 }
 
 // ── Password Reset DTOs ───────────────────────────────────────────────────────
@@ -179,6 +187,16 @@ export const authApi = {
 
   register: (data: RegisterRequest) =>
     apiFetch<AuthResponse>('/auth/register', { method: 'POST', body: JSON.stringify(data) }, false),
+
+  verifyEmail: (data: VerifyEmailRequest) =>
+    apiFetch<null>('/auth/verify-email', { method: 'POST', body: JSON.stringify(data) }, false),
+
+  resendVerification: (email: string) =>
+    apiFetch<null>(
+      `/auth/resend-verification?email=${encodeURIComponent(email)}`,
+      { method: 'POST' },
+      false
+    ),
 
   refreshToken: (refreshToken: string) =>
     apiFetch<AuthResponse>(

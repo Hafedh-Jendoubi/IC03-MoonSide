@@ -19,13 +19,29 @@ public class AuthController {
 
     private final AuthService authService;
 
-    // ─── Existing ─────────────────────────────────────────────────────────────
+    // ─── Register ─────────────────────────────────────────────────────────────
 
     @PostMapping("/register")
     public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(authService.register(request), "User registered successfully"));
+                .body(ApiResponse.success(authService.register(request), "Registration successful. Please check your email for the verification code."));
     }
+
+    // ─── Email Verification ───────────────────────────────────────────────────
+
+    @PostMapping("/verify-email")
+    public ResponseEntity<ApiResponse<Void>> verifyEmail(@Valid @RequestBody VerifyEmailRequest request) {
+        authService.verifyEmail(request);
+        return ResponseEntity.ok(ApiResponse.success(null, "Email verified successfully"));
+    }
+
+    @PostMapping("/resend-verification")
+    public ResponseEntity<ApiResponse<Void>> resendVerification(@RequestParam String email) {
+        authService.resendEmailVerificationOtp(email);
+        return ResponseEntity.ok(ApiResponse.success(null, "Verification code resent to your email"));
+    }
+
+    // ─── Login ────────────────────────────────────────────────────────────────
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<AuthResponse>> login(@Valid @RequestBody LoginRequest request) {
@@ -64,7 +80,6 @@ public class AuthController {
 
     // ─── 2FA ─────────────────────────────────────────────────────────────────
 
-    /** Step 1 — generate secret + QR code (requires auth) */
     @PostMapping("/2fa/setup")
     public ResponseEntity<ApiResponse<TwoFactorSetupResponse>> setup2FA(
             @AuthenticationPrincipal UserDetails principal) {
@@ -72,7 +87,6 @@ public class AuthController {
                 authService.setup2FA(getUserId(principal)), "2FA setup initiated"));
     }
 
-    /** Step 2 — confirm first TOTP code to activate 2FA (requires auth) */
     @PostMapping("/2fa/enable")
     public ResponseEntity<ApiResponse<Void>> enable2FA(
             @AuthenticationPrincipal UserDetails principal,
@@ -81,7 +95,6 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(null, "2FA enabled successfully"));
     }
 
-    /** Disable 2FA — requires current TOTP code (requires auth) */
     @PostMapping("/2fa/disable")
     public ResponseEntity<ApiResponse<Void>> disable2FA(
             @AuthenticationPrincipal UserDetails principal,
@@ -90,7 +103,6 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success(null, "2FA disabled successfully"));
     }
 
-    /** Get current 2FA status (requires auth) */
     @GetMapping("/2fa/status")
     public ResponseEntity<ApiResponse<TwoFactorStatusResponse>> get2FAStatus(
             @AuthenticationPrincipal UserDetails principal) {
@@ -98,10 +110,6 @@ public class AuthController {
                 authService.get2FAStatus(getUserId(principal)), "2FA status retrieved"));
     }
 
-    /**
-     * Second step of login when 2FA is required — public endpoint, no JWT yet.
-     * Verifies TOTP code and returns the full auth tokens.
-     */
     @PostMapping("/2fa/verify-login")
     public ResponseEntity<ApiResponse<AuthResponse>> verify2FALogin(
             @Valid @RequestBody TwoFactorVerifyRequest request) {

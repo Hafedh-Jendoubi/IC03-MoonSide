@@ -66,6 +66,7 @@ public class AuthServiceImpl implements AuthService {
         if (userRepository.existsByEmail(request.getEmail())) {
             throw new DuplicateResourceException("Email already registered: " + request.getEmail());
         }
+        String otp = generateNumericOtp(6);
         User user = User.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
@@ -77,18 +78,72 @@ public class AuthServiceImpl implements AuthService {
                 .bio(request.getBio())
                 .avatar(request.getAvatar())
                 .isActive(true)
+                .emailVerified(false)
+                .emailVerificationOtp(otp)
+                .emailVerificationOtpExpiry(LocalDateTime.now().plusMinutes(15))
                 .build();
         User saved = userRepository.save(user);
         log.info("Registered new user: {}", saved.getEmail());
 
-        UserDetails userDetails = userDetailsService.loadUserByUsername(saved.getEmail());
+        // Auto-assign the "EMPLOYEE" role to every new user
+        roleRepository.findByName("EMPLOYEE").ifPresent(employeeRole -> {
+            tn.moonside.userservice.entities.UserRole userRole = tn.moonside.userservice.entities.UserRole.builder()
+                    .userId(saved.getId())
+                    .roleId(employeeRole.getId())
+                    .build();
+            userRoleRepository.save(userRole);
+            log.info("Assigned EMPLOYEE role to new user: {}", saved.getEmail());
+        });
+
+        sendEmailVerificationOtpEmail(saved.getEmail(), saved.getFirstName(), otp);
+
+        // Return a response without tokens — user must verify email first
         return AuthResponse.builder()
-                .accessToken(jwtService.generateToken(userDetails))
-                .refreshToken(jwtService.generateRefreshToken(userDetails))
-                .tokenType("Bearer")
-                .expiresIn(jwtService.getJwtExpiration())
+                .emailVerificationRequired(true)
                 .user(mapToUserResponse(saved))
                 .build();
+    }
+
+    // ─── Email Verification ───────────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public void verifyEmail(VerifyEmailRequest request) {
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() -> new ResourceNotFoundException("No account found for: " + request.getEmail()));
+        if (user.isEmailVerified()) {
+            return; // already verified, nothing to do
+        }
+        if (user.getEmailVerificationOtp() == null || user.getEmailVerificationOtpExpiry() == null) {
+            throw new UnauthorizedException("No verification OTP found. Please request a new one.");
+        }
+        if (LocalDateTime.now().isAfter(user.getEmailVerificationOtpExpiry())) {
+            throw new UnauthorizedException("OTP has expired. Please request a new one.");
+        }
+        if (!user.getEmailVerificationOtp().equals(request.getOtp())) {
+            throw new UnauthorizedException("Invalid OTP.");
+        }
+        user.setEmailVerified(true);
+        user.setEmailVerificationOtp(null);
+        user.setEmailVerificationOtpExpiry(null);
+        userRepository.save(user);
+        log.info("Email verified for {}", user.getEmail());
+    }
+
+    @Override
+    @Transactional
+    public void resendEmailVerificationOtp(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("No account found for: " + email));
+        if (user.isEmailVerified()) {
+            return;
+        }
+        String otp = generateNumericOtp(6);
+        user.setEmailVerificationOtp(otp);
+        user.setEmailVerificationOtpExpiry(LocalDateTime.now().plusMinutes(15));
+        userRepository.save(user);
+        sendEmailVerificationOtpEmail(user.getEmail(), user.getFirstName(), otp);
+        log.info("Resent email verification OTP to {}", email);
     }
 
     // ─── Login ────────────────────────────────────────────────────────────────
@@ -100,6 +155,10 @@ public class AuthServiceImpl implements AuthService {
         );
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new UnauthorizedException("Invalid credentials"));
+
+        if (!user.isEmailVerified()) {
+            throw new UnauthorizedException("Email not verified. Please check your inbox for the verification code.");
+        }
 
         user.setLastLogin(LocalDateTime.now());
         userRepository.save(user);
@@ -341,6 +400,22 @@ public class AuthServiceImpl implements AuthService {
         StringBuilder sb = new StringBuilder(length);
         for (int i = 0; i < length; i++) sb.append(rnd.nextInt(10));
         return sb.toString();
+    }
+
+    private void sendEmailVerificationOtpEmail(String to, String name, String otp) {
+        SimpleMailMessage msg = new SimpleMailMessage();
+        msg.setFrom(mailFrom);
+        msg.setTo(to);
+        msg.setSubject(appName + " — Verify your email address");
+        msg.setText(
+            "Hi " + name + ",\n\n" +
+            "Welcome to " + appName + "! Please verify your email address by entering the code below:\n\n" +
+            "  " + otp + "\n\n" +
+            "This code expires in 15 minutes.\n\n" +
+            "If you did not create an account, you can safely ignore this email.\n\n" +
+            "— The " + appName + " Team"
+        );
+        mailSender.send(msg);
     }
 
     private void sendOtpEmail(String to, String name, String otp) {

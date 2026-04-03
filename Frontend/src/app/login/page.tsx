@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -18,9 +18,11 @@ type Step =
   | 'verify-otp' // enter the 6-digit OTP from email
   | 'new-password' // set the new password
 
-export default function LoginPage() {
+function LoginForm() {
   const { login, complete2FALogin, user } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const emailJustVerified = searchParams.get('verified') === '1'
 
   const [step, setStep] = useState<Step>('login')
 
@@ -130,7 +132,6 @@ export default function LoginPage() {
     try {
       await authApi.resetPassword({ email: resetEmail, otp, newPassword })
       setSuccessMsg('Password reset! You can now sign in.')
-      // Reset to login step after short delay
       setTimeout(() => {
         setStep('login')
         setOtp('')
@@ -145,7 +146,6 @@ export default function LoginPage() {
     }
   }
 
-  // ── Shared UI pieces ───────────────────────────────────────────────────────
   const FeedbackBanner = () => (
     <>
       {error && (
@@ -153,9 +153,9 @@ export default function LoginPage() {
           {error}
         </div>
       )}
-      {successMsg && (
+      {(successMsg || emailJustVerified) && (
         <div className="animate-slide-down rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
-          {successMsg}
+          {successMsg || (emailJustVerified && 'Email verified! Please sign in.')}
         </div>
       )}
     </>
@@ -178,7 +178,6 @@ export default function LoginPage() {
   return (
     <div className="animate-fade-in flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4">
       <Card className="animate-scale-in w-full max-w-md p-8">
-        {/* ── STEP: Login ─────────────────────────────────────────────────── */}
         {step === 'login' && (
           <>
             <div className="mb-8 text-center">
@@ -188,7 +187,6 @@ export default function LoginPage() {
 
             <form onSubmit={handleLogin} className="space-y-4">
               <FeedbackBanner />
-
               <div>
                 <label htmlFor="email" className="text-foreground mb-2 block text-sm font-medium">
                   Email Address
@@ -252,7 +250,6 @@ export default function LoginPage() {
           </>
         )}
 
-        {/* ── STEP: 2FA ───────────────────────────────────────────────────── */}
         {step === '2fa' && (
           <>
             <div className="mb-8 text-center">
@@ -267,7 +264,6 @@ export default function LoginPage() {
 
             <form onSubmit={handle2FA} className="space-y-4">
               <FeedbackBanner />
-
               <div>
                 <label className="text-foreground mb-2 block text-sm font-medium">
                   Authentication Code
@@ -293,14 +289,12 @@ export default function LoginPage() {
                 {isLoading ? 'Verifying...' : 'Verify Code'}
               </Button>
             </form>
-
             <div className="mt-4">
               <BackToLogin />
             </div>
           </>
         )}
 
-        {/* ── STEP: Forgot Password — enter email ─────────────────────────── */}
         {step === 'forgot' && (
           <>
             <div className="mb-8">
@@ -318,7 +312,6 @@ export default function LoginPage() {
 
             <form onSubmit={handleForgotPassword} className="space-y-4">
               <FeedbackBanner />
-
               <div>
                 <label className="text-foreground mb-2 block text-sm font-medium">
                   Email Address
@@ -333,7 +326,6 @@ export default function LoginPage() {
                   autoFocus
                 />
               </div>
-
               <Button
                 type="submit"
                 disabled={isLoading}
@@ -345,7 +337,6 @@ export default function LoginPage() {
           </>
         )}
 
-        {/* ── STEP: Verify OTP ────────────────────────────────────────────── */}
         {step === 'verify-otp' && (
           <>
             <div className="mb-8">
@@ -355,14 +346,13 @@ export default function LoginPage() {
                 </div>
                 <h1 className="text-foreground text-2xl font-bold">Check Your Email</h1>
                 <p className="text-muted-foreground mt-2 text-sm">
-                  We sent a 6-digit code to <strong>{resetEmail}</strong>. It expires in 15 minutes.
+                  We sent a 6-digit code to <strong>{resetEmail}</strong>.
                 </p>
               </div>
             </div>
 
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <FeedbackBanner />
-
               <div>
                 <label className="text-foreground mb-2 block text-sm font-medium">
                   Verification Code
@@ -379,7 +369,6 @@ export default function LoginPage() {
                   autoFocus
                 />
               </div>
-
               <Button
                 type="submit"
                 disabled={isLoading || otp.length !== 6}
@@ -388,7 +377,6 @@ export default function LoginPage() {
                 {isLoading ? 'Verifying...' : 'Verify Code'}
               </Button>
             </form>
-
             <div className="mt-4 flex items-center justify-between">
               <BackToLogin />
               <button
@@ -409,7 +397,6 @@ export default function LoginPage() {
           </>
         )}
 
-        {/* ── STEP: New Password ───────────────────────────────────────────── */}
         {step === 'new-password' && (
           <>
             <div className="mb-8 text-center">
@@ -424,7 +411,6 @@ export default function LoginPage() {
 
             <form onSubmit={handleResetPassword} className="space-y-4">
               <FeedbackBanner />
-
               <div>
                 <label className="text-foreground mb-2 block text-sm font-medium">
                   New Password
@@ -439,7 +425,6 @@ export default function LoginPage() {
                   autoFocus
                 />
               </div>
-
               <div>
                 <label className="text-foreground mb-2 block text-sm font-medium">
                   Confirm Password
@@ -453,7 +438,6 @@ export default function LoginPage() {
                   className="w-full"
                 />
               </div>
-
               <Button
                 type="submit"
                 disabled={isLoading}
@@ -466,5 +450,23 @@ export default function LoginPage() {
         )}
       </Card>
     </div>
+  )
+}
+
+// ── Root Export Wrapped in Suspense ──────────────────────────────────────────
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4">
+          <Card className="flex w-full max-w-md flex-col items-center justify-center space-y-4 p-8">
+            <div className="border-primary h-12 w-12 animate-spin rounded-full border-4 border-t-transparent"></div>
+            <p className="text-muted-foreground font-medium">Loading WorkSphere...</p>
+          </Card>
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   )
 }

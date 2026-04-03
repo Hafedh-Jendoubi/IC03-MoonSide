@@ -18,4 +18,7 @@ public class AuthResponse {
     // When 2FA is enabled, tokens are withheld until OTP is verified
     @Builder.Default
     private boolean twoFactorRequired = false;
+    // When email verification is required after registration
+    @Builder.Default
+    private boolean emailVerificationRequired = false;
 }
