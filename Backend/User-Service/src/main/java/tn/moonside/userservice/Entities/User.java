@@ -39,6 +39,12 @@ public class User {
     private String passwordResetOtp;
     private LocalDateTime passwordResetOtpExpiry;
 
+    // ── Email Verification ───────────────────────────────────────────────────────
+    @Builder.Default
+    private boolean emailVerified = false;
+    private String emailVerificationOtp;
+    private LocalDateTime emailVerificationOtpExpiry;
+
     // ── Two-Factor Authentication (TOTP) ──────────────────────────────────────
     @Builder.Default
     private boolean twoFactorEnabled = false;
