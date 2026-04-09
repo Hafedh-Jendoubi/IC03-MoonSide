@@ -249,6 +249,10 @@ export const userApi = {
       method: 'PATCH',
       body: JSON.stringify({ avatarUrl }),
     }),
+  deleteAvatar: () =>
+    apiFetch<UserResponse>('/users/me/avatar', {
+      method: 'DELETE',
+    }),
   delete: (id: string) => apiFetch<void>(`/users/${id}`, { method: 'DELETE' }),
   deactivate: (id: string) => apiFetch<void>(`/users/${id}/deactivate`, { method: 'PATCH' }),
   activate: (id: string) => apiFetch<void>(`/users/${id}/activate`, { method: 'PATCH' }),

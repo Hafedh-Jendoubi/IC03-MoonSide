@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { AuthLayout } from '@/components/auth-layout'
 import { Button } from '@/components/ui/button'
@@ -18,9 +18,11 @@ import {
   X,
   Save,
   Loader2,
+  Camera,
+  Trash2,
 } from 'lucide-react'
 import { User, getFullName } from '@/lib/types'
-import { userApi, UpdateUserRequest } from '@/lib/api'
+import { userApi, mediaApi, UpdateUserRequest } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 
 // ─── Edit Profile Modal ───────────────────────────────────────────────────────
@@ -31,8 +33,13 @@ interface EditProfileModalProps {
   onSaved: (updated: User) => void
 }
 
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+const MAX_SIZE_MB = 10
+
 function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
   const { refreshUser } = useAuth()
+  const inputRef = useRef<HTMLInputElement>(null)
+
   const [form, setForm] = useState({
     firstName: user.firstName ?? '',
     lastName: user.lastName ?? '',
@@ -43,11 +50,59 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
+  // Avatar state
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(user.avatar ?? null)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarStatus, setAvatarStatus] = useState<'idle' | 'uploading' | 'deleting'>('idle')
+  const [avatarError, setAvatarError] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState(false)
+
+  const initials = `${form.firstName?.[0] ?? ''}${form.lastName?.[0] ?? ''}`.toUpperCase()
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setAvatarError('Only JPEG, PNG, GIF and WebP images are allowed.')
+      return
+    }
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      setAvatarError(`File must be under ${MAX_SIZE_MB} MB.`)
+      return
+    }
+
+    setAvatarError(null)
+    setPendingDelete(false)
+    setAvatarPreview(URL.createObjectURL(file))
+    setAvatarFile(file)
+    if (inputRef.current) inputRef.current.value = ''
+  }
+
+  const handleDeleteAvatar = () => {
+    setAvatarPreview(null)
+    setAvatarFile(null)
+    setAvatarError(null)
+    setPendingDelete(true)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setError('')
+
     try {
+      // Handle avatar changes first
+      if (pendingDelete) {
+        setAvatarStatus('deleting')
+        await userApi.deleteAvatar()
+      } else if (avatarFile) {
+        setAvatarStatus('uploading')
+        const media = await mediaApi.upload(avatarFile, 'AVATAR')
+        await userApi.updateAvatar(media.url)
+      }
+
+      // Save profile fields
       const payload: UpdateUserRequest = {
         firstName: form.firstName || undefined,
         lastName: form.lastName || undefined,
@@ -62,6 +117,7 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
       setError(err instanceof Error ? err.message : 'Failed to save changes')
     } finally {
       setSaving(false)
+      setAvatarStatus('idle')
     }
   }
 
@@ -69,6 +125,8 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
   const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (e.target === e.currentTarget) onClose()
   }
+
+  const avatarBusy = avatarStatus !== 'idle'
 
   return (
     <div
@@ -91,23 +149,93 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
         </div>
 
         {/* Avatar row */}
-        <div className="border-border flex items-center gap-4 border-b px-6 py-4 dark:border-slate-700">
-          {user.avatar ? (
-            <img
-              src={user.avatar}
-              alt={getFullName(user)}
-              className="ring-primary/20 h-16 w-16 rounded-full object-cover ring-4"
-            />
-          ) : (
-            <div className="bg-primary/10 text-primary ring-primary/20 flex h-16 w-16 items-center justify-center rounded-full text-xl font-bold ring-4">
-              {user.firstName?.[0]?.toUpperCase()}
-              {user.lastName?.[0]?.toUpperCase()}
-            </div>
-          )}
-          <div>
-            <p className="text-foreground font-medium">{getFullName(user)}</p>
-            <p className="text-muted-foreground text-sm">{user.email}</p>
+        <div className="border-border flex items-center gap-5 border-b px-6 py-5 dark:border-slate-700">
+          {/* Clickable avatar with camera overlay */}
+          <div className="group relative flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={avatarBusy}
+              className="border-border focus-visible:ring-ring relative block h-20 w-20 overflow-hidden rounded-full border-2 focus:outline-none focus-visible:ring-2 disabled:cursor-not-allowed"
+              aria-label="Change profile picture"
+            >
+              {avatarPreview ? (
+                <img
+                  src={avatarPreview}
+                  alt={getFullName(user)}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="bg-primary/10 text-primary flex h-full w-full items-center justify-center rounded-full text-xl font-bold">
+                  {initials || '?'}
+                </span>
+              )}
+
+              {/* Hover overlay */}
+              <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                {avatarBusy ? (
+                  <Loader2 size={18} className="animate-spin text-white" />
+                ) : (
+                  <Camera size={18} className="text-white" />
+                )}
+                <span className="text-[9px] leading-none font-medium text-white">
+                  {avatarBusy ? '…' : 'Change'}
+                </span>
+              </span>
+            </button>
           </div>
+
+          {/* Info + action buttons */}
+          <div className="min-w-0 flex-1">
+            <p className="text-foreground font-medium">{getFullName(user)}</p>
+            <p className="text-muted-foreground mb-3 text-sm">{user.email}</p>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="gap-1.5 text-xs"
+                disabled={avatarBusy}
+                onClick={() => inputRef.current?.click()}
+              >
+                <Camera size={13} />
+                {avatarFile ? 'Change photo' : 'Upload photo'}
+              </Button>
+
+              {(avatarPreview || user.avatar) && !pendingDelete && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 border-red-200 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
+                  disabled={avatarBusy}
+                  onClick={handleDeleteAvatar}
+                >
+                  <Trash2 size={13} />
+                  Remove photo
+                </Button>
+              )}
+
+              {pendingDelete && (
+                <span className="flex items-center gap-1 text-xs text-amber-600">
+                  <Trash2 size={13} />
+                  Photo will be removed on save
+                </span>
+              )}
+            </div>
+
+            {avatarError && <p className="mt-1.5 text-xs text-red-600">{avatarError}</p>}
+          </div>
+
+          {/* Hidden file input */}
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ALLOWED_TYPES.join(',')}
+            className="hidden"
+            onChange={handleAvatarChange}
+          />
         </div>
 
         {/* Form */}
