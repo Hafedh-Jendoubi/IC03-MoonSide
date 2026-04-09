@@ -42,6 +42,11 @@ public class GatewayConfig {
                         .path("/badges/**")
                         .uri("lb://BADGE-SERVICE"))
 
+                // Media Service: file uploads, avatar storage
+                .route("media-service", r -> r
+                        .path("/media/**")
+                        .uri("lb://MEDIA-SERVICE"))
+
                 .build();
     }
 }

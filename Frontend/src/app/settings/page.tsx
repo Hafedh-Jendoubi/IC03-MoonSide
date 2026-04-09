@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Bell, Lock, Eye, Palette, ShieldCheck, ShieldOff, Smartphone } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { authApi, TwoFactorSetupResponse } from '@/lib/api'
+import { AvatarUpload } from '@/components/avatar-upload'
 import { getFullName } from '@/lib/types'
 import { useRouter } from 'next/navigation'
 
@@ -278,22 +279,11 @@ export default function SettingsPage() {
 
         {/* Profile Quick-link Card */}
         <Card className="animate-scale-in mb-6 p-5">
-          <div className="flex items-center gap-4">
-            {user?.avatar ? (
-              <img
-                src={user.avatar}
-                alt={displayName}
-                className="h-14 w-14 rounded-full object-cover"
-              />
-            ) : (
-              <div className="bg-primary/10 text-primary flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold">
-                {user?.firstName?.[0]?.toUpperCase()}
-                {user?.lastName?.[0]?.toUpperCase()}
-              </div>
-            )}
-            <div className="flex-1">
-              <p className="text-foreground font-semibold">{displayName}</p>
-              <p className="text-muted-foreground text-sm">{user?.email}</p>
+          <div className="flex items-center gap-6">
+            <AvatarUpload />
+            <div className="min-w-0 flex-1">
+              <p className="text-foreground truncate font-semibold">{displayName}</p>
+              <p className="text-muted-foreground truncate text-sm">{user?.email}</p>
             </div>
             <Button
               variant="outline"
