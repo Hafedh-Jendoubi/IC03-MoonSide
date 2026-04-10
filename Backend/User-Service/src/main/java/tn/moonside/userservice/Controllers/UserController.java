@@ -1,6 +1,7 @@
-package tn.moonside.userservice.controllers;
+package tn.moonside.userservice.Controllers;
 
 import tn.moonside.userservice.dtos.requests.AssignRoleRequest;
+import tn.moonside.userservice.dtos.requests.UpdateAvatarRequest;
 import tn.moonside.userservice.dtos.requests.UpdateUserRequest;
 import tn.moonside.userservice.dtos.responses.ApiResponse;
 import tn.moonside.userservice.dtos.responses.UserResponse;
@@ -35,6 +36,21 @@ public class UserController {
     public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser(
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserByEmail(userDetails.getUsername())));
+    }
+
+    @PatchMapping("/me/avatar")
+    public ResponseEntity<ApiResponse<UserResponse>> updateMyAvatar(
+            @RequestBody UpdateAvatarRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        UserResponse updated = userService.updateAvatar(userDetails.getUsername(), request.getAvatarUrl());
+        return ResponseEntity.ok(ApiResponse.success(updated, "Avatar updated successfully"));
+    }
+
+    @DeleteMapping("/me/avatar")
+    public ResponseEntity<ApiResponse<UserResponse>> deleteMyAvatar(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        UserResponse updated = userService.updateAvatar(userDetails.getUsername(), null);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Avatar removed successfully"));
     }
 
     /** Returns the list of role names for the given user — used by the frontend. */

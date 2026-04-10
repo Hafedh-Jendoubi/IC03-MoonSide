@@ -279,21 +279,22 @@ export default function SettingsPage() {
         {/* Profile Quick-link Card */}
         <Card className="animate-scale-in mb-6 p-5">
           <div className="flex items-center gap-4">
+            {/* Static avatar display */}
             {user?.avatar ? (
               <img
                 src={user.avatar}
                 alt={displayName}
-                className="h-14 w-14 rounded-full object-cover"
+                className="ring-primary/20 h-14 w-14 flex-shrink-0 rounded-full object-cover ring-2"
               />
             ) : (
-              <div className="bg-primary/10 text-primary flex h-14 w-14 items-center justify-center rounded-full text-lg font-bold">
+              <div className="bg-primary/10 text-primary ring-primary/20 flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full text-lg font-bold ring-2">
                 {user?.firstName?.[0]?.toUpperCase()}
                 {user?.lastName?.[0]?.toUpperCase()}
               </div>
             )}
-            <div className="flex-1">
-              <p className="text-foreground font-semibold">{displayName}</p>
-              <p className="text-muted-foreground text-sm">{user?.email}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-foreground truncate font-semibold">{displayName}</p>
+              <p className="text-muted-foreground truncate text-sm">{user?.email}</p>
             </div>
             <Button
               variant="outline"

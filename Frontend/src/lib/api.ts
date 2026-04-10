@@ -244,6 +244,15 @@ export const userApi = {
   getMe: () => apiFetch<UserResponse>('/users/me'),
   update: (id: string, data: UpdateUserRequest) =>
     apiFetch<UserResponse>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateAvatar: (avatarUrl: string) =>
+    apiFetch<UserResponse>('/users/me/avatar', {
+      method: 'PATCH',
+      body: JSON.stringify({ avatarUrl }),
+    }),
+  deleteAvatar: () =>
+    apiFetch<UserResponse>('/users/me/avatar', {
+      method: 'DELETE',
+    }),
   delete: (id: string) => apiFetch<void>(`/users/${id}`, { method: 'DELETE' }),
   deactivate: (id: string) => apiFetch<void>(`/users/${id}/deactivate`, { method: 'PATCH' }),
   activate: (id: string) => apiFetch<void>(`/users/${id}/activate`, { method: 'PATCH' }),
@@ -299,6 +308,60 @@ export const roleApi = {
     apiFetch<void>(`/roles/${roleId}/permissions/${permissionId}`, { method: 'POST' }),
   revokePermission: (roleId: string, permissionId: string) =>
     apiFetch<void>(`/roles/${roleId}/permissions/${permissionId}`, { method: 'DELETE' }),
+}
+
+// ─── Media types & endpoints ───────────────────────────────────────────────────
+
+export interface MediaResponse {
+  id: string
+  uploadedBy: string
+  originalFilename: string
+  contentType: string
+  size: number
+  url: string
+  context: string
+  uploadedAt: string
+}
+
+/**
+ * Upload a file to the Media-Service.
+ * Uses a raw fetch (not apiFetch) so we can send multipart/form-data
+ * without the Content-Type: application/json header override.
+ */
+async function uploadFile(path: string, formData: FormData): Promise<MediaResponse> {
+  const token = tokenStorage.getAccessToken()
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  })
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.message || `Upload failed: ${res.status}`)
+  }
+
+  const body: ApiResponse<MediaResponse> = await res.json()
+  return body.data
+}
+
+export const mediaApi = {
+  /**
+   * Upload any file. Returns the stored metadata including the public URL.
+   * @param file     The File object from an <input type="file">
+   * @param context  Logical context tag: AVATAR | POST_ATTACHMENT | GENERAL
+   */
+  upload: (file: File, context: string = 'GENERAL'): Promise<MediaResponse> => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('context', context)
+    return uploadFile('/media/upload', form)
+  },
+
+  getById: (id: string) => apiFetch<MediaResponse>(`/media/${id}`),
 }
 
 // ─── Permission endpoints ──────────────────────────────────────────────────────
