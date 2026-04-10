@@ -378,3 +378,53 @@ export const permissionApi = {
     }),
   delete: (id: string) => apiFetch<void>(`/permissions/${id}`, { method: 'DELETE' }),
 }
+
+// ─── Audit Log types & endpoints ──────────────────────────────────────────────
+
+export interface AuditLogResponse {
+  id: string
+  userId: string | null
+  entityId: string | null
+  entityType: string | null
+  action: string
+  description: string
+  success: boolean
+  oldValue: string | null
+  newValue: string | null
+  ipAddress: string | null
+  createdAt: string
+}
+
+export interface PageResponse<T> {
+  content: T[]
+  totalElements: number
+  totalPages: number
+  number: number // current page (0-based)
+  size: number
+}
+
+export interface AuditLogStats {
+  total: number
+  success: number
+  failure: number
+}
+
+export const auditApi = {
+  getLogs: (params?: {
+    page?: number
+    size?: number
+    userId?: string
+    action?: string
+    success?: boolean
+  }) => {
+    const query = new URLSearchParams()
+    if (params?.page != null) query.set('page', String(params.page))
+    if (params?.size != null) query.set('size', String(params.size))
+    if (params?.userId) query.set('userId', params.userId)
+    if (params?.action) query.set('action', params.action)
+    if (params?.success != null) query.set('success', String(params.success))
+    return apiFetch<PageResponse<AuditLogResponse>>(`/audit-logs?${query.toString()}`)
+  },
+
+  getStats: () => apiFetch<AuditLogStats>('/audit-logs/stats'),
+}

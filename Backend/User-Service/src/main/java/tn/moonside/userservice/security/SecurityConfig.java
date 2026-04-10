@@ -65,6 +65,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/users/me/avatar").authenticated()
                 // Delete users — ADMIN only
                 .requestMatchers(HttpMethod.DELETE, "/users/**").hasRole("ADMIN")
+                // Audit logs — ADMIN only
+                .requestMatchers("/audit-logs/**").hasRole("ADMIN")
                 // ── Authenticated read-only routes ───────────────────────────
                 .requestMatchers(HttpMethod.GET, "/roles/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/users/**").authenticated()

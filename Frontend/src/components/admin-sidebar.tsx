@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Users, Shield, BarChart3, Settings, ArrowLeft } from 'lucide-react'
+import { Users, Shield, BarChart3, Settings, ArrowLeft, ClipboardList } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -31,6 +31,12 @@ export function AdminSidebar({ isOpen = true }: AdminSidebarProps) {
       label: 'Roles',
       icon: Shield,
       description: 'Manage roles & permissions',
+    },
+    {
+      href: '/admin/audit-logs',
+      label: 'Audit Logs',
+      icon: ClipboardList,
+      description: 'Activity & security trail',
     },
     {
       href: '/admin/settings',

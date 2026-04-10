@@ -30,6 +30,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
+    private final AuditLogService auditLogService;
 
     @Override
     public UserResponse getUserById(String id) {
@@ -55,10 +56,19 @@ public class UserServiceImpl implements UserService {
     public UserResponse updateAvatar(String email, String avatarUrl) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+        String oldAvatar = user.getAvatar();
         user.setAvatar(avatarUrl);
         user.setUpdatedAt(LocalDateTime.now());
         User saved = userRepository.save(user);
         log.info("Updated avatar for user: {}", saved.getId());
+
+        String action = (avatarUrl == null) ? "AVATAR_DELETE" : "AVATAR_UPDATE";
+        String desc   = (avatarUrl == null)
+                ? "Avatar removed for " + email
+                : "Avatar updated for " + email;
+        auditLogService.log(saved.getId(), saved.getId(), "USER",
+                action, desc, true, oldAvatar, avatarUrl, null);
+
         return mapToUserResponse(saved);
     }
 
@@ -66,6 +76,10 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse updateUser(String id, UpdateUserRequest request, String currentUserEmail) {
         User user = findUserById(id);
+
+        // Capture old snapshot for audit
+        String oldSnapshot = toSnapshot(user);
+
         if (request.getFirstName()   != null) user.setFirstName(request.getFirstName());
         if (request.getLastName()    != null) user.setLastName(request.getLastName());
         if (request.getBirthDate()   != null) user.setBirthDate(request.getBirthDate());
@@ -77,6 +91,12 @@ public class UserServiceImpl implements UserService {
         user.setUpdatedAt(LocalDateTime.now());
         User updated = userRepository.save(user);
         log.info("Updated user: {}", updated.getId());
+
+        auditLogService.log(updated.getId(), updated.getId(), "USER",
+                "PROFILE_UPDATE",
+                "Profile updated for " + updated.getEmail() + " by " + currentUserEmail,
+                true, oldSnapshot, toSnapshot(updated), null);
+
         return mapToUserResponse(updated);
     }
 
@@ -87,17 +107,18 @@ public class UserServiceImpl implements UserService {
         userRoleRepository.findByUserIdFlexible(id).forEach(userRoleRepository::delete);
         userRepository.delete(user);
         log.info("Deleted user: {}", id);
+        auditLogService.log(id, id, "USER",
+                "USER_DELETED", "User deleted: " + user.getEmail(), true, null, null, null);
     }
 
     @Override
     @Transactional
     public void assignRole(String userId, AssignRoleRequest request) {
-        findUserById(userId);
-        roleRepository.findById(request.getRoleId())
+        User user = findUserById(userId);
+        Role role = roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + request.getRoleId()));
 
         String scopeId = request.getScopeId() != null ? request.getScopeId() : "GLOBAL";
-
         boolean alreadyAssigned = userRoleRepository.existsByUserIdAndRoleIdFlexible(userId, request.getRoleId());
         if (alreadyAssigned) {
             throw new DuplicateResourceException("Role already assigned to user with this scope");
@@ -111,14 +132,25 @@ public class UserServiceImpl implements UserService {
                 .build();
         userRoleRepository.save(userRole);
         log.info("Assigned role {} to user {}", request.getRoleId(), userId);
+
+        auditLogService.log(userId, userId, "USER",
+                "ROLE_ASSIGNED",
+                "Role '" + role.getName() + "' assigned to " + user.getEmail(),
+                true, null, role.getName(), null);
     }
 
     @Override
     @Transactional
     public void revokeRole(String userId, String roleId) {
-        findUserById(userId);
+        User user = findUserById(userId);
+        Role role = findRoleById(roleId).orElse(null);
         userRoleRepository.deleteByUserIdAndRoleIdFlexible(userId, roleId);
         log.info("Revoked role {} from user {}", roleId, userId);
+
+        auditLogService.log(userId, userId, "USER",
+                "ROLE_REVOKED",
+                "Role '" + (role != null ? role.getName() : roleId) + "' revoked from " + user.getEmail(),
+                true, (role != null ? role.getName() : roleId), null, null);
     }
 
     @Override
@@ -128,6 +160,8 @@ public class UserServiceImpl implements UserService {
         user.setActive(false);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+        auditLogService.log(id, id, "USER",
+                "USER_DEACTIVATED", "User deactivated: " + user.getEmail(), true, null, null, null);
     }
 
     @Override
@@ -137,6 +171,8 @@ public class UserServiceImpl implements UserService {
         user.setActive(true);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
+        auditLogService.log(id, id, "USER",
+                "USER_ACTIVATED", "User activated: " + user.getEmail(), true, null, null, null);
     }
 
     @Override
@@ -157,11 +193,6 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
     }
 
-    /**
-     * Looks up a role by its stored ID value, which might be either a plain
-     * hex string (new records) or the string representation of an ObjectId
-     * that was stored natively as ObjectId (legacy records).
-     */
     private Optional<Role> findRoleById(String roleId) {
         if (roleId == null) return Optional.empty();
         Optional<Role> role = roleRepository.findById(roleId);
@@ -171,6 +202,18 @@ public class UserServiceImpl implements UserService {
         }
         return Optional.empty();
     }
+
+    /** Lightweight JSON snapshot of mutable profile fields for the audit trail */
+    private String toSnapshot(User u) {
+        return "{\"firstName\":\"" + nullSafe(u.getFirstName()) + "\"" +
+               ",\"lastName\":\""  + nullSafe(u.getLastName())  + "\"" +
+               ",\"jobTitle\":\""  + nullSafe(u.getJobTitle())  + "\"" +
+               ",\"bio\":\""       + nullSafe(u.getBio())       + "\"" +
+               ",\"phoneNumber\":\"" + nullSafe(u.getPhoneNumber()) + "\"" +
+               ",\"active\":"      + u.isActive() + "}";
+    }
+
+    private String nullSafe(String s) { return s == null ? "" : s.replace("\"", "\\\""); }
 
     private UserResponse mapToUserResponse(User user) {
         List<String> roles = user.getId() != null ? getUserRoleNames(user.getId()) : List.of();
