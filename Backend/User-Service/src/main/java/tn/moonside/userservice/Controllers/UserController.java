@@ -46,6 +46,13 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(updated, "Avatar updated successfully"));
     }
 
+    @DeleteMapping("/me/avatar")
+    public ResponseEntity<ApiResponse<UserResponse>> deleteMyAvatar(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        UserResponse updated = userService.updateAvatar(userDetails.getUsername(), null);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Avatar removed successfully"));
+    }
+
     /** Returns the list of role names for the given user — used by the frontend. */
     @GetMapping("/{id}/roles")
     public ResponseEntity<ApiResponse<List<String>>> getUserRoles(@PathVariable String id) {
