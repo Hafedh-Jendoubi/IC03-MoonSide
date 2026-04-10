@@ -1,0 +1,648 @@
+'use client'
+
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import {
+  Search,
+  Shield,
+  Loader2,
+  RefreshCw,
+  MoreVertical,
+  Eye,
+  Edit2,
+  Mail,
+  UserX,
+  UserCheck,
+  Trash2,
+  X,
+} from 'lucide-react'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { userApi, roleApi, UserResponse, RoleResponse } from '@/lib/api'
+
+// ─── Avatar component ─────────────────────────────────────────────────────────
+
+function UserAvatar({ user, size = 'sm' }: { user: UserResponse; size?: 'sm' | 'md' }) {
+  const dim = size === 'sm' ? 'h-8 w-8 text-xs' : 'h-10 w-10 text-sm'
+  if (user.avatar) {
+    return (
+      <img
+        src={user.avatar}
+        alt={`${user.firstName} ${user.lastName}`}
+        className={`${dim} rounded-full object-cover ring-2 ring-white dark:ring-slate-800`}
+      />
+    )
+  }
+  return (
+    <div
+      className={`${dim} bg-primary/10 text-primary flex flex-shrink-0 items-center justify-center rounded-full font-semibold ring-2 ring-white dark:ring-slate-800`}
+    >
+      {user.firstName?.[0]?.toUpperCase()}
+      {user.lastName?.[0]?.toUpperCase()}
+    </div>
+  )
+}
+
+// ─── Dropdown action menu ─────────────────────────────────────────────────────
+
+interface DropdownMenuProps {
+  user: UserResponse
+  onView: () => void
+  onEdit: () => void
+  onContact: () => void
+  onToggleActive: () => void
+  onDelete: () => void
+}
+
+function ActionDropdown({
+  user,
+  onView,
+  onEdit,
+  onContact,
+  onToggleActive,
+  onDelete,
+}: DropdownMenuProps) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    if (open) document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const action = (fn: () => void) => {
+    fn()
+    setOpen(false)
+  }
+
+  return (
+    <div ref={ref} className="relative" onClick={(e) => e.stopPropagation()}>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="h-8 w-8 p-0 opacity-60 hover:opacity-100"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Actions"
+      >
+        <MoreVertical className="h-4 w-4" />
+      </Button>
+
+      {open && (
+        <div className="border-border bg-popover absolute right-0 z-50 mt-1 w-44 origin-top-right rounded-lg border shadow-lg ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900">
+          <div className="text-popover-foreground py-1 text-sm">
+            <button
+              className="hover:bg-muted flex w-full items-center gap-2.5 px-3 py-2"
+              onClick={() => action(onView)}
+            >
+              <Eye className="text-muted-foreground h-3.5 w-3.5" />
+              View profile
+            </button>
+            <button
+              className="hover:bg-muted flex w-full items-center gap-2.5 px-3 py-2"
+              onClick={() => action(onEdit)}
+            >
+              <Edit2 className="text-muted-foreground h-3.5 w-3.5" />
+              Edit
+            </button>
+            <button
+              className="hover:bg-muted flex w-full items-center gap-2.5 px-3 py-2"
+              onClick={() => action(onContact)}
+            >
+              <Mail className="text-muted-foreground h-3.5 w-3.5" />
+              Contact
+            </button>
+            <div className="border-border my-1 border-t dark:border-slate-700" />
+            <button
+              className={`hover:bg-muted flex w-full items-center gap-2.5 px-3 py-2 ${
+                user.active
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-green-600 dark:text-green-400'
+              }`}
+              onClick={() => action(onToggleActive)}
+            >
+              {user.active ? (
+                <UserX className="h-3.5 w-3.5" />
+              ) : (
+                <UserCheck className="h-3.5 w-3.5" />
+              )}
+              {user.active ? 'Block user' : 'Unblock user'}
+            </button>
+            <button
+              className="text-destructive hover:bg-destructive/10 flex w-full items-center gap-2.5 px-3 py-2"
+              onClick={() => action(onDelete)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
+
+export default function UsersPage() {
+  const router = useRouter()
+  const [users, setUsers] = useState<UserResponse[]>([])
+  const [roles, setRoles] = useState<RoleResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterStatus, setFilterStatus] = useState<string>('all')
+
+  // Edit user state
+  const [editingUser, setEditingUser] = useState<UserResponse | null>(null)
+  const [editForm, setEditForm] = useState({ firstName: '', lastName: '', jobTitle: '', bio: '' })
+  const [assignedRoleIds, setAssignedRoleIds] = useState<Set<string>>(new Set())
+  const [originalRoleIds, setOriginalRoleIds] = useState<Set<string>>(new Set())
+  const [saving, setSaving] = useState(false)
+
+  // Delete state
+  const [deletingUser, setDeletingUser] = useState<UserResponse | null>(null)
+  const [deleting, setDeleting] = useState(false)
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const [usersData, rolesData] = await Promise.all([userApi.getAll(), roleApi.getAll()])
+      setUsers(usersData)
+      setRoles(rolesData)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((user) => {
+      const fullName = `${user.firstName} ${user.lastName}`.toLowerCase()
+      const matchesSearch =
+        fullName.includes(searchQuery.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchQuery.toLowerCase())
+      const matchesStatus =
+        filterStatus === 'all' ||
+        (filterStatus === 'active' && user.active) ||
+        (filterStatus === 'inactive' && !user.active)
+      return matchesSearch && matchesStatus
+    })
+  }, [users, searchQuery, filterStatus])
+
+  const getRoleBadgeVariant = (
+    roleNames: string[]
+  ): 'default' | 'secondary' | 'destructive' | 'outline' => {
+    if (roleNames.length === 0) return 'outline'
+    const first = roleNames[0].toLowerCase()
+    if (first === 'admin') return 'default'
+    if (first === 'manager') return 'secondary'
+    return 'outline'
+  }
+
+  const openEdit = (user: UserResponse) => {
+    setEditingUser(user)
+    setEditForm({
+      firstName: user.firstName,
+      lastName: user.lastName,
+      jobTitle: user.jobTitle ?? '',
+      bio: user.bio ?? '',
+    })
+    const ids = new Set(
+      user.roles
+        .map((name) => roles.find((r) => r.name === name)?.id)
+        .filter((id): id is string => !!id)
+    )
+    setAssignedRoleIds(new Set(ids))
+    setOriginalRoleIds(new Set(ids))
+  }
+
+  const toggleRole = (roleId: string) => {
+    setAssignedRoleIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(roleId)) next.delete(roleId)
+      else next.add(roleId)
+      return next
+    })
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingUser) return
+    setSaving(true)
+    try {
+      await userApi.update(editingUser.id, {
+        firstName: editForm.firstName,
+        lastName: editForm.lastName,
+        jobTitle: editForm.jobTitle || undefined,
+        bio: editForm.bio || undefined,
+      })
+      const toAssign = [...assignedRoleIds].filter((id) => !originalRoleIds.has(id))
+      const toRevoke = [...originalRoleIds].filter((id) => !assignedRoleIds.has(id))
+      await Promise.all([
+        ...toAssign.map((roleId) =>
+          userApi.assignRole(editingUser.id, { roleId, scopeType: 'GLOBAL', scopeId: 'GLOBAL' })
+        ),
+        ...toRevoke.map((roleId) => userApi.revokeRole(editingUser.id, roleId)),
+      ])
+      await fetchData()
+      setEditingUser(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update user')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleToggleActive = async (user: UserResponse) => {
+    try {
+      if (user.active) await userApi.deactivate(user.id)
+      else await userApi.activate(user.id)
+      await fetchData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update user status')
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deletingUser) return
+    setDeleting(true)
+    try {
+      await userApi.delete(deletingUser.id)
+      await fetchData()
+      setDeletingUser(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete user')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const handleContact = (user: UserResponse) => {
+    window.location.href = `mailto:${user.email}`
+  }
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '—'
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+  }
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-8 p-8">
+      {/* Header */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">User Management</h1>
+            <p className="text-muted-foreground">Manage users, roles, and permissions</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
+            <RefreshCw className="h-4 w-4" />
+            Refresh
+          </Button>
+        </div>
+
+        {error && (
+          <div className="bg-destructive/10 text-destructive rounded-md px-4 py-2 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Search and Filters */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-center">
+          <div className="relative flex-1">
+            <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+            <Input
+              type="text"
+              placeholder="Search by name or email..."
+              className="pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="border-border bg-background rounded-md border px-3 py-2 text-sm dark:bg-slate-900"
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive (Blocked)</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Users Table */}
+      <Card className="dark:border-slate-700">
+        <CardHeader>
+          <CardTitle>Users</CardTitle>
+          <CardDescription>
+            Showing {filteredUsers.length} of {users.length} users
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="border-border overflow-x-auto rounded-lg border dark:border-slate-700">
+            <Table>
+              <TableHeader>
+                <TableRow className="dark:border-slate-700">
+                  <TableHead className="font-semibold">User</TableHead>
+                  <TableHead className="font-semibold">Email</TableHead>
+                  <TableHead className="font-semibold">Roles</TableHead>
+                  <TableHead className="font-semibold">Joined</TableHead>
+                  <TableHead className="text-right font-semibold">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredUsers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-muted-foreground py-8 text-center">
+                      No users found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredUsers.map((user) => {
+                    const isInactive = !user.active
+                    return (
+                      <TableRow
+                        key={user.id}
+                        onClick={() => router.push(`/profile/${user.id}`)}
+                        className={`cursor-pointer transition-colors dark:border-slate-700 ${
+                          isInactive
+                            ? 'bg-red-50/60 hover:bg-red-100/60 dark:bg-red-950/20 dark:hover:bg-red-950/30'
+                            : 'hover:bg-muted/50'
+                        }`}
+                      >
+                        {/* Avatar + Name */}
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <UserAvatar user={user} />
+                            <div>
+                              <p
+                                className={`leading-tight font-medium ${
+                                  isInactive ? 'text-red-700 dark:text-red-400' : 'text-foreground'
+                                }`}
+                              >
+                                {user.firstName} {user.lastName}
+                              </p>
+                              {isInactive && (
+                                <span className="text-xs font-medium text-red-500 dark:text-red-400">
+                                  Blocked
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+
+                        {/* Email */}
+                        <TableCell
+                          className={`text-sm ${
+                            isInactive
+                              ? 'text-red-600/80 dark:text-red-400/80'
+                              : 'text-muted-foreground'
+                          }`}
+                        >
+                          {user.email}
+                        </TableCell>
+
+                        {/* Roles */}
+                        <TableCell>
+                          {user.roles.length === 0 ? (
+                            <Badge variant="outline" className="gap-1 text-xs">
+                              No Role
+                            </Badge>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {user.roles.map((roleName) => (
+                                <Badge
+                                  key={roleName}
+                                  variant={getRoleBadgeVariant([roleName])}
+                                  className="gap-1 text-xs"
+                                >
+                                  <Shield className="h-2.5 w-2.5" />
+                                  {roleName}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
+                        </TableCell>
+
+                        {/* Joined date */}
+                        <TableCell
+                          className={`text-sm ${
+                            isInactive
+                              ? 'text-red-600/70 dark:text-red-400/70'
+                              : 'text-muted-foreground'
+                          }`}
+                        >
+                          {formatDate(user.createdAt)}
+                        </TableCell>
+
+                        {/* Actions */}
+                        <TableCell className="text-right">
+                          <ActionDropdown
+                            user={user}
+                            onView={() => router.push(`/profile/${user.id}`)}
+                            onEdit={() => openEdit(user)}
+                            onContact={() => handleContact(user)}
+                            onToggleActive={() => handleToggleActive(user)}
+                            onDelete={() => setDeletingUser(user)}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Edit User Dialog */}
+      <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+        <DialogContent className="max-w-lg dark:border-slate-700">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>Update user information and roles</DialogDescription>
+          </DialogHeader>
+          {editingUser && (
+            <div className="space-y-4">
+              {/* User identity preview */}
+              <div className="bg-muted/50 flex items-center gap-3 rounded-lg px-3 py-2">
+                <UserAvatar user={editingUser} size="md" />
+                <div>
+                  <p className="font-medium">
+                    {editingUser.firstName} {editingUser.lastName}
+                  </p>
+                  <p className="text-muted-foreground text-xs">{editingUser.email}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">First Name</label>
+                  <Input
+                    className="mt-1"
+                    value={editForm.firstName}
+                    onChange={(e) => setEditForm((f) => ({ ...f, firstName: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Last Name</label>
+                  <Input
+                    className="mt-1"
+                    value={editForm.lastName}
+                    onChange={(e) => setEditForm((f) => ({ ...f, lastName: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Job Title</label>
+                <Input
+                  className="mt-1"
+                  value={editForm.jobTitle}
+                  onChange={(e) => setEditForm((f) => ({ ...f, jobTitle: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Bio</label>
+                <textarea
+                  className="border-border bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm dark:bg-slate-900"
+                  rows={3}
+                  value={editForm.bio}
+                  onChange={(e) => setEditForm((f) => ({ ...f, bio: e.target.value }))}
+                />
+              </div>
+
+              {/* Roles */}
+              <div>
+                <label className="text-sm font-medium">Roles</label>
+                <p className="text-muted-foreground mb-2 text-xs">
+                  Select one or more roles for this user
+                </p>
+                <div className="border-border grid grid-cols-2 gap-2 rounded-md border p-3 dark:border-slate-700">
+                  {roles.map((role) => (
+                    <label
+                      key={role.id}
+                      className="flex cursor-pointer items-center gap-2 rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={assignedRoleIds.has(role.id)}
+                        onChange={() => toggleRole(role.id)}
+                        className="accent-primary h-4 w-4"
+                      />
+                      <span className="text-sm">{role.name}</span>
+                    </label>
+                  ))}
+                </div>
+                {assignedRoleIds.size > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {[...assignedRoleIds].map((id) => {
+                      const role = roles.find((r) => r.id === id)
+                      if (!role) return null
+                      return (
+                        <Badge key={id} variant="secondary" className="gap-1 pr-1">
+                          {role.name}
+                          <button
+                            onClick={() => toggleRole(id)}
+                            className="hover:text-destructive ml-1"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setEditingUser(null)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveEdit} disabled={saving}>
+                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deletingUser} onOpenChange={(open) => !open && setDeletingUser(null)}>
+        <AlertDialogContent className="dark:border-slate-700">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete{' '}
+              <strong>
+                {deletingUser?.firstName} {deletingUser?.lastName}
+              </strong>
+              ? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  )
+}

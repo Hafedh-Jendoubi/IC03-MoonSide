@@ -15,7 +15,7 @@ on:
 
 jobs:
   # ─────────────────────────────────────────────
-  # 1. Lint, type-check & test
+  # 1. Prettier check, type-check & test
   # ─────────────────────────────────────────────
   build-and-test:
     name: Build & Test Frontend
@@ -38,13 +38,28 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Prettier check
+        id: prettier-check
+        run: npm run format:check
+        continue-on-error: true
+
+      - name: Auto-fix with Prettier
+        if: steps.prettier-check.outcome == 'failure'
+        run: npx prettier --write .
+
+      - name: Commit Prettier fixes
+        if: steps.prettier-check.outcome == 'failure'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: auto-fix with Prettier"
+          branch: ${{ github.head_ref }}
+
+      - name: Fail job if formatting was required
+        if: steps.prettier-check.outcome == 'failure'
+        run: exit 1
 
       - name: Type check
         run: npm run type-check
-        # Remove this step if you don't have a type-check script yet;
-        # add it to package.json as: "type-check": "tsc --noEmit"
 
       - name: Run tests
         run: npm test -- --passWithNoTests --ci

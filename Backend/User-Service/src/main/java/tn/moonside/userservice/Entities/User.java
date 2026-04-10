@@ -16,7 +16,6 @@ import java.time.LocalDateTime;
 public class User {
     @Id
     private String id;
-    private String roleId;
     @Indexed(unique = true)
     private String email;
     private String password;
@@ -35,4 +34,19 @@ public class User {
     private LocalDateTime createdAt = LocalDateTime.now();
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
+
+    // ── Password Reset ────────────────────────────────────────────────────────
+    private String passwordResetOtp;
+    private LocalDateTime passwordResetOtpExpiry;
+
+    // ── Email Verification ───────────────────────────────────────────────────────
+    @Builder.Default
+    private boolean emailVerified = false;
+    private String emailVerificationOtp;
+    private LocalDateTime emailVerificationOtpExpiry;
+
+    // ── Two-Factor Authentication (TOTP) ──────────────────────────────────────
+    @Builder.Default
+    private boolean twoFactorEnabled = false;
+    private String twoFactorSecret;           // base32-encoded TOTP secret
 }

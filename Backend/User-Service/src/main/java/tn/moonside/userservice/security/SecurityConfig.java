@@ -7,6 +7,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -30,20 +31,51 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/v1/auth/**").permitAll()
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/v1/roles/**").authenticated()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/roles/**").authenticated()
-                        .requestMatchers("/api/v1/permissions/**").authenticated()
-                        .anyRequest().authenticated()
-                )
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
-                .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .csrf(AbstractHttpConfigurer::disable)
+            .cors(Customizer.withDefaults())
+            .authorizeHttpRequests(auth -> auth
+                // ── Public auth endpoints ───────────────────────────────────
+                .requestMatchers(
+                    "/auth/login",
+                    "/auth/register",
+                    "/auth/refresh",
+                    "/auth/verify-email",
+                    "/auth/resend-verification",
+                    "/auth/forgot-password",
+                    "/auth/verify-otp",
+                    "/auth/reset-password",
+                    "/auth/2fa/verify-login"
+                ).permitAll()
+                // ── Actuator ────────────────────────────────────────────────
+                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                // ── Admin-only routes ────────────────────────────────────────
+                // Role management (create/update/delete) — ADMIN only
+                .requestMatchers(HttpMethod.POST,   "/roles/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PUT,    "/roles/**").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/roles/**").hasRole("ADMIN")
+                // Permission management — ADMIN only
+                .requestMatchers("/permissions/**").hasRole("ADMIN")
+                // Assign / revoke roles on users — ADMIN only
+                .requestMatchers(HttpMethod.POST,   "/users/*/roles").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.DELETE, "/users/*/roles/**").hasRole("ADMIN")
+                // Activate / deactivate users — ADMIN only
+                .requestMatchers(HttpMethod.PATCH,  "/users/*/deactivate").hasRole("ADMIN")
+                .requestMatchers(HttpMethod.PATCH,  "/users/*/activate").hasRole("ADMIN")
+                // Users can remove their own avatar
+                .requestMatchers(HttpMethod.DELETE, "/users/me/avatar").authenticated()
+                // Delete users — ADMIN only
+                .requestMatchers(HttpMethod.DELETE, "/users/**").hasRole("ADMIN")
+                // ── Authenticated read-only routes ───────────────────────────
+                .requestMatchers(HttpMethod.GET, "/roles/**").authenticated()
+                .requestMatchers(HttpMethod.GET, "/users/**").authenticated()
+                // ── Everything else needs authentication ─────────────────────
+                .anyRequest().authenticated()
+            )
+            .sessionManagement(session -> session
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            .authenticationProvider(authenticationProvider())
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

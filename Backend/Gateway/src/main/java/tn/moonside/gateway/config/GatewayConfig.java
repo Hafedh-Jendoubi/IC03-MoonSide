@@ -14,39 +14,38 @@ public class GatewayConfig {
 
                 // User Service: User, UserRole, UserTeam, Role, Permission, PermissionRole
                 .route("user-service", r -> r
-                        .path("/api/users/**")
-                        .filters(f -> f.stripPrefix(2))
+                        .path("/users/**", "/auth/**", "/roles/**", "/permissions/**")
                         .uri("lb://USER-SERVICE"))
 
                 // Organization Service: Department, Team
                 .route("organization-service", r -> r
-                        .path("/api/organizations/**")
-                        .filters(f -> f.stripPrefix(2))
+                        .path("/organizations/**")
                         .uri("lb://ORGANIZATION-SERVICE"))
 
                 // Post Service: Post, Attachment, SavedPost, PostTag, Tag
                 .route("post-service", r -> r
-                        .path("/api/posts/**")
-                        .filters(f -> f.stripPrefix(2))
+                        .path("/posts/**")
                         .uri("lb://POST-SERVICE"))
 
                 // Interaction Service: Comment, Reaction, ReactionType
                 .route("interaction-service", r -> r
-                        .path("/api/interactions/**")
-                        .filters(f -> f.stripPrefix(2))
+                        .path("/interactions/**")
                         .uri("lb://INTERACTION-SERVICE"))
 
                 // Notification Service: Notification
                 .route("notification-service", r -> r
-                        .path("/api/notifications/**")
-                        .filters(f -> f.stripPrefix(2))
+                        .path("/notifications/**")
                         .uri("lb://NOTIFICATION-SERVICE"))
 
                 // Badge Service: Badge, UserBadge, AuditLog
                 .route("badge-service", r -> r
-                        .path("/api/badges/**")
-                        .filters(f -> f.stripPrefix(2))
+                        .path("/badges/**")
                         .uri("lb://BADGE-SERVICE"))
+
+                // Media Service: file uploads, avatar storage
+                .route("media-service", r -> r
+                        .path("/media/**")
+                        .uri("lb://MEDIA-SERVICE"))
 
                 .build();
     }
