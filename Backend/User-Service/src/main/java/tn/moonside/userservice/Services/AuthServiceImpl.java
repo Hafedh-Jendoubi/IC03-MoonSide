@@ -51,6 +51,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
     private final JavaMailSender mailSender;
+    private final AuditLogService auditLogService;
 
     @Value("${app.name:WorkSphere}")
     private String appName;
@@ -64,6 +65,10 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
+            auditLogService.log(null, null, "USER",
+                    "REGISTER_FAILURE",
+                    "Registration failed — email already in use: " + request.getEmail(),
+                    false, null, null, null);
             throw new DuplicateResourceException("Email already registered: " + request.getEmail());
         }
         String otp = generateNumericOtp(6);
@@ -85,7 +90,6 @@ public class AuthServiceImpl implements AuthService {
         User saved = userRepository.save(user);
         log.info("Registered new user: {}", saved.getEmail());
 
-        // Auto-assign the "EMPLOYEE" role to every new user
         roleRepository.findByName("EMPLOYEE").ifPresent(employeeRole -> {
             tn.moonside.userservice.entities.UserRole userRole = tn.moonside.userservice.entities.UserRole.builder()
                     .userId(saved.getId())
@@ -97,7 +101,11 @@ public class AuthServiceImpl implements AuthService {
 
         sendEmailVerificationOtpEmail(saved.getEmail(), saved.getFirstName(), otp);
 
-        // Return a response without tokens — user must verify email first
+        auditLogService.log(saved.getId(), saved.getId(), "USER",
+                "REGISTER_SUCCESS",
+                "New user registered: " + saved.getEmail(),
+                true, null, null, null);
+
         return AuthResponse.builder()
                 .emailVerificationRequired(true)
                 .user(mapToUserResponse(saved))
@@ -111,16 +119,20 @@ public class AuthServiceImpl implements AuthService {
     public void verifyEmail(VerifyEmailRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("No account found for: " + request.getEmail()));
-        if (user.isEmailVerified()) {
-            return; // already verified, nothing to do
-        }
+        if (user.isEmailVerified()) return;
         if (user.getEmailVerificationOtp() == null || user.getEmailVerificationOtpExpiry() == null) {
+            auditLogService.log(user.getId(), user.getId(), "USER",
+                    "EMAIL_VERIFY_FAILURE", "No OTP on record for " + request.getEmail(), false, null, null, null);
             throw new UnauthorizedException("No verification OTP found. Please request a new one.");
         }
         if (LocalDateTime.now().isAfter(user.getEmailVerificationOtpExpiry())) {
+            auditLogService.log(user.getId(), user.getId(), "USER",
+                    "EMAIL_VERIFY_FAILURE", "OTP expired for " + request.getEmail(), false, null, null, null);
             throw new UnauthorizedException("OTP has expired. Please request a new one.");
         }
         if (!user.getEmailVerificationOtp().equals(request.getOtp())) {
+            auditLogService.log(user.getId(), user.getId(), "USER",
+                    "EMAIL_VERIFY_FAILURE", "Invalid OTP for " + request.getEmail(), false, null, null, null);
             throw new UnauthorizedException("Invalid OTP.");
         }
         user.setEmailVerified(true);
@@ -128,6 +140,8 @@ public class AuthServiceImpl implements AuthService {
         user.setEmailVerificationOtpExpiry(null);
         userRepository.save(user);
         log.info("Email verified for {}", user.getEmail());
+        auditLogService.log(user.getId(), user.getId(), "USER",
+                "EMAIL_VERIFY_SUCCESS", "Email verified for " + user.getEmail(), true, null, null, null);
     }
 
     @Override
@@ -135,9 +149,7 @@ public class AuthServiceImpl implements AuthService {
     public void resendEmailVerificationOtp(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("No account found for: " + email));
-        if (user.isEmailVerified()) {
-            return;
-        }
+        if (user.isEmailVerified()) return;
         String otp = generateNumericOtp(6);
         user.setEmailVerificationOtp(otp);
         user.setEmailVerificationOtpExpiry(LocalDateTime.now().plusMinutes(15));
@@ -150,13 +162,25 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+            );
+        } catch (Exception ex) {
+            auditLogService.log(null, null, "USER",
+                    "LOGIN_FAILURE",
+                    "Failed login attempt for: " + request.getEmail(),
+                    false, null, null, null);
+            throw ex;
+        }
+
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new UnauthorizedException("Invalid credentials"));
 
         if (!user.isEmailVerified()) {
+            auditLogService.log(user.getId(), user.getId(), "USER",
+                    "LOGIN_FAILURE", "Login blocked — email not verified: " + user.getEmail(),
+                    false, null, null, null);
             throw new UnauthorizedException("Email not verified. Please check your inbox for the verification code.");
         }
 
@@ -164,13 +188,17 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
         log.info("User logged in: {}", user.getEmail());
 
-        // If 2FA is enabled, return partial response - no tokens yet
         if (user.isTwoFactorEnabled()) {
+            auditLogService.log(user.getId(), user.getId(), "USER",
+                    "LOGIN_SUCCESS", "Login success (2FA pending) for " + user.getEmail(), true, null, null, null);
             return AuthResponse.builder()
                     .twoFactorRequired(true)
                     .user(mapToUserResponse(user))
                     .build();
         }
+
+        auditLogService.log(user.getId(), user.getId(), "USER",
+                "LOGIN_SUCCESS", "Login success for " + user.getEmail(), true, null, null, null);
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
         return AuthResponse.builder()
@@ -218,6 +246,8 @@ public class AuthServiceImpl implements AuthService {
 
         sendOtpEmail(user.getEmail(), user.getFirstName(), otp);
         log.info("Password reset OTP sent to {}", user.getEmail());
+        auditLogService.log(user.getId(), user.getId(), "USER",
+                "PASSWORD_RESET_REQUEST", "Password reset OTP sent to " + user.getEmail(), true, null, null, null);
     }
 
     // ─── Password Reset: Step 2 — verify OTP ─────────────────────────────────
@@ -244,6 +274,8 @@ public class AuthServiceImpl implements AuthService {
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         log.info("Password reset for {}", user.getEmail());
+        auditLogService.log(user.getId(), user.getId(), "USER",
+                "PASSWORD_RESET_SUCCESS", "Password was reset for " + user.getEmail(), true, null, null, null);
     }
 
     // ─── 2FA: Setup ───────────────────────────────────────────────────────────
@@ -281,11 +313,15 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("2FA setup not initiated. Call /auth/2fa/setup first.");
         }
         if (!verifyTotp(user.getTwoFactorSecret(), code)) {
+            auditLogService.log(userId, userId, "USER",
+                    "TWO_FA_VERIFY_FAILURE", "Invalid 2FA code during enable for " + user.getEmail(), false, null, null, null);
             throw new UnauthorizedException("Invalid 2FA code");
         }
         user.setTwoFactorEnabled(true);
         userRepository.save(user);
         log.info("2FA enabled for {}", user.getEmail());
+        auditLogService.log(userId, userId, "USER",
+                "TWO_FA_ENABLED", "2FA enabled for " + user.getEmail(), true, null, null, null);
     }
 
     // ─── 2FA: Disable ────────────────────────────────────────────────────────
@@ -299,12 +335,16 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("2FA is not enabled for this account");
         }
         if (!verifyTotp(user.getTwoFactorSecret(), code)) {
+            auditLogService.log(userId, userId, "USER",
+                    "TWO_FA_VERIFY_FAILURE", "Invalid 2FA code during disable for " + user.getEmail(), false, null, null, null);
             throw new UnauthorizedException("Invalid 2FA code");
         }
         user.setTwoFactorEnabled(false);
         user.setTwoFactorSecret(null);
         userRepository.save(user);
         log.info("2FA disabled for {}", user.getEmail());
+        auditLogService.log(userId, userId, "USER",
+                "TWO_FA_DISABLED", "2FA disabled for " + user.getEmail(), true, null, null, null);
     }
 
     // ─── 2FA: Get status ──────────────────────────────────────────────────────
@@ -328,8 +368,12 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("2FA not set up for this account");
         }
         if (!verifyTotp(user.getTwoFactorSecret(), request.getCode())) {
+            auditLogService.log(user.getId(), user.getId(), "USER",
+                    "TWO_FA_VERIFY_FAILURE", "Invalid 2FA code at login for " + user.getEmail(), false, null, null, null);
             throw new UnauthorizedException("Invalid 2FA code");
         }
+        auditLogService.log(user.getId(), user.getId(), "USER",
+                "TWO_FA_VERIFY_SUCCESS", "2FA login complete for " + user.getEmail(), true, null, null, null);
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getEmail());
         return AuthResponse.builder()
                 .accessToken(jwtService.generateToken(userDetails))
