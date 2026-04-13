@@ -22,6 +22,13 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.hssf.usermodel.HSSFWorkbook;
+import org.springframework.web.multipart.MultipartFile;
+import tn.moonside.userservice.dtos.responses.BulkInviteResult;
+import java.io.InputStream;
+import java.util.ArrayList;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -98,6 +105,95 @@ public class UserServiceImpl implements UserService {
                 "USER_INVITED", "User invited: " + saved.getEmail(), true, null, null, null);
 
         return mapToUserResponse(saved);
+    }
+
+
+    // ─── Bulk Invite from Excel ───────────────────────────────────────────────
+
+    @Override
+    public BulkInviteResult bulkInviteFromExcel(MultipartFile file) {
+        String filename = file.getOriginalFilename() != null ? file.getOriginalFilename().toLowerCase() : "";
+        if (!filename.endsWith(".xlsx") && !filename.endsWith(".xls")) {
+            throw new IllegalArgumentException("Only .xlsx and .xls files are supported.");
+        }
+
+        List<BulkInviteResult.RowResult> rows = new ArrayList<>();
+        int succeeded = 0, skipped = 0, failed = 0;
+
+        try (InputStream is = file.getInputStream();
+             Workbook workbook = filename.endsWith(".xlsx") ? new XSSFWorkbook(is) : new HSSFWorkbook(is)) {
+
+            Sheet sheet = workbook.getSheetAt(0);
+            Row headerRow = sheet.getRow(0);
+            if (headerRow == null) {
+                throw new IllegalArgumentException("The Excel file appears to be empty.");
+            }
+
+            // Auto-detect the email column index
+            int emailColIndex = -1;
+            for (Cell cell : headerRow) {
+                String header = cell.getStringCellValue().trim().toLowerCase();
+                if (header.contains("email")) {
+                    emailColIndex = cell.getColumnIndex();
+                    break;
+                }
+            }
+            if (emailColIndex == -1) {
+                throw new IllegalArgumentException(
+                    "No email column found. Please ensure one column header contains the word 'email'.");
+            }
+
+            // Process data rows (skip header at index 0)
+            for (int i = 1; i <= sheet.getLastRowNum(); i++) {
+                Row row = sheet.getRow(i);
+                if (row == null) continue;
+
+                Cell emailCell = row.getCell(emailColIndex);
+                if (emailCell == null) continue;
+
+                String rawEmail = "";
+                if (emailCell.getCellType() == CellType.STRING) {
+                    rawEmail = emailCell.getStringCellValue().trim();
+                } else if (emailCell.getCellType() == CellType.NUMERIC) {
+                    rawEmail = String.valueOf((long) emailCell.getNumericCellValue()).trim();
+                }
+
+                if (rawEmail.isEmpty()) continue;
+
+                int rowNum = i + 1; // 1-based for user display
+                try {
+                    InviteUserRequest req = new InviteUserRequest();
+                    req.setEmail(rawEmail);
+                    inviteUser(req);
+                    rows.add(BulkInviteResult.RowResult.builder()
+                            .rowNumber(rowNum).email(rawEmail)
+                            .status("SUCCESS").message("Invitation sent").build());
+                    succeeded++;
+                } catch (DuplicateResourceException e) {
+                    rows.add(BulkInviteResult.RowResult.builder()
+                            .rowNumber(rowNum).email(rawEmail)
+                            .status("SKIPPED").message("Already registered").build());
+                    skipped++;
+                } catch (Exception e) {
+                    rows.add(BulkInviteResult.RowResult.builder()
+                            .rowNumber(rowNum).email(rawEmail)
+                            .status("FAILED").message(e.getMessage()).build());
+                    failed++;
+                }
+            }
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to process Excel file: " + e.getMessage(), e);
+        }
+
+        return BulkInviteResult.builder()
+                .total(succeeded + skipped + failed)
+                .succeeded(succeeded)
+                .skipped(skipped)
+                .failed(failed)
+                .rows(rows)
+                .build();
     }
 
     private String capitalize(String s) {

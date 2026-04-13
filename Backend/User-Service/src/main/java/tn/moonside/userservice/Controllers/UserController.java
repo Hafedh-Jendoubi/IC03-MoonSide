@@ -13,6 +13,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+import tn.moonside.userservice.dtos.responses.BulkInviteResult;
 
 import java.util.List;
 
@@ -109,5 +111,14 @@ public class UserController {
         UserResponse created = userService.inviteUser(request);
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
                 .body(ApiResponse.success(created, "Invitation sent successfully. The user has been created and notified by email."));
+    }
+
+    @PostMapping("/invite/bulk")
+    public ResponseEntity<ApiResponse<BulkInviteResult>> bulkInviteUsers(
+            @RequestParam("file") MultipartFile file) {
+        BulkInviteResult result = userService.bulkInviteFromExcel(file);
+        return ResponseEntity.ok(ApiResponse.success(result,
+                "Bulk invite completed: " + result.getSucceeded() + " invited, " +
+                result.getSkipped() + " skipped, " + result.getFailed() + " failed."));
     }
 }

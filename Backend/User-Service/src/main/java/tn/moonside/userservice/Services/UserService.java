@@ -5,6 +5,8 @@ import tn.moonside.userservice.dtos.requests.UpdateUserRequest;
 import tn.moonside.userservice.dtos.responses.UserResponse;
 import tn.moonside.userservice.dtos.requests.InviteUserRequest;
 
+import org.springframework.web.multipart.MultipartFile;
+import tn.moonside.userservice.dtos.responses.BulkInviteResult;
 import java.util.List;
 
 public interface UserService {
@@ -21,4 +23,5 @@ public interface UserService {
     /** Returns the role names (e.g. ["ADMIN", "EMPLOYEE"]) for a given user. */
     List<String> getUserRoleNames(String userId);
     UserResponse inviteUser(InviteUserRequest request);
+    BulkInviteResult bulkInviteFromExcel(MultipartFile file);
 }
