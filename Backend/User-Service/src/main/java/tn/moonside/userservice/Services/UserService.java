@@ -3,6 +3,7 @@ package tn.moonside.userservice.services;
 import tn.moonside.userservice.dtos.requests.AssignRoleRequest;
 import tn.moonside.userservice.dtos.requests.UpdateUserRequest;
 import tn.moonside.userservice.dtos.responses.UserResponse;
+import tn.moonside.userservice.dtos.requests.InviteUserRequest;
 
 import java.util.List;
 
@@ -19,4 +20,5 @@ public interface UserService {
     void activateUser(String id);
     /** Returns the role names (e.g. ["ADMIN", "EMPLOYEE"]) for a given user. */
     List<String> getUserRoleNames(String userId);
+    UserResponse inviteUser(InviteUserRequest request);
 }

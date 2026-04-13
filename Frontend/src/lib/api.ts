@@ -24,6 +24,7 @@ export interface UserResponse {
   bio: string | null
   avatar: string | null
   active: boolean
+  mustChangePassword: boolean
   lastLogin: string | null
   createdAt: string
   updatedAt: string
@@ -50,6 +51,10 @@ export interface RegisterRequest {
   jobTitle?: string
   bio?: string
   avatar?: string
+}
+
+export interface InviteUserRequest {
+  email: string
 }
 
 export interface UpdateUserRequest {
@@ -254,6 +259,8 @@ export const userApi = {
       method: 'DELETE',
     }),
   delete: (id: string) => apiFetch<void>(`/users/${id}`, { method: 'DELETE' }),
+  invite: (data: InviteUserRequest) =>
+    apiFetch<UserResponse>('/users/invite', { method: 'POST', body: JSON.stringify(data) }),
   deactivate: (id: string) => apiFetch<void>(`/users/${id}/deactivate`, { method: 'PATCH' }),
   activate: (id: string) => apiFetch<void>(`/users/${id}/activate`, { method: 'PATCH' }),
   assignRole: (userId: string, data: { roleId: string; scopeType?: string; scopeId?: string }) =>

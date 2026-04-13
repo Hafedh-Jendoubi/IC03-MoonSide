@@ -61,6 +61,8 @@ public class SecurityConfig {
                 // Activate / deactivate users — ADMIN only
                 .requestMatchers(HttpMethod.PATCH,  "/users/*/deactivate").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PATCH,  "/users/*/activate").hasRole("ADMIN")
+                // Invite users — ADMIN only
+                .requestMatchers(HttpMethod.POST,   "/users/invite").hasRole("ADMIN")
                 // Users can remove their own avatar
                 .requestMatchers(HttpMethod.DELETE, "/users/me/avatar").authenticated()
                 // Delete users — ADMIN only

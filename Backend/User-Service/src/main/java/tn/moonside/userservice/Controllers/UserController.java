@@ -3,6 +3,7 @@ package tn.moonside.userservice.Controllers;
 import tn.moonside.userservice.dtos.requests.AssignRoleRequest;
 import tn.moonside.userservice.dtos.requests.UpdateAvatarRequest;
 import tn.moonside.userservice.dtos.requests.UpdateUserRequest;
+import tn.moonside.userservice.dtos.requests.InviteUserRequest;
 import tn.moonside.userservice.dtos.responses.ApiResponse;
 import tn.moonside.userservice.dtos.responses.UserResponse;
 import tn.moonside.userservice.services.UserService;
@@ -100,5 +101,13 @@ public class UserController {
     public ResponseEntity<ApiResponse<Void>> activateUser(@PathVariable String id) {
         userService.activateUser(id);
         return ResponseEntity.ok(ApiResponse.success(null, "User activated successfully"));
+    }
+
+    @PostMapping("/invite")
+    public ResponseEntity<ApiResponse<UserResponse>> inviteUser(
+            @Valid @RequestBody InviteUserRequest request) {
+        UserResponse created = userService.inviteUser(request);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(ApiResponse.success(created, "Invitation sent successfully. The user has been created and notified by email."));
     }
 }

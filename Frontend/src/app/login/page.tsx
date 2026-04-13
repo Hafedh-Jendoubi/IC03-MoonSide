@@ -56,9 +56,11 @@ function LoginForm() {
     clearMessages()
     setIsLoading(true)
     try {
-      const { twoFactorRequired } = await login(email, password)
+      const { twoFactorRequired, mustChangePassword } = await login(email, password)
       if (twoFactorRequired) {
         setStep('2fa')
+      } else if (mustChangePassword) {
+        router.push('/settings?mustChangePassword=true')
       } else {
         router.push('/feed')
       }

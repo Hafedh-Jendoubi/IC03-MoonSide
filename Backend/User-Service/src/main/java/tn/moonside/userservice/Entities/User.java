@@ -49,4 +49,8 @@ public class User {
     @Builder.Default
     private boolean twoFactorEnabled = false;
     private String twoFactorSecret;           // base32-encoded TOTP secret
+
+    // ── First-login password change ───────────────────────────────────────────
+    @Builder.Default
+    private boolean mustChangePassword = false;
 }

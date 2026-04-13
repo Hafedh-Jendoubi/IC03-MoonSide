@@ -19,6 +19,8 @@ import {
   UserCheck,
   Trash2,
   X,
+  UserPlus,
+  SendHorizonal,
 } from 'lucide-react'
 import {
   Table,
@@ -45,7 +47,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { userApi, roleApi, UserResponse, RoleResponse } from '@/lib/api'
+import { userApi, roleApi, UserResponse, RoleResponse, InviteUserRequest } from '@/lib/api'
 
 // ─── Avatar component ─────────────────────────────────────────────────────────
 
@@ -193,6 +195,13 @@ export default function UsersPage() {
   const [deletingUser, setDeletingUser] = useState<UserResponse | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Invite dialog
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null)
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -312,6 +321,33 @@ export default function UsersPage() {
     }
   }
 
+  const handleInvite = async () => {
+    if (!inviteEmail.trim()) {
+      setInviteError('Please enter an email address.')
+      return
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(inviteEmail.trim())) {
+      setInviteError('Please enter a valid email address.')
+      return
+    }
+    setInviting(true)
+    setInviteError(null)
+    setInviteSuccess(null)
+    try {
+      const newUser = await userApi.invite({ email: inviteEmail.trim().toLowerCase() })
+      setUsers((prev) => [newUser, ...prev])
+      setInviteSuccess(
+        `Invitation sent! Account created for ${newUser.firstName} ${newUser.lastName}.`
+      )
+      setInviteEmail('')
+    } catch (err: unknown) {
+      setInviteError(err instanceof Error ? err.message : 'Failed to send invitation.')
+    } finally {
+      setInviting(false)
+    }
+  }
+
   const handleContact = (user: UserResponse) => {
     window.location.href = `mailto:${user.email}`
   }
@@ -342,10 +378,25 @@ export default function UsersPage() {
             <h1 className="text-3xl font-bold">User Management</h1>
             <p className="text-muted-foreground">Manage users, roles, and permissions</p>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="gap-2"
+              onClick={() => {
+                setInviteOpen(true)
+                setInviteError(null)
+                setInviteSuccess(null)
+                setInviteEmail('')
+              }}
+            >
+              <UserPlus className="h-4 w-4" />
+              Invite User
+            </Button>
+            <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {error && (
@@ -503,6 +554,100 @@ export default function UsersPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Invite User Dialog */}
+      <Dialog
+        open={inviteOpen}
+        onOpenChange={(open) => {
+          setInviteOpen(open)
+          if (!open) {
+            setInviteEmail('')
+            setInviteError(null)
+            setInviteSuccess(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-md dark:border-slate-700">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Invite User
+            </DialogTitle>
+            <DialogDescription>
+              Enter the user's email address. An account will be created automatically and login
+              credentials will be sent to them.
+            </DialogDescription>
+          </DialogHeader>
+
+          {inviteSuccess ? (
+            <div className="space-y-4">
+              <div className="flex items-start gap-3 rounded-lg bg-green-50 p-4 text-green-800 dark:bg-green-900/20 dark:text-green-300">
+                <SendHorizonal className="mt-0.5 h-5 w-5 flex-shrink-0" />
+                <p className="text-sm">{inviteSuccess}</p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setInviteSuccess(null)
+                    setInviteEmail('')
+                  }}
+                >
+                  Invite Another
+                </Button>
+                <Button onClick={() => setInviteOpen(false)}>Done</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">Email Address</label>
+                <Input
+                  className="mt-1"
+                  type="email"
+                  placeholder="colleague@company.com"
+                  value={inviteEmail}
+                  onChange={(e) => {
+                    setInviteEmail(e.target.value)
+                    setInviteError(null)
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && !inviting && handleInvite()}
+                  disabled={inviting}
+                  autoFocus
+                />
+                <p className="text-muted-foreground mt-1 text-xs">
+                  The user's name will be derived from their email. They will receive a temporary
+                  password and be asked to change it on first login.
+                </p>
+              </div>
+
+              {inviteError && (
+                <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                  {inviteError}
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setInviteOpen(false)} disabled={inviting}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleInvite}
+                  disabled={inviting || !inviteEmail.trim()}
+                  className="gap-2"
+                >
+                  {inviting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <SendHorizonal className="h-4 w-4" />
+                  )}
+                  Send Invitation
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Edit User Dialog */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>

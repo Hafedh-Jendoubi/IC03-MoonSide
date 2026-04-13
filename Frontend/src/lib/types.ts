@@ -12,6 +12,7 @@ export interface User {
   bio: string | null
   avatar: string | null
   active: boolean
+  mustChangePassword: boolean
   lastLogin: string | null
   createdAt: string
   updatedAt: string
