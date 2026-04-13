@@ -23,6 +23,7 @@ public class UserResponse {
     private String bio;
     private String avatar;
     private boolean isActive;
+    private boolean mustChangePassword;
     private LocalDateTime lastLogin;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

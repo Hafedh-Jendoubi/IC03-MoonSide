@@ -24,6 +24,7 @@ export interface UserResponse {
   bio: string | null
   avatar: string | null
   active: boolean
+  mustChangePassword: boolean
   lastLogin: string | null
   createdAt: string
   updatedAt: string
@@ -50,6 +51,25 @@ export interface RegisterRequest {
   jobTitle?: string
   bio?: string
   avatar?: string
+}
+
+export interface InviteUserRequest {
+  email: string
+}
+
+export interface BulkInviteRowResult {
+  rowNumber: number
+  email: string
+  status: 'SUCCESS' | 'SKIPPED' | 'FAILED'
+  message: string
+}
+
+export interface BulkInviteResult {
+  total: number
+  succeeded: number
+  skipped: number
+  failed: number
+  rows: BulkInviteRowResult[]
 }
 
 export interface UpdateUserRequest {
@@ -125,8 +145,11 @@ async function apiFetch<T>(
   options: RequestInit = {},
   authenticated = true
 ): Promise<T> {
+  // Do NOT set Content-Type for FormData — the browser must set it automatically
+  // so it includes the multipart boundary. For everything else default to JSON.
+  const isFormData = options.body instanceof FormData
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers as Record<string, string>),
   }
 
@@ -254,6 +277,13 @@ export const userApi = {
       method: 'DELETE',
     }),
   delete: (id: string) => apiFetch<void>(`/users/${id}`, { method: 'DELETE' }),
+  bulkInvite: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return apiFetch<BulkInviteResult>('/users/invite/bulk', { method: 'POST', body: form })
+  },
+  invite: (data: InviteUserRequest) =>
+    apiFetch<UserResponse>('/users/invite', { method: 'POST', body: JSON.stringify(data) }),
   deactivate: (id: string) => apiFetch<void>(`/users/${id}/deactivate`, { method: 'PATCH' }),
   activate: (id: string) => apiFetch<void>(`/users/${id}/activate`, { method: 'PATCH' }),
   assignRole: (userId: string, data: { roleId: string; scopeType?: string; scopeId?: string }) =>

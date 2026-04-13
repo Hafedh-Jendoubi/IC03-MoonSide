@@ -19,6 +19,13 @@ import {
   UserCheck,
   Trash2,
   X,
+  UserPlus,
+  SendHorizonal,
+  UploadCloud,
+  FileSpreadsheet,
+  CheckCircle2,
+  AlertCircle,
+  MinusCircle,
 } from 'lucide-react'
 import {
   Table,
@@ -45,7 +52,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { userApi, roleApi, UserResponse, RoleResponse } from '@/lib/api'
+import {
+  userApi,
+  roleApi,
+  UserResponse,
+  RoleResponse,
+  InviteUserRequest,
+  BulkInviteResult,
+} from '@/lib/api'
 
 // ─── Avatar component ─────────────────────────────────────────────────────────
 
@@ -118,7 +132,7 @@ function ActionDropdown({
       </Button>
 
       {open && (
-        <div className="border-border bg-popover absolute right-0 z-50 mt-1 w-44 origin-top-right rounded-lg border shadow-lg ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900">
+        <div className="border-border bg-popover fixed right-0 z-50 mt-1 w-44 origin-top-right rounded-lg border shadow-lg ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900">
           <div className="text-popover-foreground py-1 text-sm">
             <button
               className="hover:bg-muted flex w-full items-center gap-2.5 px-3 py-2"
@@ -192,6 +206,21 @@ export default function UsersPage() {
   // Delete state
   const [deletingUser, setDeletingUser] = useState<UserResponse | null>(null)
   const [deleting, setDeleting] = useState(false)
+
+  // Invite dialog
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [inviteError, setInviteError] = useState<string | null>(null)
+  const [inviteSuccess, setInviteSuccess] = useState<string | null>(null)
+
+  // Bulk invite state
+  const [inviteTab, setInviteTab] = useState<'single' | 'bulk'>('single')
+  const [bulkFile, setBulkFile] = useState<File | null>(null)
+  const [bulkLoading, setBulkLoading] = useState(false)
+  const [bulkResult, setBulkResult] = useState<BulkInviteResult | null>(null)
+  const [bulkError, setBulkError] = useState<string | null>(null)
+  const [dragOver, setDragOver] = useState(false)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -312,6 +341,52 @@ export default function UsersPage() {
     }
   }
 
+  const handleInvite = async () => {
+    if (!inviteEmail.trim()) {
+      setInviteError('Please enter an email address.')
+      return
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(inviteEmail.trim())) {
+      setInviteError('Please enter a valid email address.')
+      return
+    }
+    setInviting(true)
+    setInviteError(null)
+    setInviteSuccess(null)
+    try {
+      const newUser = await userApi.invite({ email: inviteEmail.trim().toLowerCase() })
+      setUsers((prev) => [newUser, ...prev])
+      setInviteSuccess(
+        `Invitation sent! Account created for ${newUser.firstName} ${newUser.lastName}.`
+      )
+      setInviteEmail('')
+    } catch (err: unknown) {
+      setInviteError(err instanceof Error ? err.message : 'Failed to send invitation.')
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  const handleBulkInvite = async () => {
+    if (!bulkFile) return
+    setBulkLoading(true)
+    setBulkError(null)
+    setBulkResult(null)
+    try {
+      const result = await userApi.bulkInvite(bulkFile)
+      setBulkResult(result)
+      if (result.succeeded > 0) {
+        const updatedUsers = await userApi.getAll()
+        setUsers(updatedUsers)
+      }
+    } catch (err: unknown) {
+      setBulkError(err instanceof Error ? err.message : 'Failed to process the file.')
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
   const handleContact = (user: UserResponse) => {
     window.location.href = `mailto:${user.email}`
   }
@@ -342,10 +417,25 @@ export default function UsersPage() {
             <h1 className="text-3xl font-bold">User Management</h1>
             <p className="text-muted-foreground">Manage users, roles, and permissions</p>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              className="gap-2"
+              onClick={() => {
+                setInviteOpen(true)
+                setInviteError(null)
+                setInviteSuccess(null)
+                setInviteEmail('')
+              }}
+            >
+              <UserPlus className="h-4 w-4" />
+              Invite User
+            </Button>
+            <Button variant="outline" size="sm" onClick={fetchData} className="gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {error && (
@@ -504,15 +594,348 @@ export default function UsersPage() {
         </CardContent>
       </Card>
 
-      {/* Edit User Dialog */}
-      <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+      {/* Invite User Dialog */}
+      <Dialog
+        open={inviteOpen}
+        onOpenChange={(open) => {
+          setInviteOpen(open)
+          if (!open) {
+            setInviteEmail('')
+            setInviteError(null)
+            setInviteSuccess(null)
+            setInviteTab('single')
+            setBulkFile(null)
+            setBulkResult(null)
+            setBulkError(null)
+          }
+        }}
+      >
         <DialogContent className="max-w-lg dark:border-slate-700">
           <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Invite User{inviteTab === 'bulk' ? 's' : ''}
+            </DialogTitle>
+            <DialogDescription>
+              Send email invitations to new users. They will receive login credentials
+              automatically.
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Tab switcher */}
+          <div className="flex rounded-md border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800/50">
+            <button
+              onClick={() => {
+                setInviteTab('single')
+                setBulkFile(null)
+                setBulkResult(null)
+                setBulkError(null)
+              }}
+              className={`flex-1 rounded py-1.5 text-sm font-medium transition-colors ${
+                inviteTab === 'single'
+                  ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+              }`}
+            >
+              Single Invite
+            </button>
+            <button
+              onClick={() => {
+                setInviteTab('bulk')
+                setInviteSuccess(null)
+                setInviteError(null)
+                setInviteEmail('')
+              }}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded py-1.5 text-sm font-medium transition-colors ${
+                inviteTab === 'bulk'
+                  ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+              }`}
+            >
+              <FileSpreadsheet className="h-3.5 w-3.5" />
+              Bulk via Excel
+            </button>
+          </div>
+
+          {/* ── Single Invite Tab ── */}
+          {inviteTab === 'single' && (
+            <>
+              {inviteSuccess ? (
+                <div className="space-y-4">
+                  <div className="flex items-start gap-3 rounded-lg bg-green-50 p-4 text-green-800 dark:bg-green-900/20 dark:text-green-300">
+                    <SendHorizonal className="mt-0.5 h-5 w-5 flex-shrink-0" />
+                    <p className="text-sm">{inviteSuccess}</p>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setInviteSuccess(null)
+                        setInviteEmail('')
+                      }}
+                    >
+                      Invite Another
+                    </Button>
+                    <Button onClick={() => setInviteOpen(false)}>Done</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium">Email Address</label>
+                    <Input
+                      className="mt-1"
+                      type="email"
+                      placeholder="colleague@company.com"
+                      value={inviteEmail}
+                      onChange={(e) => {
+                        setInviteEmail(e.target.value)
+                        setInviteError(null)
+                      }}
+                      onKeyDown={(e) => e.key === 'Enter' && !inviting && handleInvite()}
+                      disabled={inviting}
+                      autoFocus
+                    />
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      The user's name will be derived from their email. They will receive a
+                      temporary password and be asked to change it on first login.
+                    </p>
+                  </div>
+                  {inviteError && (
+                    <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                      {inviteError}
+                    </div>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setInviteOpen(false)}
+                      disabled={inviting}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleInvite}
+                      disabled={inviting || !inviteEmail.trim()}
+                      className="gap-2"
+                    >
+                      {inviting ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <SendHorizonal className="h-4 w-4" />
+                      )}
+                      Send Invitation
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ── Bulk Invite Tab ── */}
+          {inviteTab === 'bulk' && (
+            <div className="space-y-4">
+              {!bulkResult ? (
+                <>
+                  {/* Drop zone */}
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setDragOver(true)
+                    }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      setDragOver(false)
+                      const dropped = e.dataTransfer.files[0]
+                      if (
+                        dropped &&
+                        (dropped.name.endsWith('.xlsx') || dropped.name.endsWith('.xls'))
+                      ) {
+                        setBulkFile(dropped)
+                        setBulkError(null)
+                      } else {
+                        setBulkError('Please upload a valid .xlsx or .xls file.')
+                      }
+                    }}
+                    className={`relative flex cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed px-6 py-10 transition-colors ${
+                      dragOver
+                        ? 'border-primary bg-primary/5'
+                        : bulkFile
+                          ? 'border-green-400 bg-green-50 dark:bg-green-900/10'
+                          : 'border-slate-300 hover:border-slate-400 dark:border-slate-600'
+                    }`}
+                    onClick={() => document.getElementById('bulk-file-input')?.click()}
+                  >
+                    <input
+                      id="bulk-file-input"
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0]
+                        if (f) {
+                          setBulkFile(f)
+                          setBulkError(null)
+                        }
+                      }}
+                    />
+                    {bulkFile ? (
+                      <>
+                        <FileSpreadsheet className="h-10 w-10 text-green-500" />
+                        <div className="text-center">
+                          <p className="text-sm font-medium text-green-700 dark:text-green-400">
+                            {bulkFile.name}
+                          </p>
+                          <p className="text-muted-foreground mt-0.5 text-xs">
+                            {(bulkFile.size / 1024).toFixed(1)} KB — click to change
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud className="h-10 w-10 text-slate-400" />
+                        <div className="text-center">
+                          <p className="text-sm font-medium">Drop your Excel file here</p>
+                          <p className="text-muted-foreground mt-0.5 text-xs">
+                            or click to browse — .xlsx or .xls
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="rounded-md bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+                    💡 Your file must have a column whose header contains the word{' '}
+                    <strong>email</strong>. All other columns are ignored.
+                  </div>
+
+                  {bulkError && (
+                    <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+                      {bulkError}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setInviteOpen(false)}
+                      disabled={bulkLoading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleBulkInvite}
+                      disabled={!bulkFile || bulkLoading}
+                      className="gap-2"
+                    >
+                      {bulkLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <SendHorizonal className="h-4 w-4" />
+                      )}
+                      {bulkLoading ? 'Sending...' : 'Send Invitations'}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                /* Results view */
+                <div className="space-y-4">
+                  {/* Summary */}
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
+                      <p className="text-xl font-bold text-green-700 dark:text-green-400">
+                        {bulkResult.succeeded}
+                      </p>
+                      <p className="text-xs text-green-600 dark:text-green-500">Invited</p>
+                    </div>
+                    <div className="rounded-lg bg-yellow-50 p-3 dark:bg-yellow-900/20">
+                      <p className="text-xl font-bold text-yellow-700 dark:text-yellow-400">
+                        {bulkResult.skipped}
+                      </p>
+                      <p className="text-xs text-yellow-600 dark:text-yellow-500">Skipped</p>
+                    </div>
+                    <div className="rounded-lg bg-red-50 p-3 dark:bg-red-900/20">
+                      <p className="text-xl font-bold text-red-700 dark:text-red-400">
+                        {bulkResult.failed}
+                      </p>
+                      <p className="text-xs text-red-600 dark:text-red-500">Failed</p>
+                    </div>
+                  </div>
+
+                  {/* Row details */}
+                  <div className="max-h-56 overflow-y-auto rounded-md border dark:border-slate-700">
+                    <table className="w-full text-xs">
+                      <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-slate-500">#</th>
+                          <th className="px-3 py-2 text-left font-medium text-slate-500">Email</th>
+                          <th className="px-3 py-2 text-left font-medium text-slate-500">Status</th>
+                          <th className="px-3 py-2 text-left font-medium text-slate-500">Note</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y dark:divide-slate-700">
+                        {bulkResult.rows.map((row) => (
+                          <tr
+                            key={row.rowNumber}
+                            className="hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                          >
+                            <td className="px-3 py-2 text-slate-400">{row.rowNumber}</td>
+                            <td className="px-3 py-2 font-mono text-slate-700 dark:text-slate-300">
+                              {row.email}
+                            </td>
+                            <td className="px-3 py-2">
+                              {row.status === 'SUCCESS' && (
+                                <span className="inline-flex items-center gap-1 text-green-600 dark:text-green-400">
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Invited
+                                </span>
+                              )}
+                              {row.status === 'SKIPPED' && (
+                                <span className="inline-flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
+                                  <MinusCircle className="h-3.5 w-3.5" /> Skipped
+                                </span>
+                              )}
+                              {row.status === 'FAILED' && (
+                                <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400">
+                                  <AlertCircle className="h-3.5 w-3.5" /> Failed
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-slate-500">{row.message}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setBulkResult(null)
+                        setBulkFile(null)
+                      }}
+                    >
+                      Upload Another
+                    </Button>
+                    <Button onClick={() => setInviteOpen(false)}>Done</Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto dark:border-slate-700">
+          <DialogHeader className="bg-background sticky top-0 z-10">
             <DialogTitle>Edit User</DialogTitle>
             <DialogDescription>Update user information and roles</DialogDescription>
           </DialogHeader>
           {editingUser && (
-            <div className="space-y-4">
+            <div className="space-y-4 pb-4">
               {/* User identity preview */}
               <div className="bg-muted/50 flex items-center gap-3 rounded-lg px-3 py-2">
                 <UserAvatar user={editingUser} size="md" />
