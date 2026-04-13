@@ -132,7 +132,7 @@ function ActionDropdown({
       </Button>
 
       {open && (
-        <div className="border-border bg-popover absolute right-0 z-50 mt-1 w-44 origin-top-right rounded-lg border shadow-lg ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900">
+        <div className="border-border bg-popover fixed right-0 z-50 mt-1 w-44 origin-top-right rounded-lg border shadow-lg ring-1 ring-black/5 dark:border-slate-700 dark:bg-slate-900">
           <div className="text-popover-foreground py-1 text-sm">
             <button
               className="hover:bg-muted flex w-full items-center gap-2.5 px-3 py-2"
@@ -929,13 +929,13 @@ export default function UsersPage() {
 
       {/* Edit User Dialog */}
       <Dialog open={!!editingUser} onOpenChange={(open) => !open && setEditingUser(null)}>
-        <DialogContent className="max-w-lg dark:border-slate-700">
-          <DialogHeader>
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto dark:border-slate-700">
+          <DialogHeader className="bg-background sticky top-0 z-10">
             <DialogTitle>Edit User</DialogTitle>
             <DialogDescription>Update user information and roles</DialogDescription>
           </DialogHeader>
           {editingUser && (
-            <div className="space-y-4">
+            <div className="space-y-4 pb-4">
               {/* User identity preview */}
               <div className="bg-muted/50 flex items-center gap-3 rounded-lg px-3 py-2">
                 <UserAvatar user={editingUser} size="md" />
