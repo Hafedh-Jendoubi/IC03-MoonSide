@@ -222,6 +222,9 @@ export default function UsersPage() {
   const [bulkError, setBulkError] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
+  // User detail modal state
+  const [viewingUser, setViewingUser] = useState<UserResponse | null>(null)
+
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -501,7 +504,7 @@ export default function UsersPage() {
                     return (
                       <TableRow
                         key={user.id}
-                        onClick={() => router.push(`/profile/${user.id}`)}
+                        onClick={() => setViewingUser(user)}
                         className={`cursor-pointer transition-colors dark:border-slate-700 ${
                           isInactive
                             ? 'bg-red-50/60 hover:bg-red-100/60 dark:bg-red-950/20 dark:hover:bg-red-950/30'
@@ -1066,6 +1069,158 @@ export default function UsersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* User Detail Modal */}
+      <Dialog open={!!viewingUser} onOpenChange={(open) => !open && setViewingUser(null)}>
+        <DialogContent className="max-w-lg dark:border-slate-700">
+          {viewingUser && (
+            <>
+              <DialogHeader>
+                <DialogTitle>User Profile</DialogTitle>
+                <DialogDescription>View detailed information about this user</DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-6">
+                {/* User Header */}
+                <div className="bg-muted/50 flex items-center gap-4 rounded-lg p-4">
+                  <UserAvatar user={viewingUser} size="md" />
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold">
+                      {viewingUser.firstName} {viewingUser.lastName}
+                    </h3>
+                    <p className="text-muted-foreground text-sm">{viewingUser.email}</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <div
+                        className={`h-2 w-2 rounded-full ${
+                          viewingUser.active ? 'bg-green-500' : 'bg-red-500'
+                        }`}
+                      />
+                      <span className="text-xs font-medium">
+                        {viewingUser.active ? 'Active' : 'Inactive (Blocked)'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* User Details Grid */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-muted-foreground text-xs font-semibold uppercase">
+                      Job Title
+                    </label>
+                    <p className="mt-1 text-sm font-medium">{viewingUser.jobTitle || '—'}</p>
+                  </div>
+                  <div>
+                    <label className="text-muted-foreground text-xs font-semibold uppercase">
+                      Phone
+                    </label>
+                    <p className="mt-1 text-sm font-medium">
+                      {viewingUser.phoneNumber ? (
+                        <a href={`tel:${viewingUser.phoneNumber}`} className="hover:underline">
+                          {viewingUser.phoneNumber}
+                        </a>
+                      ) : (
+                        '—'
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-muted-foreground text-xs font-semibold uppercase">
+                      Birth Date
+                    </label>
+                    <p className="mt-1 text-sm font-medium">{formatDate(viewingUser.birthDate)}</p>
+                  </div>
+                  <div>
+                    <label className="text-muted-foreground text-xs font-semibold uppercase">
+                      Joined
+                    </label>
+                    <p className="mt-1 text-sm font-medium">{formatDate(viewingUser.createdAt)}</p>
+                  </div>
+                </div>
+
+                {/* Bio */}
+                {viewingUser.bio && (
+                  <div>
+                    <label className="text-muted-foreground text-xs font-semibold uppercase">
+                      Bio
+                    </label>
+                    <p className="text-foreground mt-2 text-sm leading-relaxed">
+                      {viewingUser.bio}
+                    </p>
+                  </div>
+                )}
+
+                {/* Roles */}
+                <div>
+                  <label className="text-muted-foreground text-xs font-semibold uppercase">
+                    Roles
+                  </label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {viewingUser.roles.length === 0 ? (
+                      <span className="text-muted-foreground text-sm">No roles assigned</span>
+                    ) : (
+                      viewingUser.roles.map((roleName) => (
+                        <Badge
+                          key={roleName}
+                          variant={getRoleBadgeVariant([roleName])}
+                          className="gap-1"
+                        >
+                          <Shield className="h-3 w-3" />
+                          {roleName}
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* Last Login */}
+                <div className="border-muted border-t pt-4">
+                  <label className="text-muted-foreground text-xs font-semibold uppercase">
+                    Last Login
+                  </label>
+                  <p className="mt-1 text-sm font-medium">
+                    {viewingUser.lastLogin ? formatDate(viewingUser.lastLogin) : 'Never logged in'}
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setViewingUser(null)
+                      openEdit(viewingUser)
+                    }}
+                  >
+                    <Edit2 className="mr-2 h-4 w-4" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setViewingUser(null)
+                      handleContact(viewingUser)
+                    }}
+                  >
+                    <Mail className="mr-2 h-4 w-4" />
+                    Contact
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => router.push(`/profile/${viewingUser.id}`)}
+                  >
+                    <Eye className="mr-2 h-4 w-4" />
+                    View Profile
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
