@@ -458,3 +458,177 @@ export const auditApi = {
 
   getStats: () => apiFetch<AuditLogStats>('/audit-logs/stats'),
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ORGANIZATION SERVICE  –  Types & API
+// Append this block to src/lib/api.ts
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type VisibilityType = 'PUBLIC' | 'PRIVATE'
+
+export interface UserSummary {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  avatar: string | null
+  jobTitle: string | null
+}
+
+// ── Department ────────────────────────────────────────────────────────────────
+
+export interface DepartmentResponse {
+  id: string
+  managerId: string | null
+  manager: UserSummary | null
+  name: string
+  description: string | null
+  isActive: boolean
+  teamCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DepartmentRequest {
+  name: string
+  description?: string
+  managerId?: string
+}
+
+// ── Team ──────────────────────────────────────────────────────────────────────
+
+export interface TeamResponse {
+  id: string
+  departmentId: string
+  departmentName: string | null
+  leadId: string | null
+  lead: UserSummary | null
+  name: string
+  description: string | null
+  image: string | null
+  teamVisibility: VisibilityType
+  memberCount: number
+  isMember: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TeamRequest {
+  name: string
+  description?: string
+  departmentId: string
+  leadId?: string
+  image?: string
+  teamVisibility: VisibilityType
+}
+
+export interface UserTeamResponse {
+  id: string
+  userId: string
+  teamId: string
+  user: UserSummary | null
+  joinedAt: string
+}
+
+// ── Department API ────────────────────────────────────────────────────────────
+
+export const departmentApi = {
+  getAll: () => apiFetch<DepartmentResponse[]>('/organizations/departments'),
+
+  getActive: () => apiFetch<DepartmentResponse[]>('/organizations/departments/active'),
+
+  getById: (id: string) => apiFetch<DepartmentResponse>(`/organizations/departments/${id}`),
+
+  create: (data: DepartmentRequest) =>
+    apiFetch<DepartmentResponse>('/organizations/departments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: DepartmentRequest) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) => apiFetch<void>(`/organizations/departments/${id}`, { method: 'DELETE' }),
+
+  activate: (id: string) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/activate`, {
+      method: 'PATCH',
+    }),
+
+  deactivate: (id: string) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/deactivate`, {
+      method: 'PATCH',
+    }),
+
+  assignManager: (id: string, managerId: string) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/manager`, {
+      method: 'PATCH',
+      body: JSON.stringify({ managerId }),
+    }),
+
+  removeManager: (id: string) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/manager`, {
+      method: 'DELETE',
+    }),
+}
+
+// ── Team API ──────────────────────────────────────────────────────────────────
+
+export const teamApi = {
+  getAll: () => apiFetch<TeamResponse[]>('/organizations/teams'),
+
+  getPublic: () => apiFetch<TeamResponse[]>('/organizations/teams/public'),
+
+  search: (q: string) =>
+    apiFetch<TeamResponse[]>(`/organizations/teams/search?q=${encodeURIComponent(q)}`),
+
+  getMy: () => apiFetch<TeamResponse[]>('/organizations/teams/my'),
+
+  getByDepartment: (departmentId: string) =>
+    apiFetch<TeamResponse[]>(`/organizations/teams/department/${departmentId}`),
+
+  getById: (id: string) => apiFetch<TeamResponse>(`/organizations/teams/${id}`),
+
+  getMembers: (id: string) => apiFetch<UserTeamResponse[]>(`/organizations/teams/${id}/members`),
+
+  create: (data: TeamRequest) =>
+    apiFetch<TeamResponse>('/organizations/teams', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: TeamRequest) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) => apiFetch<void>(`/organizations/teams/${id}`, { method: 'DELETE' }),
+
+  assignLead: (id: string, leadId: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/lead`, {
+      method: 'PATCH',
+      body: JSON.stringify({ leadId }),
+    }),
+
+  removeLead: (id: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/lead`, { method: 'DELETE' }),
+
+  join: (id: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/join`, { method: 'POST' }),
+
+  leave: (id: string) => apiFetch<void>(`/organizations/teams/${id}/leave`, { method: 'DELETE' }),
+
+  addMember: (teamId: string, userId: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${teamId}/members/${userId}`, {
+      method: 'POST',
+    }),
+
+  removeMember: (teamId: string, userId: string) =>
+    apiFetch<void>(`/organizations/teams/${teamId}/members/${userId}`, {
+      method: 'DELETE',
+    }),
+}

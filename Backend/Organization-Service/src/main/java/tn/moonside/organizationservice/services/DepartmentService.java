@@ -1,0 +1,133 @@
+package tn.moonside.organizationservice.services;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import tn.moonside.organizationservice.config.UserServiceClient;
+import tn.moonside.organizationservice.dtos.requests.AssignManagerRequest;
+import tn.moonside.organizationservice.dtos.requests.DepartmentRequest;
+import tn.moonside.organizationservice.dtos.responses.DepartmentResponse;
+import tn.moonside.organizationservice.dtos.responses.UserSummary;
+import tn.moonside.organizationservice.entities.Department;
+import tn.moonside.organizationservice.repositories.DepartmentRepository;
+import tn.moonside.organizationservice.repositories.TeamRepository;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class DepartmentService {
+
+    private final DepartmentRepository departmentRepository;
+    private final TeamRepository teamRepository;
+    private final UserServiceClient userServiceClient;
+
+    // ── CRUD ─────────────────────────────────────────────────────────────────
+
+    public DepartmentResponse createDepartment(DepartmentRequest request) {
+        Department dept = Department.builder()
+                .name(request.getName())
+                .description(request.getDescription())
+                .managerId(request.getManagerId())
+                .isActive(true)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+        return toResponse(departmentRepository.save(dept));
+    }
+
+    public List<DepartmentResponse> getAllDepartments() {
+        return departmentRepository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    public List<DepartmentResponse> getActiveDepartments() {
+        return departmentRepository.findByIsActiveTrue()
+                .stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
+    }
+
+    public DepartmentResponse getDepartmentById(String id) {
+        Department dept = findById(id);
+        return toResponse(dept);
+    }
+
+    public DepartmentResponse updateDepartment(String id, DepartmentRequest request) {
+        Department dept = findById(id);
+        dept.setName(request.getName());
+        dept.setDescription(request.getDescription());
+        if (request.getManagerId() != null) {
+            dept.setManagerId(request.getManagerId());
+        }
+        dept.setUpdatedAt(LocalDateTime.now());
+        return toResponse(departmentRepository.save(dept));
+    }
+
+    public void deleteDepartment(String id) {
+        Department dept = findById(id);
+        departmentRepository.delete(dept);
+    }
+
+    public DepartmentResponse deactivateDepartment(String id) {
+        Department dept = findById(id);
+        dept.setActive(false);
+        dept.setUpdatedAt(LocalDateTime.now());
+        return toResponse(departmentRepository.save(dept));
+    }
+
+    public DepartmentResponse activateDepartment(String id) {
+        Department dept = findById(id);
+        dept.setActive(true);
+        dept.setUpdatedAt(LocalDateTime.now());
+        return toResponse(departmentRepository.save(dept));
+    }
+
+    // ── Manager assignment ────────────────────────────────────────────────────
+
+    public DepartmentResponse assignManager(String departmentId, AssignManagerRequest request) {
+        Department dept = findById(departmentId);
+        dept.setManagerId(request.getManagerId());
+        dept.setUpdatedAt(LocalDateTime.now());
+        return toResponse(departmentRepository.save(dept));
+    }
+
+    public DepartmentResponse removeManager(String departmentId) {
+        Department dept = findById(departmentId);
+        dept.setManagerId(null);
+        dept.setUpdatedAt(LocalDateTime.now());
+        return toResponse(departmentRepository.save(dept));
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private Department findById(String id) {
+        return departmentRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Department not found: " + id));
+    }
+
+    public DepartmentResponse toResponse(Department dept) {
+        UserSummary manager = dept.getManagerId() != null
+                ? userServiceClient.findById(dept.getManagerId()).orElse(null)
+                : null;
+
+        long teamCount = teamRepository.findByDepartmentId(dept.getId()).size();
+
+        return DepartmentResponse.builder()
+                .id(dept.getId())
+                .managerId(dept.getManagerId())
+                .manager(manager)
+                .name(dept.getName())
+                .description(dept.getDescription())
+                .isActive(dept.isActive())
+                .teamCount(teamCount)
+                .createdAt(dept.getCreatedAt())
+                .updatedAt(dept.getUpdatedAt())
+                .build();
+    }
+}
