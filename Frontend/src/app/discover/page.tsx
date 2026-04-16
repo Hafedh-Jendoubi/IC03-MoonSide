@@ -1,101 +1,76 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Building2,
   Users,
-  Search,
-  Globe,
   Lock,
-  Crown,
-  UserPlus,
-  UserMinus,
   Loader2,
   X,
-  Compass,
+  UserPlus,
+  UserMinus,
+  Mail,
   CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  Search,
 } from 'lucide-react'
 import {
   departmentApi,
   teamApi,
+  userApi,
   DepartmentResponse,
   TeamResponse,
   UserTeamResponse,
+  UserResponse,
 } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
+import Link from 'next/link'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Department Card ──────────────────────────────────────────────────────────
 
-function InitialAvatar({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md' | 'lg' }) {
-  const dim =
-    size === 'sm' ? 'h-7 w-7 text-xs' : size === 'md' ? 'h-9 w-9 text-sm' : 'h-12 w-12 text-base'
-  const initials = name
-    .split(' ')
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase()
-  return (
-    <div
-      className={`${dim} bg-primary/10 text-primary flex flex-shrink-0 items-center justify-center rounded-full font-semibold`}
-    >
-      {initials}
-    </div>
-  )
+interface DepartmentCardProps {
+  dept: DepartmentResponse
+  teamCount: number
 }
 
-// Department colour palette — cycles through a set of accent colours
-const DEPT_COLORS = [
-  {
-    bg: 'bg-blue-500/10',
-    icon: 'text-blue-500',
-    border: 'border-blue-500/20',
-    pill: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  },
-  {
-    bg: 'bg-violet-500/10',
-    icon: 'text-violet-500',
-    border: 'border-violet-500/20',
-    pill: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
-  },
-  {
-    bg: 'bg-emerald-500/10',
-    icon: 'text-emerald-500',
-    border: 'border-emerald-500/20',
-    pill: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  },
-  {
-    bg: 'bg-amber-500/10',
-    icon: 'text-amber-500',
-    border: 'border-amber-500/20',
-    pill: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  },
-  {
-    bg: 'bg-rose-500/10',
-    icon: 'text-rose-500',
-    border: 'border-rose-500/20',
-    pill: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
-  },
-  {
-    bg: 'bg-cyan-500/10',
-    icon: 'text-cyan-500',
-    border: 'border-cyan-500/20',
-    pill: 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400',
-  },
-]
+function DepartmentCard({ dept, teamCount }: DepartmentCardProps) {
+  return (
+    <Link href={`/department/${dept.id}`}>
+      <div className="bg-background border-border hover:border-border/80 flex h-full cursor-pointer flex-col space-y-4 rounded-lg border p-6 transition-all duration-200 hover:shadow-md">
+        {/* Header */}
+        <div className="flex items-start gap-3">
+          <div className="bg-muted flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg">
+            <Building2 className="text-foreground h-6 w-6" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-foreground line-clamp-1 text-lg font-semibold">{dept.name}</h3>
+            {dept.description && (
+              <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">{dept.description}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Manager info */}
+        {dept.manager && (
+          <div className="text-muted-foreground text-xs">
+            Led by {dept.manager.firstName} {dept.manager.lastName}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="border-border mt-auto border-t pt-3">
+          <p className="text-muted-foreground text-sm font-medium">
+            {teamCount} team{teamCount !== 1 ? 's' : ''}
+          </p>
+        </div>
+      </div>
+    </Link>
+  )
+}
 
 // ─── Team Card ────────────────────────────────────────────────────────────────
 
@@ -105,80 +80,49 @@ interface TeamCardProps {
   onLeave: (team: TeamResponse) => void
   onViewMembers: (team: TeamResponse) => void
   joining: boolean
-  accentColor: (typeof DEPT_COLORS)[0]
 }
 
-function TeamCard({ team, onJoin, onLeave, onViewMembers, joining, accentColor }: TeamCardProps) {
+function TeamCard({ team, onJoin, onLeave, onViewMembers, joining }: TeamCardProps) {
   const isPrivate = team.teamVisibility !== 'PUBLIC'
-  return (
-    <div
-      className={`group bg-card relative flex flex-col rounded-2xl border p-5 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${
-        team.isMember
-          ? 'border-primary/25 ring-primary/10 ring-1'
-          : 'border-border hover:border-border/80'
-      }`}
-    >
-      {/* Member ribbon */}
-      {team.isMember && (
-        <span className="bg-primary/10 text-primary absolute top-3 right-3 flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold">
-          <CheckCircle2 className="h-3 w-3" /> Joined
-        </span>
-      )}
 
-      {/* Top row: avatar + meta */}
-      <div className="flex items-start gap-3">
-        <div className="flex-shrink-0">
-          {team.image ? (
-            <img src={team.image} alt={team.name} className="h-11 w-11 rounded-xl object-cover" />
-          ) : (
-            <div
-              className={`flex h-11 w-11 items-center justify-center rounded-xl ${accentColor.bg}`}
-            >
-              <Users className={`h-5 w-5 ${accentColor.icon}`} />
+  return (
+    <div className="bg-background border-border flex h-full flex-col space-y-4 rounded-lg border p-5 transition-shadow duration-200 hover:shadow-md">
+      {/* Team Header */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-foreground truncate font-semibold">{team.name}</h3>
+          {isPrivate && (
+            <div className="text-muted-foreground mt-1.5 flex items-center gap-1 text-xs">
+              <Lock className="h-3 w-3" />
+              <span>Private</span>
             </div>
           )}
-        </div>
-
-        <div className="min-w-0 flex-1 pr-12">
-          <h3 className="text-foreground truncate leading-tight font-semibold">{team.name}</h3>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                isPrivate ? 'bg-muted text-muted-foreground' : accentColor.pill
-              }`}
-            >
-              {isPrivate ? <Lock className="h-2.5 w-2.5" /> : <Globe className="h-2.5 w-2.5" />}
-              {isPrivate ? 'Private' : 'Public'}
-            </span>
-          </div>
         </div>
       </div>
 
       {/* Description */}
       {team.description && (
-        <p className="text-muted-foreground mt-3 line-clamp-2 text-xs leading-relaxed">
-          {team.description}
-        </p>
+        <p className="text-muted-foreground line-clamp-2 flex-grow text-sm">{team.description}</p>
       )}
 
-      {/* Footer: lead + count + action */}
-      <div className="mt-4 flex items-center gap-2">
-        {team.lead && (
-          <span className="text-muted-foreground flex flex-1 items-center gap-1 truncate text-xs">
-            <Crown className="h-3 w-3 flex-shrink-0 text-amber-500" />
-            <span className="truncate">
-              {team.lead.firstName} {team.lead.lastName}
-            </span>
-          </span>
-        )}
-        {!team.lead && <span className="flex-1" />}
+      {/* Team Lead */}
+      {team.lead && (
+        <div className="text-muted-foreground border-border space-y-1 border-t py-2 text-xs">
+          <p className="text-foreground font-medium">Team Lead</p>
+          <p>
+            {team.lead.firstName} {team.lead.lastName}
+          </p>
+        </div>
+      )}
 
+      {/* Footer */}
+      <div className="border-border mt-auto flex items-center justify-between gap-2 border-t pt-3">
         <button
           onClick={() => onViewMembers(team)}
-          className="text-muted-foreground hover:bg-muted hover:text-foreground flex items-center gap-1 rounded-full px-2 py-1 text-xs transition-colors"
+          className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
         >
-          <Users className="h-3 w-3" />
-          {team.memberCount}
+          <Users className="h-4 w-4" />
+          <span>{team.memberCount} members</span>
         </button>
 
         {team.isMember ? (
@@ -187,7 +131,7 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining, accentColor }
             variant="outline"
             onClick={() => onLeave(team)}
             disabled={joining}
-            className="border-destructive/30 text-destructive hover:border-destructive/60 hover:bg-destructive/10 h-7 rounded-full px-3 text-xs"
+            className="h-8 text-xs"
           >
             {joining ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -197,22 +141,11 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining, accentColor }
             <span className="ml-1">Leave</span>
           </Button>
         ) : isPrivate ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled
-            className="text-muted-foreground h-7 rounded-full px-3 text-xs"
-          >
+          <Button size="sm" variant="ghost" disabled className="h-8 text-xs">
             <Lock className="h-3 w-3" />
-            <span className="ml-1">Private</span>
           </Button>
         ) : (
-          <Button
-            size="sm"
-            onClick={() => onJoin(team)}
-            disabled={joining}
-            className="h-7 rounded-full px-3 text-xs"
-          >
+          <Button size="sm" onClick={() => onJoin(team)} disabled={joining} className="h-8 text-xs">
             {joining ? (
               <Loader2 className="h-3 w-3 animate-spin" />
             ) : (
@@ -226,117 +159,48 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining, accentColor }
   )
 }
 
-// ─── Department Section ───────────────────────────────────────────────────────
+// ─── User Card ────────────────────────────────────────────────────────────────
 
-interface DeptSectionProps {
-  dept: DepartmentResponse
-  teams: TeamResponse[]
-  colorIndex: number
-  onJoin: (team: TeamResponse) => void
-  onLeave: (team: TeamResponse) => void
-  onViewMembers: (team: TeamResponse) => void
-  joiningTeam: string | null
+interface UserCardProps {
+  user: UserTeamResponse
 }
 
-function DeptSection({
-  dept,
-  teams,
-  colorIndex,
-  onJoin,
-  onLeave,
-  onViewMembers,
-  joiningTeam,
-}: DeptSectionProps) {
-  const [collapsed, setCollapsed] = useState(false)
-  const color = DEPT_COLORS[colorIndex % DEPT_COLORS.length]
-  if (teams.length === 0) return null
+function UserCard({ user }: UserCardProps) {
+  if (!user.user) return null
+  const initials = `${user.user.firstName[0]}${user.user.lastName[0]}`.toUpperCase()
   return (
-    <div className="space-y-3">
-      {/* Dept header */}
-      <button
-        onClick={() => setCollapsed((c) => !c)}
-        className="hover:bg-muted/50 flex w-full items-center gap-3 rounded-xl px-1 py-1 transition-colors"
-      >
-        <div
-          className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${color.bg}`}
-        >
-          <Building2 className={`h-4 w-4 ${color.icon}`} />
-        </div>
-        <div className="flex-1 text-left">
-          <div className="flex items-center gap-2">
-            <span className="text-foreground text-sm font-semibold">{dept.name}</span>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${color.pill}`}>
-              {teams.length} team{teams.length !== 1 ? 's' : ''}
-            </span>
-          </div>
-          {dept.description && (
-            <p className="text-muted-foreground mt-0.5 line-clamp-1 text-xs">{dept.description}</p>
-          )}
-          {dept.manager && !dept.description && (
-            <p className="text-muted-foreground mt-0.5 text-xs">
-              Managed by {dept.manager.firstName} {dept.manager.lastName}
-            </p>
-          )}
-        </div>
-        <div className="text-muted-foreground flex-shrink-0">
-          {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-        </div>
-      </button>
-
-      {/* Team grid */}
-      {!collapsed && (
-        <div className="animate-fade-in grid gap-3 pl-1 sm:grid-cols-2 lg:grid-cols-3">
-          {teams.map((team) => (
-            <TeamCard
-              key={team.id}
-              team={team}
-              accentColor={color}
-              onJoin={onJoin}
-              onLeave={onLeave}
-              onViewMembers={onViewMembers}
-              joining={joiningTeam === team.id}
-            />
-          ))}
+    <div className="bg-background border-border flex h-full flex-col space-y-3 rounded-lg border p-4 text-center">
+      <div className="bg-muted text-foreground mx-auto flex h-14 w-14 items-center justify-center rounded-full font-semibold">
+        {initials}
+      </div>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-foreground truncate text-sm font-semibold">
+          {user.user.firstName} {user.user.lastName}
+        </h3>
+        {user.user.jobTitle && (
+          <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">{user.user.jobTitle}</p>
+        )}
+      </div>
+      {user.user.email && (
+        <div className="text-muted-foreground border-border flex items-center justify-center gap-1 border-t pt-3 text-xs">
+          <Mail className="h-3 w-3" />
+          <span className="truncate">{user.user.email}</span>
         </div>
       )}
     </div>
   )
 }
 
-// ─── Stat Card ────────────────────────────────────────────────────────────────
-
-function StatCard({
-  value,
-  label,
-  icon: Icon,
-  colorClass,
-}: {
-  value: number
-  label: string
-  icon: React.ElementType
-  colorClass: string
-}) {
-  return (
-    <div className="border-border bg-card flex items-center gap-3 rounded-2xl border px-5 py-4">
-      <div
-        className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${colorClass}`}
-      >
-        <Icon className="h-5 w-5" />
-      </div>
-      <div>
-        <p className="text-foreground text-2xl leading-none font-bold">{value}</p>
-        <p className="text-muted-foreground mt-0.5 text-xs">{label}</p>
-      </div>
-    </div>
-  )
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
+
+const DEPARTMENTS_PER_PAGE = 6
 
 export default function DiscoverPage() {
   const [departments, setDepartments] = useState<DepartmentResponse[]>([])
   const [teams, setTeams] = useState<TeamResponse[]>([])
   const [myTeams, setMyTeams] = useState<TeamResponse[]>([])
+  const [users, setUsers] = useState<UserResponse[]>([])
+  const [currentUserIndex, setCurrentUserIndex] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -351,6 +215,9 @@ export default function DiscoverPage() {
 
   // Dept filter pill
   const [activeDeptId, setActiveDeptId] = useState<string | null>(null)
+
+  // Department pagination
+  const [displayedDeptCount, setDisplayedDeptCount] = useState(DEPARTMENTS_PER_PAGE)
 
   // Join/leave loading
   const [joiningTeam, setJoiningTeam] = useState<string | null>(null)
@@ -372,10 +239,11 @@ export default function DiscoverPage() {
     setLoading(true)
     setError(null)
     try {
-      const [depts, publicTeams, mine] = await Promise.all([
+      const [depts, publicTeams, mine, allUsers] = await Promise.all([
         departmentApi.getActive(),
         teamApi.getPublic(),
         teamApi.getMy(),
+        userApi.getAll(),
       ])
       // Merge isMember flag
       const myIds = new Set(mine.map((t) => t.id))
@@ -383,6 +251,7 @@ export default function DiscoverPage() {
       setDepartments(depts)
       setTeams(merged)
       setMyTeams(mine)
+      setUsers(allUsers)
     } catch (e: any) {
       setError(e.message ?? 'Failed to load data')
     } finally {
@@ -530,25 +399,10 @@ export default function DiscoverPage() {
   return (
     <AuthLayout>
       <div className="bg-background min-h-screen">
-        <div className="mx-auto max-w-6xl space-y-7 px-4 py-10">
-          {/* ── Page Header ───────────────────────────────────────────────── */}
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-2xl">
-                <Compass className="text-primary h-5 w-5" />
-              </div>
-              <div>
-                <h1 className="text-foreground text-2xl font-bold tracking-tight">Discover</h1>
-                <p className="text-muted-foreground text-sm">
-                  Explore departments and join the teams that interest you
-                </p>
-              </div>
-            </div>
-          </div>
-
+        <div className="mx-auto max-w-5xl space-y-8 px-4 py-12">
           {/* ── Error banner ──────────────────────────────────────────────── */}
           {error && (
-            <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm">
+            <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-3 rounded-lg border px-4 py-3 text-sm">
               <X className="h-4 w-4 flex-shrink-0" />
               {error}
               <button
@@ -560,210 +414,129 @@ export default function DiscoverPage() {
             </div>
           )}
 
-          {/* ── Stats ─────────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-3 gap-3 sm:gap-4">
-            <StatCard
-              value={departments.length}
-              label="Departments"
-              icon={Building2}
-              colorClass="bg-blue-500/10 text-blue-500"
-            />
-            <StatCard
-              value={teams.length}
-              label="Public Teams"
-              icon={Globe}
-              colorClass="bg-violet-500/10 text-violet-500"
-            />
-            <StatCard
-              value={joinedCount}
-              label="Teams Joined"
-              icon={CheckCircle2}
-              colorClass="bg-emerald-500/10 text-emerald-500"
+          {/* ── Search Bar ────────────────────────────────────────────────── */}
+          <div className="relative">
+            <Search className="text-muted-foreground absolute top-3 left-3 h-4 w-4" />
+            <Input
+              placeholder="Search teams..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
             />
           </div>
 
-          {/* ── Tabs ──────────────────────────────────────────────────────── */}
-          <div className="border-border flex gap-1 border-b">
-            {(
-              [
-                ['all', 'Discover', Sparkles],
-                ['my-teams', 'My Teams', Users],
-              ] as const
-            ).map(([key, label, Icon]) => (
-              <button
-                key={key}
-                onClick={() => setTab(key as 'all' | 'my-teams')}
-                className={`-mb-px flex items-center gap-2 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors ${
-                  tab === key
-                    ? 'border-primary text-primary'
-                    : 'text-muted-foreground hover:text-foreground border-transparent'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {label}
-                {key === 'my-teams' && myTeams.length > 0 && (
-                  <span className="bg-primary/10 text-primary rounded-full px-1.5 py-0.5 text-[10px] font-bold">
-                    {myTeams.length}
-                  </span>
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* DEPARTMENTS AND TEAMS                                          */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          <div className="space-y-8">
+            {/* ── Departments Grid ──────────────────────────────────────── */}
+            {departments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <div className="bg-muted mb-4 flex h-16 w-16 items-center justify-center rounded-full">
+                  <Building2 className="text-muted-foreground h-8 w-8" />
+                </div>
+                <p className="text-foreground font-semibold">No departments yet</p>
+                <p className="text-muted-foreground mt-1 text-sm">
+                  Check back once your admin sets up the organization structure.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                <h2 className="text-foreground text-xl font-semibold">
+                  Departments & Joined Departments
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {departments.slice(0, displayedDeptCount).map((dept) => {
+                    const deptTeams = teams.filter((t) => t.departmentId === dept.id)
+                    return <DepartmentCard key={dept.id} dept={dept} teamCount={deptTeams.length} />
+                  })}
+                </div>
+
+                {/* Load More Button */}
+                {displayedDeptCount < departments.length && (
+                  <div className="flex justify-center pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => setDisplayedDeptCount((prev) => prev + DEPARTMENTS_PER_PAGE)}
+                    >
+                      Load More...
+                    </Button>
+                  </div>
                 )}
-              </button>
-            ))}
+              </div>
+            )}
           </div>
 
           {/* ═══════════════════════════════════════════════════════════════ */}
           {/* DISCOVER TAB                                                   */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* ════════════════════════════════════════════════════════��══════ */}
           {tab === 'all' && (
-            <div className="space-y-6">
-              {/* Search + dept filter row */}
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                {/* Search */}
-                <div className="relative flex-1">
-                  <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-                  <Input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search teams…"
-                    className="bg-muted/50 focus:border-border focus:bg-background rounded-xl border-transparent pr-9 pl-9"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Department filter pills */}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => setActiveDeptId(null)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                    activeDeptId === null
-                      ? 'border-primary bg-primary text-primary-foreground'
-                      : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
-                  }`}
-                >
-                  All
-                </button>
-                {departments.map((dept, i) => {
-                  const color = DEPT_COLORS[i % DEPT_COLORS.length]
-                  return (
-                    <button
-                      key={dept.id}
-                      onClick={() => setActiveDeptId(dept.id === activeDeptId ? null : dept.id)}
-                      className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
-                        activeDeptId === dept.id
-                          ? `border-primary bg-primary text-primary-foreground`
-                          : 'border-border text-muted-foreground hover:border-primary/40 hover:text-foreground'
-                      }`}
-                    >
-                      <Building2 className="h-3 w-3" />
-                      {dept.name}
-                      <span
-                        className={`rounded-full px-1 font-semibold ${activeDeptId === dept.id ? 'opacity-70' : 'opacity-50'}`}
-                      >
-                        {dept.teamCount}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-
+            <div className="space-y-8">
               {/* ── Search Results ──────────────────────────────────────── */}
               {searchQuery && (
                 <>
                   {searching && (
-                    <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Searching…
+                    <div className="text-muted-foreground flex items-center justify-center py-10">
+                      <Loader2 className="h-5 w-5 animate-spin" />
                     </div>
                   )}
                   {!searching && searchResults !== null && (
                     <>
-                      <p className="text-muted-foreground text-sm">
-                        {displayedInSearch.length === 0
-                          ? 'No teams found.'
-                          : `${displayedInSearch.length} team${displayedInSearch.length !== 1 ? 's' : ''} found`}
-                      </p>
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {displayedInSearch.map((team) => {
-                          const deptIdx = departments.findIndex((d) => d.id === team.departmentId)
-                          return (
-                            <TeamCard
-                              key={team.id}
-                              team={team}
-                              accentColor={
-                                DEPT_COLORS[(deptIdx >= 0 ? deptIdx : 0) % DEPT_COLORS.length]
-                              }
-                              onJoin={handleJoin}
-                              onLeave={handleLeave}
-                              onViewMembers={handleViewMembers}
-                              joining={joiningTeam === team.id}
-                            />
-                          )
-                        })}
-                      </div>
+                      {displayedInSearch.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-10 text-center">
+                          <p className="text-muted-foreground">
+                            No teams found matching "{searchQuery}"
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          <p className="text-muted-foreground text-sm">
+                            {displayedInSearch.length} team
+                            {displayedInSearch.length !== 1 ? 's' : ''} found
+                          </p>
+                          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {displayedInSearch.map((team) => (
+                              <TeamCard
+                                key={team.id}
+                                team={team}
+                                onJoin={handleJoin}
+                                onLeave={handleLeave}
+                                onViewMembers={handleViewMembers}
+                                joining={joiningTeam === team.id}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
                 </>
               )}
 
-              {/* ── Department-filtered flat list ───────────────────────── */}
-              {!searchQuery && activeDeptId && (
-                <div className="animate-fade-in grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {filteredByDept.length === 0 ? (
-                    <p className="text-muted-foreground col-span-3 py-10 text-center text-sm">
-                      No public teams in this department yet.
-                    </p>
-                  ) : (
-                    filteredByDept.map((team) => {
-                      const deptIdx = departments.findIndex((d) => d.id === activeDeptId)
-                      return (
-                        <TeamCard
-                          key={team.id}
-                          team={team}
-                          accentColor={DEPT_COLORS[deptIdx % DEPT_COLORS.length]}
-                          onJoin={handleJoin}
-                          onLeave={handleLeave}
-                          onViewMembers={handleViewMembers}
-                          joining={joiningTeam === team.id}
-                        />
-                      )
-                    })
-                  )}
-                </div>
-              )}
-
               {/* ── All departments grouped ─────────────────────────────── */}
-              {!searchQuery && !activeDeptId && (
-                <div className="space-y-8">
-                  {departments.length === 0 && (
+              {!searchQuery && (
+                <>
+                  {departments.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-center">
                       <div className="bg-muted mb-4 flex h-16 w-16 items-center justify-center rounded-full">
                         <Building2 className="text-muted-foreground h-8 w-8" />
                       </div>
-                      <p className="font-semibold">No departments yet</p>
+                      <p className="text-foreground font-semibold">No departments yet</p>
                       <p className="text-muted-foreground mt-1 text-sm">
                         Check back once your admin sets up the organization structure.
                       </p>
                     </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {departments.slice(0, displayedDeptCount).map((dept) => {
+                        const deptTeams = teams.filter((t) => t.departmentId === dept.id)
+                        return (
+                          <DepartmentCard key={dept.id} dept={dept} teamCount={deptTeams.length} />
+                        )
+                      })}
+                    </div>
                   )}
-                  {departments.map((dept, i) => (
-                    <DeptSection
-                      key={dept.id}
-                      dept={dept}
-                      teams={teams.filter((t) => t.departmentId === dept.id)}
-                      colorIndex={i}
-                      onJoin={handleJoin}
-                      onLeave={handleLeave}
-                      onViewMembers={handleViewMembers}
-                      joiningTeam={joiningTeam}
-                    />
-                  ))}
-                </div>
+                </>
               )}
             </div>
           )}
@@ -772,38 +545,137 @@ export default function DiscoverPage() {
           {/* MY TEAMS TAB                                                   */}
           {/* ═══════════════════════════════════════════════════════════════ */}
           {tab === 'my-teams' && (
-            <div className="space-y-4">
+            <>
               {myTeams.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <div className="bg-muted mb-4 flex h-16 w-16 items-center justify-center rounded-full">
                     <Users className="text-muted-foreground h-8 w-8" />
                   </div>
-                  <h3 className="font-semibold">You haven't joined any teams yet</h3>
+                  <h3 className="text-foreground font-semibold">
+                    You haven&apos;t joined any teams yet
+                  </h3>
                   <p className="text-muted-foreground mt-1 text-sm">
-                    Head to Discover to browse public teams and join ones that interest you.
+                    Browse public teams and join ones that interest you.
                   </p>
-                  <Button className="mt-5 rounded-full" onClick={() => setTab('all')}>
-                    <Sparkles className="mr-2 h-4 w-4" /> Discover Teams
+                  <Button className="mt-5" onClick={() => setTab('all')}>
+                    Explore Teams
                   </Button>
                 </div>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {myTeams.map((team) => {
-                    const deptIdx = departments.findIndex((d) => d.id === team.departmentId)
-                    return (
-                      <TeamCard
-                        key={team.id}
-                        team={team}
-                        accentColor={DEPT_COLORS[(deptIdx >= 0 ? deptIdx : 0) % DEPT_COLORS.length]}
-                        onJoin={handleJoin}
-                        onLeave={handleLeave}
-                        onViewMembers={handleViewMembers}
-                        joining={joiningTeam === team.id}
-                      />
-                    )
-                  })}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {myTeams.map((team) => (
+                    <TeamCard
+                      key={team.id}
+                      team={team}
+                      onJoin={handleJoin}
+                      onLeave={handleLeave}
+                      onViewMembers={handleViewMembers}
+                      joining={joiningTeam === team.id}
+                    />
+                  ))}
                 </div>
               )}
+            </>
+          )}
+
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* PEOPLE YOU MAY KNOW SECTION                                     */}
+          {/* ═══════════════════════════════════════════════════════════════ */}
+          {users.length > 0 && (
+            <div className="border-border mt-12 space-y-4 border-t pt-8">
+              <h2 className="text-foreground text-lg font-semibold">People You May Know</h2>
+              <div className="relative">
+                {/* Carousel container - shows 4 cards */}
+                <div className="overflow-hidden">
+                  <div
+                    className="flex gap-4 transition-transform duration-300 ease-out"
+                    style={{
+                      transform: `translateX(-${currentUserIndex * 25}%)`,
+                    }}
+                  >
+                    {users.map((user) => (
+                      <Link
+                        key={user.id}
+                        href={`/profile/${user.id}`}
+                        className="w-1/4 flex-shrink-0"
+                      >
+                        <div className="bg-background border-border hover:border-border/80 flex h-full cursor-pointer flex-col space-y-4 rounded-lg border p-4 transition-all duration-200 hover:shadow-md">
+                          {/* Avatar */}
+                          <div className="flex justify-center">
+                            {user.avatar ? (
+                              <img
+                                src={user.avatar}
+                                alt={`${user.firstName} ${user.lastName}`}
+                                className="border-border h-16 w-16 rounded-full border object-cover"
+                              />
+                            ) : (
+                              <div className="bg-muted text-foreground flex h-16 w-16 items-center justify-center rounded-full text-lg font-bold">
+                                {user.firstName[0]}
+                                {user.lastName[0]}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Name and Job Title */}
+                          <div className="flex-1 space-y-1 text-center">
+                            <h3 className="text-foreground hover:text-primary line-clamp-1 text-sm font-semibold transition-colors">
+                              {user.firstName} {user.lastName}
+                            </h3>
+                            {user.jobTitle && (
+                              <p className="text-muted-foreground line-clamp-1 text-xs">
+                                {user.jobTitle}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Bio */}
+                          {user.bio && (
+                            <p className="text-muted-foreground line-clamp-2 text-center text-xs">
+                              {user.bio}
+                            </p>
+                          )}
+
+                          {/* Email */}
+                          <div className="border-border border-t pt-3">
+                            <a
+                              href={`mailto:${user.email}`}
+                              onClick={(e) => e.preventDefault()}
+                              className="text-primary flex items-center justify-center gap-1 truncate text-xs hover:underline"
+                              title={user.email}
+                            >
+                              <Mail className="h-3 w-3 flex-shrink-0" />
+                              <span className="truncate">{user.email}</span>
+                            </a>
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Navigation buttons */}
+                {users.length > 4 && (
+                  <div className="mt-6 flex items-center justify-center gap-4">
+                    <button
+                      onClick={() =>
+                        setCurrentUserIndex((i) => (i - 1 + users.length) % users.length)
+                      }
+                      className="bg-background border-border hover:bg-muted text-foreground rounded-full border p-2 transition-colors"
+                      aria-label="Previous"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+
+                    <button
+                      onClick={() => setCurrentUserIndex((i) => (i + 1) % users.length)}
+                      className="bg-background border-border hover:bg-muted text-foreground rounded-full border p-2 transition-colors"
+                      aria-label="Next"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -813,19 +685,12 @@ export default function DiscoverPage() {
           open={membersDialog.open}
           onOpenChange={(open) => !open && setMembersDialog((prev) => ({ ...prev, open: false }))}
         >
-          <DialogContent className="flex max-h-[80vh] flex-col rounded-2xl sm:max-w-md">
+          <DialogContent className="flex max-h-[80vh] flex-col rounded-lg sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Users className="text-primary h-5 w-5" />
-                {membersDialog.team?.name}
-              </DialogTitle>
-              <DialogDescription>
-                {membersDialog.team?.memberCount} member
-                {membersDialog.team?.memberCount !== 1 ? 's' : ''}
-              </DialogDescription>
+              <DialogTitle>{membersDialog.team?.name} Members</DialogTitle>
             </DialogHeader>
 
-            <div className="min-h-0 flex-1 space-y-1 overflow-y-auto py-2">
+            <div className="min-h-0 flex-1 overflow-y-auto py-4">
               {membersDialog.loading ? (
                 <div className="flex items-center justify-center py-10">
                   <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
@@ -833,60 +698,29 @@ export default function DiscoverPage() {
               ) : membersDialog.members.length === 0 ? (
                 <p className="text-muted-foreground py-10 text-center text-sm">No members yet.</p>
               ) : (
-                membersDialog.members.map((m) => (
-                  <div
-                    key={m.id}
-                    className="hover:bg-muted/50 flex items-center gap-3 rounded-xl px-2 py-2 transition-colors"
-                  >
-                    {m.user ? (
-                      m.user.avatar ? (
-                        <img
-                          src={m.user.avatar}
-                          alt=""
-                          className="h-9 w-9 flex-shrink-0 rounded-full object-cover"
-                        />
-                      ) : (
-                        <InitialAvatar name={`${m.user.firstName} ${m.user.lastName}`} size="md" />
-                      )
-                    ) : (
-                      <div className="bg-muted h-9 w-9 flex-shrink-0 rounded-full" />
-                    )}
-                    <div className="min-w-0 flex-1">
+                <div className="grid grid-cols-1 gap-3">
+                  {membersDialog.members.map((m) => (
+                    <div key={m.id}>
                       {m.user ? (
-                        <>
-                          <p className="truncate text-sm font-medium">
-                            {m.user.firstName} {m.user.lastName}
-                            {membersDialog.team?.leadId === m.userId && (
-                              <Crown className="ml-1.5 inline h-3.5 w-3.5 text-amber-500" />
-                            )}
-                          </p>
-                          {m.user.jobTitle && (
-                            <p className="text-muted-foreground truncate text-xs">
-                              {m.user.jobTitle}
-                            </p>
-                          )}
-                        </>
+                        <UserCard user={m} />
                       ) : (
                         <p className="text-muted-foreground text-sm">Unknown user</p>
                       )}
                     </div>
-                    <p className="text-muted-foreground flex-shrink-0 text-xs">
-                      {new Date(m.joinedAt).toLocaleDateString()}
-                    </p>
-                  </div>
-                ))
+                  ))}
+                </div>
               )}
             </div>
           </DialogContent>
         </Dialog>
 
         {/* ── Toast notification ──────────────────────────────────────────────── */}
-        {toast && (
+        {toast ? (
           <div
-            className={`animate-slide-up fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-2xl px-5 py-3 text-sm font-medium shadow-lg ${
+            className={`animate-slide-up fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium shadow-lg ${
               toast.type === 'success'
-                ? 'bg-foreground text-background'
-                : 'bg-destructive text-destructive-foreground'
+                ? 'bg-background text-foreground border-border'
+                : 'bg-destructive/10 text-destructive border-destructive/20'
             }`}
           >
             {toast.type === 'success' ? (
@@ -896,7 +730,7 @@ export default function DiscoverPage() {
             )}
             {toast.msg}
           </div>
-        )}
+        ) : null}
       </div>
     </AuthLayout>
   )
