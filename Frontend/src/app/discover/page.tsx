@@ -37,35 +37,68 @@ interface DepartmentCardProps {
   teamCount: number
 }
 
+// Helper function to generate a consistent color/image for each department
+function getDepartmentImage(deptId: string): string {
+  const images = [
+    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=300&fit=crop',
+    'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=600&h=300&fit=crop',
+    'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=600&h=300&fit=crop',
+    'https://images.unsplash.com/photo-1426604966848-d7adac402bff?w=600&h=300&fit=crop',
+    'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=600&h=300&fit=crop',
+    'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=600&h=300&fit=crop',
+  ]
+  // Use department ID to deterministically pick an image (hash all characters)
+  const hash = Array.from(deptId).reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  const index = hash % images.length
+  return images[index]
+}
+
 function DepartmentCard({ dept, teamCount }: DepartmentCardProps) {
+  const imageUrl = getDepartmentImage(dept.id)
+
   return (
     <Link href={`/department/${dept.id}`}>
-      <div className="bg-background border-border hover:border-border/80 flex h-full cursor-pointer flex-col space-y-4 rounded-lg border p-6 transition-all duration-200 hover:shadow-md">
-        {/* Header */}
-        <div className="flex items-start gap-3">
-          <div className="bg-muted flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-lg">
-            <Building2 className="text-foreground h-6 w-6" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="text-foreground line-clamp-1 text-lg font-semibold">{dept.name}</h3>
-            {dept.description && (
-              <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">{dept.description}</p>
-            )}
-          </div>
+      <div className="group overflow-hidden rounded-lg transition-all duration-300 hover:shadow-lg">
+        {/* Image Container */}
+        <div className="relative h-48 w-full overflow-hidden bg-gradient-to-br from-slate-400 to-slate-600">
+          <img
+            src={imageUrl}
+            alt={dept.name}
+            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          />
+          <div className="absolute inset-0 bg-black/20 transition-opacity duration-300 group-hover:bg-black/10" />
         </div>
 
-        {/* Manager info */}
-        {dept.manager && (
-          <div className="text-muted-foreground text-xs">
-            Led by {dept.manager.firstName} {dept.manager.lastName}
+        {/* Content Container */}
+        <div className="bg-background border-border flex h-full flex-col space-y-3 border border-t-0 p-4">
+          {/* Department Code/ID */}
+          <div className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+            DEPT.{dept.id.slice(0, 8).toUpperCase()}
           </div>
-        )}
 
-        {/* Footer */}
-        <div className="border-border mt-auto border-t pt-3">
-          <p className="text-muted-foreground text-sm font-medium">
-            {teamCount} team{teamCount !== 1 ? 's' : ''}
-          </p>
+          {/* Department Name */}
+          <div>
+            <h3 className="text-foreground line-clamp-2 text-base font-semibold">{dept.name}</h3>
+          </div>
+
+          {/* Description */}
+          {dept.description && (
+            <p className="text-muted-foreground line-clamp-2 text-xs">{dept.description}</p>
+          )}
+
+          {/* Manager info */}
+          {dept.manager && (
+            <div className="text-muted-foreground text-xs">
+              {dept.manager.firstName} {dept.manager.lastName}
+            </div>
+          )}
+
+          {/* Footer - Team Count */}
+          <div className="border-border mt-auto border-t pt-3">
+            <p className="text-muted-foreground text-sm font-medium">
+              {teamCount} team{teamCount !== 1 ? 's' : ''}
+            </p>
+          </div>
         </div>
       </div>
     </Link>
@@ -540,27 +573,6 @@ export default function DiscoverPage() {
               </div>
             )}
           </div>
-
-          {/* --------------------------------------------------------------- */}
-          {/* MY TEAMS SECTION                                               */}
-          {/* --------------------------------------------------------------- */}
-          {myTeams.length > 0 && (
-            <div className="space-y-6">
-              <h2 className="text-foreground text-2xl font-semibold">My Teams</h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {myTeams.map((team) => (
-                  <TeamCard
-                    key={team.id}
-                    team={team}
-                    onJoin={handleJoin}
-                    onLeave={handleLeave}
-                    onViewMembers={handleViewMembers}
-                    joining={joiningTeam === team.id}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* --------------------------------------------------------------- */}
           {/* PEOPLE YOU MAY KNOW SECTION                                     */}

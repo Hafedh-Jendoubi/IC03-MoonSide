@@ -12,6 +12,22 @@ import { useAuth } from '@/lib/auth-context'
 import { Post, User } from '@/lib/types'
 import Link from 'next/link'
 
+// Helper function to get consistent image for department (matches discover page)
+function getDepartmentImage(deptId: string): string {
+  const images = [
+    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=300&fit=crop',
+    'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=600&h=300&fit=crop',
+    'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=600&h=300&fit=crop',
+    'https://images.unsplash.com/photo-1426604966848-d7adac402bff?w=600&h=300&fit=crop',
+    'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=600&h=300&fit=crop',
+    'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=600&h=300&fit=crop',
+  ]
+  // Use department ID to deterministically pick an image (hash all characters, not just first)
+  const hash = Array.from(deptId).reduce((sum, char) => sum + char.charCodeAt(0), 0)
+  const index = hash % images.length
+  return images[index]
+}
+
 export default function DepartmentFeedPage() {
   const params = useParams()
   const { user } = useAuth()
@@ -110,11 +126,16 @@ export default function DepartmentFeedPage() {
 
   if (!user) return null
 
+  const bannerImage = getDepartmentImage(deptId)
+
   return (
     <AuthLayout>
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Cover Banner */}
-        <div className="from-primary/20 to-secondary/20 mb-6 h-48 rounded-xl bg-gradient-to-r"></div>
+        <div className="relative mb-6 h-64 w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-400 to-slate-600">
+          <img src={bannerImage} alt={department?.name} className="h-full w-full object-cover" />
+          <div className="absolute inset-0 bg-black/20" />
+        </div>
 
         {/* Department Header */}
         <div className="bg-background mb-8 flex items-end gap-6">
