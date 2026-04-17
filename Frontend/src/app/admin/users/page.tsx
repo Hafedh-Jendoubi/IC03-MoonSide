@@ -61,7 +61,7 @@ import {
   BulkInviteResult,
 } from '@/lib/api'
 
-// ─── Avatar component ─────────────────────────────────────────────────────────
+// --- Avatar component ---------------------------------------------------------
 
 function UserAvatar({ user, size = 'sm' }: { user: UserResponse; size?: 'sm' | 'md' }) {
   const dim = size === 'sm' ? 'h-8 w-8 text-xs' : 'h-10 w-10 text-sm'
@@ -84,7 +84,7 @@ function UserAvatar({ user, size = 'sm' }: { user: UserResponse; size?: 'sm' | '
   )
 }
 
-// ─── Dropdown action menu ─────────────────────────────────────────────────────
+// --- Dropdown action menu -----------------------------------------------------
 
 interface DropdownMenuProps {
   user: UserResponse
@@ -185,7 +185,7 @@ function ActionDropdown({
   )
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// --- Main page ----------------------------------------------------------------
 
 export default function UsersPage() {
   const router = useRouter()
@@ -660,7 +660,7 @@ export default function UsersPage() {
             </button>
           </div>
 
-          {/* ── Single Invite Tab ── */}
+          {/* -- Single Invite Tab -- */}
           {inviteTab === 'single' && (
             <>
               {inviteSuccess ? (
@@ -735,7 +735,7 @@ export default function UsersPage() {
             </>
           )}
 
-          {/* ── Bulk Invite Tab ── */}
+          {/* -- Bulk Invite Tab -- */}
           {inviteTab === 'bulk' && (
             <div className="space-y-4">
               {!bulkResult ? (

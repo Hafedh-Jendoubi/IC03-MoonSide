@@ -25,7 +25,7 @@ import { User, getFullName } from '@/lib/types'
 import { userApi, mediaApi, UpdateUserRequest } from '@/lib/api'
 import { useRouter } from 'next/navigation'
 
-// ─── Edit Profile Modal ───────────────────────────────────────────────────────
+// --- Edit Profile Modal -------------------------------------------------------
 
 interface EditProfileModalProps {
   user: User
@@ -316,7 +316,7 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
   )
 }
 
-// ─── Profile Page ─────────────────────────────────────────────────────────────
+// --- Profile Page -------------------------------------------------------------
 
 export default function ProfilePage() {
   const params = useParams()

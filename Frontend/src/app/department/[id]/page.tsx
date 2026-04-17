@@ -112,98 +112,85 @@ export default function DepartmentFeedPage() {
 
   return (
     <AuthLayout>
-      <div>
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Cover Banner */}
-        <div className="from-primary/20 to-secondary/20 h-48 bg-gradient-to-r"></div>
+        <div className="from-primary/20 to-secondary/20 mb-6 h-48 rounded-xl bg-gradient-to-r"></div>
 
-        {/* Department Header Card */}
-        <div className="bg-background border-border sticky top-0 z-40 border-b">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            <div className="relative -mt-24 mb-8 flex items-end gap-6">
-              {/* Department Icon */}
-              <div className="bg-muted flex h-32 w-32 flex-shrink-0 items-center justify-center rounded-full border-4 border-white shadow-lg dark:border-slate-800">
-                <Building2 className="text-foreground h-16 w-16" />
-              </div>
+        {/* Department Header */}
+        <div className="bg-background mb-8 flex items-end gap-6">
+          {/* Department Icon */}
+          <div className="bg-muted flex h-32 w-32 flex-shrink-0 items-center justify-center rounded-full border-4 border-white shadow-lg dark:border-slate-800">
+            <Building2 className="text-foreground h-16 w-16" />
+          </div>
 
-              {/* Department Info */}
-              <div className="flex-1 pb-2">
-                <h1 className="text-foreground text-3xl font-bold">{department.name}</h1>
-                {department.description && (
-                  <p className="text-muted-foreground mt-1 text-sm">{department.description}</p>
-                )}
-                {department.manager && (
-                  <p className="text-muted-foreground mt-2 text-xs">
-                    Led by {department.manager.firstName} {department.manager.lastName}
-                  </p>
-                )}
-              </div>
-            </div>
+          {/* Department Info */}
+          <div className="flex-1 pb-2">
+            <h1 className="text-foreground text-3xl font-bold">{department.name}</h1>
+            {department.description && (
+              <p className="text-muted-foreground mt-1 text-sm">{department.description}</p>
+            )}
+            {department.manager && (
+              <p className="text-muted-foreground mt-2 text-xs">
+                Led by {department.manager.firstName} {department.manager.lastName}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-          <div className="grid gap-8 lg:grid-cols-3">
-            {/* Feed Section (Main) */}
-            <div className="space-y-6 lg:col-span-2">
-              {/* Create Post */}
-              <CreatePost user={user} onPostCreate={handlePostCreate} />
-
-              {/* Posts Feed */}
-              <div className="space-y-6">
-                {posts.length === 0 ? (
-                  <div className="py-12 text-center">
-                    <div className="mb-4 text-6xl">📝</div>
-                    <h2 className="text-foreground mb-2 text-xl font-semibold">No posts yet</h2>
-                    <p className="text-muted-foreground">
-                      Be the first to share something with your department!
-                    </p>
-                  </div>
-                ) : (
-                  posts.map((post, index) => (
-                    <div
-                      key={post.id}
-                      style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
-                    >
-                      <PostCard
-                        post={post}
-                        currentUserId={user.id}
-                        onLike={handleLike}
-                        usersMap={usersMap}
-                      />
-                    </div>
-                  ))
-                )}
+        {/* Main Content with Sidebar */}
+        <div className="grid gap-8 lg:grid-cols-4">
+          {/* Left Sidebar - Teams List */}
+          {teams.length > 0 && (
+            <div className="lg:col-span-1">
+              <div className="border-border bg-background sticky top-4 rounded-lg border p-4">
+                <h3 className="text-foreground mb-4 text-lg font-semibold">Teams</h3>
+                <div className="space-y-2">
+                  {teams.map((team) => (
+                    <Link key={team.id} href={`/team/${team.id}`}>
+                      <div className="hover:bg-muted border-border/50 block rounded-lg border p-3 transition-colors">
+                        <h4 className="text-foreground line-clamp-1 text-sm font-medium">
+                          {team.name}
+                        </h4>
+                        <p className="text-muted-foreground mt-1 text-xs">
+                          {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
               </div>
             </div>
+          )}
 
-            {/* Sidebar - Teams */}
-            <div className="lg:col-span-1">
-              {teams.length > 0 && (
-                <Card className="sticky top-20 p-6">
-                  <h2 className="text-foreground mb-4 text-lg font-semibold">
-                    Teams in this Department
-                  </h2>
-                  <div className="space-y-3">
-                    {teams.map((team) => (
-                      <Link key={team.id} href={`/team/${team.id}`}>
-                        <div className="bg-muted/50 hover:bg-muted cursor-pointer rounded-lg p-3 transition-colors">
-                          <h3 className="text-foreground line-clamp-1 text-sm font-medium">
-                            {team.name}
-                          </h3>
-                          {team.description && (
-                            <p className="text-muted-foreground mt-1 line-clamp-2 text-xs">
-                              {team.description}
-                            </p>
-                          )}
-                          <p className="text-muted-foreground mt-2 text-xs">
-                            {team.memberCount} members
-                          </p>
-                        </div>
-                      </Link>
-                    ))}
+          {/* Main Content - Posts Feed */}
+          <div className={`space-y-6 ${teams.length > 0 ? 'lg:col-span-3' : 'lg:col-span-4'}`}>
+            {/* Create Post */}
+            <CreatePost user={user} onPostCreate={handlePostCreate} />
+
+            {/* Posts Feed */}
+            <div className="space-y-6">
+              {posts.length === 0 ? (
+                <div className="py-12 text-center">
+                  <div className="mb-4 text-6xl">📝</div>
+                  <h2 className="text-foreground mb-2 text-xl font-semibold">No posts yet</h2>
+                  <p className="text-muted-foreground">
+                    Be the first to share something with your department!
+                  </p>
+                </div>
+              ) : (
+                posts.map((post, index) => (
+                  <div
+                    key={post.id}
+                    style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
+                  >
+                    <PostCard
+                      post={post}
+                      currentUserId={user.id}
+                      onLike={handleLike}
+                      usersMap={usersMap}
+                    />
                   </div>
-                </Card>
+                ))
               )}
             </div>
           </div>

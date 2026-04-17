@@ -34,7 +34,7 @@ import {
   UserTeamResponse,
 } from '@/lib/api'
 
-// ─── Avatar ───────────────────────────────────────────────────────────────────
+// --- Avatar -------------------------------------------------------------------
 
 function InitialAvatar({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md' | 'lg' }) {
   const dim =
@@ -54,7 +54,7 @@ function InitialAvatar({ name, size = 'sm' }: { name: string; size?: 'sm' | 'md'
   )
 }
 
-// ─── Team card ────────────────────────────────────────────────────────────────
+// --- Team card ----------------------------------------------------------------
 
 interface TeamCardProps {
   team: TeamResponse
@@ -173,7 +173,7 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining }: TeamCardPro
   )
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// --- Main page ----------------------------------------------------------------
 
 export default function OrganizationsPage() {
   const [departments, setDepartments] = useState<DepartmentResponse[]>([])
@@ -210,7 +210,7 @@ export default function OrganizationsPage() {
     loading: false,
   })
 
-  // ── Load ─────────────────────────────────────────────────────────────────
+  // -- Load -----------------------------------------------------------------
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -235,7 +235,7 @@ export default function OrganizationsPage() {
     loadData()
   }, [loadData])
 
-  // ── Search ───────────────────────────────────────────────────────────────
+  // -- Search ---------------------------------------------------------------
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
@@ -256,7 +256,7 @@ export default function OrganizationsPage() {
     }, 350)
   }, [searchQuery])
 
-  // ── Join / Leave ─────────────────────────────────────────────────────────
+  // -- Join / Leave ---------------------------------------------------------
 
   async function handleJoin(team: TeamResponse) {
     setJoiningTeam(team.id)
@@ -294,7 +294,7 @@ export default function OrganizationsPage() {
     }
   }
 
-  // ── Members modal ─────────────────────────────────────────────────────────
+  // -- Members modal ---------------------------------------------------------
 
   async function handleViewMembers(team: TeamResponse) {
     setMembersDialog({ open: true, team, members: [], loading: true })
@@ -306,7 +306,7 @@ export default function OrganizationsPage() {
     }
   }
 
-  // ── Derived ──────────────────────────────────────────────────────────────
+  // -- Derived --------------------------------------------------------------
 
   const displayedTeams = (() => {
     const base = searchResults ?? teams
@@ -314,7 +314,7 @@ export default function OrganizationsPage() {
     return base.filter((t) => t.departmentId === activeDeptId)
   })()
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // -- Render ---------------------------------------------------------------
 
   if (loading) {
     return (
@@ -410,7 +410,7 @@ export default function OrganizationsPage() {
           ))}
         </div>
 
-        {/* ── Discover tab ──────────────────────────────────────────────────── */}
+        {/* -- Discover tab ---------------------------------------------------- */}
         {tab === 'discover' && (
           <div className="space-y-5">
             {/* Search */}
@@ -549,7 +549,7 @@ export default function OrganizationsPage() {
           </div>
         )}
 
-        {/* ── My Teams tab ─────────────────────────────────────────────────── */}
+        {/* -- My Teams tab --------------------------------------------------- */}
         {tab === 'my-teams' && (
           <div className="space-y-4">
             {myTeams.length === 0 ? (
@@ -583,7 +583,7 @@ export default function OrganizationsPage() {
         )}
       </div>
 
-      {/* ── Members Dialog ──────────────────────────────────────────────────── */}
+      {/* -- Members Dialog ---------------------------------------------------- */}
       <Dialog
         open={membersDialog.open}
         onOpenChange={(open) => !open && setMembersDialog((prev) => ({ ...prev, open: false }))}

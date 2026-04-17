@@ -30,7 +30,7 @@ import {
 import { AuthLayout } from '@/components/auth-layout'
 import Link from 'next/link'
 
-// ─── Department Card ──────────────────────────────────────────────────────────
+// --- Department Card ----------------------------------------------------------
 
 interface DepartmentCardProps {
   dept: DepartmentResponse
@@ -72,7 +72,7 @@ function DepartmentCard({ dept, teamCount }: DepartmentCardProps) {
   )
 }
 
-// ─── Team Card ────────────────────────────────────────────────────────────────
+// --- Team Card ----------------------------------------------------------------
 
 interface TeamCardProps {
   team: TeamResponse
@@ -159,7 +159,7 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining }: TeamCardPro
   )
 }
 
-// ─── User Card ────────────────────────────────────────────────────────────────
+// --- User Card ----------------------------------------------------------------
 
 interface UserCardProps {
   user: UserTeamResponse
@@ -191,9 +191,11 @@ function UserCard({ user }: UserCardProps) {
   )
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// --- Main Page ----------------------------------------------------------------
 
 const DEPARTMENTS_PER_PAGE = 6
+
+type DeptSortType = 'name' | 'teams' | 'followers'
 
 export default function DiscoverPage() {
   const [departments, setDepartments] = useState<DepartmentResponse[]>([])
@@ -204,14 +206,15 @@ export default function DiscoverPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Search
+  // Search for departments
+  const [deptSearchQuery, setDeptSearchQuery] = useState('')
+  const [deptSortBy, setDeptSortBy] = useState<DeptSortType>('name')
+
+  // Search for teams
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<TeamResponse[] | null>(null)
   const [searching, setSearching] = useState(false)
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // Active tab
-  const [tab, setTab] = useState<'all' | 'my-teams'>('all')
 
   // Dept filter pill
   const [activeDeptId, setActiveDeptId] = useState<string | null>(null)
@@ -233,7 +236,7 @@ export default function DiscoverPage() {
     loading: boolean
   }>({ open: false, team: null, members: [], loading: false })
 
-  // ── Load ──────────────────────────────────────────────────────────────────
+  // -- Load ------------------------------------------------------------------
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -263,14 +266,14 @@ export default function DiscoverPage() {
     loadData()
   }, [loadData])
 
-  // ── Toast ─────────────────────────────────────────────────────────────────
+  // -- Toast -----------------------------------------------------------------
 
   function showToast(msg: string, type: 'success' | 'error') {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 3000)
   }
 
-  // ── Search ────────────────────────────────────────────────────────────────
+  // -- Search ----------------------------------------------------------------
 
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current)
@@ -292,7 +295,7 @@ export default function DiscoverPage() {
     }, 350)
   }, [searchQuery, myTeams])
 
-  // ── Join / Leave ──────────────────────────────────────────────────────────
+  // -- Join / Leave ----------------------------------------------------------
 
   async function handleJoin(team: TeamResponse) {
     setJoiningTeam(team.id)
@@ -335,7 +338,7 @@ export default function DiscoverPage() {
     }
   }
 
-  // ── Members modal ─────────────────────────────────────────────────────────
+  // -- Members modal ---------------------------------------------------------
 
   async function handleViewMembers(team: TeamResponse) {
     setMembersDialog({ open: true, team, members: [], loading: true })
@@ -347,7 +350,7 @@ export default function DiscoverPage() {
     }
   }
 
-  // ── Derived lists ─────────────────────────────────────────────────────────
+  // -- Derived lists ---------------------------------------------------------
 
   const displayedInSearch = (() => {
     const base = searchResults ?? []
@@ -359,7 +362,28 @@ export default function DiscoverPage() {
 
   const joinedCount = teams.filter((t) => t.isMember).length
 
-  // ── Skeleton ──────────────────────────────────────────────────────────────
+  // Sort departments
+  const sortedDepartments = (() => {
+    let filtered = departments.filter((d) =>
+      d.name.toLowerCase().includes(deptSearchQuery.toLowerCase())
+    )
+
+    const deptTeamCounts = new Map(
+      filtered.map((d) => [d.id, teams.filter((t) => t.departmentId === d.id).length])
+    )
+
+    if (deptSortBy === 'teams') {
+      filtered.sort((a, b) => (deptTeamCounts.get(b.id) || 0) - (deptTeamCounts.get(a.id) || 0))
+    } else if (deptSortBy === 'followers') {
+      filtered.sort((a, b) => (deptTeamCounts.get(b.id) || 0) - (deptTeamCounts.get(a.id) || 0))
+    } else {
+      filtered.sort((a, b) => a.name.localeCompare(b.name))
+    }
+
+    return filtered.slice(0, displayedDeptCount)
+  })()
+
+  // -- Skeleton --------------------------------------------------------------
 
   if (loading) {
     return (
@@ -394,13 +418,13 @@ export default function DiscoverPage() {
     )
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // -- Render ----------------------------------------------------------------
 
   return (
     <AuthLayout>
       <div className="bg-background min-h-screen">
         <div className="mx-auto max-w-5xl space-y-8 px-4 py-12">
-          {/* ── Error banner ──────────────────────────────────────────────── */}
+          {/* -- Error banner ------------------------------------------------ */}
           {error && (
             <div className="border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-3 rounded-lg border px-4 py-3 text-sm">
               <X className="h-4 w-4 flex-shrink-0" />
@@ -414,22 +438,70 @@ export default function DiscoverPage() {
             </div>
           )}
 
-          {/* ── Search Bar ────────────────────────────────────────────────── */}
-          <div className="relative">
-            <Search className="text-muted-foreground absolute top-3 left-3 h-4 w-4" />
-            <Input
-              placeholder="Search teams..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+          {/* --------------------------------------------------------------- */}
+          {/* JOINED DEPARTMENTS (MY DEPARTMENTS)                            */}
+          {/* --------------------------------------------------------------- */}
+          {myTeams.length > 0 && (
+            <div className="space-y-6">
+              <h2 className="text-foreground text-2xl font-semibold">Joined Departments</h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {Array.from(new Set(myTeams.map((t) => t.departmentId)))
+                  .map((deptId) => {
+                    const dept = departments.find((d) => d.id === deptId)
+                    if (!dept) return null
+                    const deptTeams = teams.filter((t) => t.departmentId === deptId)
+                    return <DepartmentCard key={dept.id} dept={dept} teamCount={deptTeams.length} />
+                  })
+                  .filter(Boolean)}
+              </div>
+            </div>
+          )}
+
+          {/* --------------------------------------------------------------- */}
+          {/* SEARCH & FILTER DEPARTMENTS                                    */}
+          {/* --------------------------------------------------------------- */}
+          <div className="space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="text-muted-foreground absolute top-3 left-3 h-4 w-4" />
+              <Input
+                placeholder="Search departments by name..."
+                value={deptSearchQuery}
+                onChange={(e) => setDeptSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={deptSortBy === 'name' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setDeptSortBy('name')}
+              >
+                Alphabetical
+              </Button>
+              <Button
+                variant={deptSortBy === 'teams' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setDeptSortBy('teams')}
+              >
+                Most Teams
+              </Button>
+              <Button
+                variant={deptSortBy === 'followers' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setDeptSortBy('followers')}
+              >
+                Most Followed
+              </Button>
+            </div>
           </div>
 
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* DEPARTMENTS AND TEAMS                                          */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* --------------------------------------------------------------- */}
+          {/* DEPARTMENTS GRID                                               */}
+          {/* --------------------------------------------------------------- */}
           <div className="space-y-8">
-            {/* ── Departments Grid ──────────────────────────────────────── */}
             {departments.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center">
                 <div className="bg-muted mb-4 flex h-16 w-16 items-center justify-center rounded-full">
@@ -440,20 +512,22 @@ export default function DiscoverPage() {
                   Check back once your admin sets up the organization structure.
                 </p>
               </div>
+            ) : sortedDepartments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <p className="text-muted-foreground">No departments match your search.</p>
+              </div>
             ) : (
               <div className="space-y-6">
-                <h2 className="text-foreground text-xl font-semibold">
-                  Departments & Joined Departments
-                </h2>
+                <h2 className="text-foreground text-xl font-semibold">Departments</h2>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {departments.slice(0, displayedDeptCount).map((dept) => {
+                  {sortedDepartments.slice(0, displayedDeptCount).map((dept) => {
                     const deptTeams = teams.filter((t) => t.departmentId === dept.id)
                     return <DepartmentCard key={dept.id} dept={dept} teamCount={deptTeams.length} />
                   })}
                 </div>
 
                 {/* Load More Button */}
-                {displayedDeptCount < departments.length && (
+                {displayedDeptCount < sortedDepartments.length && (
                   <div className="flex justify-center pt-4">
                     <Button
                       variant="outline"
@@ -467,120 +541,30 @@ export default function DiscoverPage() {
             )}
           </div>
 
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* DISCOVER TAB                                                   */}
-          {/* ════════════════════════════════════════════════════════��══════ */}
-          {tab === 'all' && (
-            <div className="space-y-8">
-              {/* ── Search Results ──────────────────────────────────────── */}
-              {searchQuery && (
-                <>
-                  {searching && (
-                    <div className="text-muted-foreground flex items-center justify-center py-10">
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                    </div>
-                  )}
-                  {!searching && searchResults !== null && (
-                    <>
-                      {displayedInSearch.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-10 text-center">
-                          <p className="text-muted-foreground">
-                            No teams found matching "{searchQuery}"
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="space-y-6">
-                          <p className="text-muted-foreground text-sm">
-                            {displayedInSearch.length} team
-                            {displayedInSearch.length !== 1 ? 's' : ''} found
-                          </p>
-                          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                            {displayedInSearch.map((team) => (
-                              <TeamCard
-                                key={team.id}
-                                team={team}
-                                onJoin={handleJoin}
-                                onLeave={handleLeave}
-                                onViewMembers={handleViewMembers}
-                                joining={joiningTeam === team.id}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </>
-              )}
-
-              {/* ── All departments grouped ─────────────────────────────── */}
-              {!searchQuery && (
-                <>
-                  {departments.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center py-20 text-center">
-                      <div className="bg-muted mb-4 flex h-16 w-16 items-center justify-center rounded-full">
-                        <Building2 className="text-muted-foreground h-8 w-8" />
-                      </div>
-                      <p className="text-foreground font-semibold">No departments yet</p>
-                      <p className="text-muted-foreground mt-1 text-sm">
-                        Check back once your admin sets up the organization structure.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-6">
-                      {departments.slice(0, displayedDeptCount).map((dept) => {
-                        const deptTeams = teams.filter((t) => t.departmentId === dept.id)
-                        return (
-                          <DepartmentCard key={dept.id} dept={dept} teamCount={deptTeams.length} />
-                        )
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
+          {/* --------------------------------------------------------------- */}
+          {/* MY TEAMS SECTION                                               */}
+          {/* --------------------------------------------------------------- */}
+          {myTeams.length > 0 && (
+            <div className="space-y-6">
+              <h2 className="text-foreground text-2xl font-semibold">My Teams</h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {myTeams.map((team) => (
+                  <TeamCard
+                    key={team.id}
+                    team={team}
+                    onJoin={handleJoin}
+                    onLeave={handleLeave}
+                    onViewMembers={handleViewMembers}
+                    joining={joiningTeam === team.id}
+                  />
+                ))}
+              </div>
             </div>
           )}
 
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          {/* MY TEAMS TAB                                                   */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
-          {tab === 'my-teams' && (
-            <>
-              {myTeams.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 text-center">
-                  <div className="bg-muted mb-4 flex h-16 w-16 items-center justify-center rounded-full">
-                    <Users className="text-muted-foreground h-8 w-8" />
-                  </div>
-                  <h3 className="text-foreground font-semibold">
-                    You haven&apos;t joined any teams yet
-                  </h3>
-                  <p className="text-muted-foreground mt-1 text-sm">
-                    Browse public teams and join ones that interest you.
-                  </p>
-                  <Button className="mt-5" onClick={() => setTab('all')}>
-                    Explore Teams
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {myTeams.map((team) => (
-                    <TeamCard
-                      key={team.id}
-                      team={team}
-                      onJoin={handleJoin}
-                      onLeave={handleLeave}
-                      onViewMembers={handleViewMembers}
-                      joining={joiningTeam === team.id}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-
-          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* --------------------------------------------------------------- */}
           {/* PEOPLE YOU MAY KNOW SECTION                                     */}
-          {/* ═══════════════════════════════════════════════════════════════ */}
+          {/* --------------------------------------------------------------- */}
           {users.length > 0 && (
             <div className="border-border mt-12 space-y-4 border-t pt-8">
               <h2 className="text-foreground text-lg font-semibold">People You May Know</h2>
@@ -680,7 +664,7 @@ export default function DiscoverPage() {
           )}
         </div>
 
-        {/* ── Members Dialog ──────────────────────────────────────────────────── */}
+        {/* -- Members Dialog ---------------------------------------------------- */}
         <Dialog
           open={membersDialog.open}
           onOpenChange={(open) => !open && setMembersDialog((prev) => ({ ...prev, open: false }))}
@@ -714,8 +698,8 @@ export default function DiscoverPage() {
           </DialogContent>
         </Dialog>
 
-        {/* ── Toast notification ──────────────────────────────────────────────── */}
-        {toast ? (
+        {/* -- Toast notification ------------------------------------------------ */}
+        {toast && (
           <div
             className={`animate-slide-up fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-lg border px-4 py-3 text-sm font-medium shadow-lg ${
               toast.type === 'success'
@@ -730,7 +714,7 @@ export default function DiscoverPage() {
             )}
             {toast.msg}
           </div>
-        ) : null}
+        )}
       </div>
     </AuthLayout>
   )

@@ -72,7 +72,7 @@ import {
 } from '@/lib/api'
 import { tokenStorage } from '@/lib/api'
 
-// ─── Small helpers ─────────────────────────────────────────────────────────────
+// --- Small helpers -------------------------------------------------------------
 
 function UserAvatar({
   user,
@@ -95,7 +95,7 @@ function UserAvatar({
   )
 }
 
-// ─── Department Form ──────────────────────────────────────────────────────────
+// --- Department Form ----------------------------------------------------------
 
 interface DeptFormProps {
   initial?: DepartmentResponse | null
@@ -165,7 +165,7 @@ function DepartmentForm({ initial, users, onSave, onCancel, loading }: DeptFormP
   )
 }
 
-// ─── Team Form ────────────────────────────────────────────────────────────────
+// --- Team Form ----------------------------------------------------------------
 
 interface TeamFormProps {
   initial?: TeamResponse | null
@@ -293,7 +293,7 @@ function TeamForm({
   )
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// --- Main page ----------------------------------------------------------------
 
 export default function AdminOrganizationsPage() {
   const router = useRouter()
@@ -328,7 +328,7 @@ export default function AdminOrganizationsPage() {
     name: string
   } | null>(null)
 
-  // ── Data loading ─────────────────────────────────────────────────────────
+  // -- Data loading ---------------------------------------------------------
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -353,7 +353,7 @@ export default function AdminOrganizationsPage() {
     loadData()
   }, [loadData])
 
-  // ── Department actions ───────────────────────────────────────────────────
+  // -- Department actions ---------------------------------------------------
 
   async function handleSaveDept(data: DepartmentRequest) {
     setSaving(true)
@@ -395,7 +395,7 @@ export default function AdminOrganizationsPage() {
     }
   }
 
-  // ── Team actions ─────────────────────────────────────────────────────────
+  // -- Team actions ---------------------------------------------------------
 
   async function handleSaveTeam(data: TeamRequest) {
     setSaving(true)
@@ -425,7 +425,7 @@ export default function AdminOrganizationsPage() {
     setDeleteDialog(null)
   }
 
-  // ── Derived ──────────────────────────────────────────────────────────────
+  // -- Derived --------------------------------------------------------------
 
   function teamsForDept(deptId: string) {
     return teams.filter((t) => t.departmentId === deptId)
@@ -439,7 +439,7 @@ export default function AdminOrganizationsPage() {
     })
   }
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // -- Render ---------------------------------------------------------------
 
   if (loading) {
     return (
@@ -530,7 +530,7 @@ export default function AdminOrganizationsPage() {
         ))}
       </div>
 
-      {/* ── Departments Tab ──────────────────────────────────────────────────── */}
+      {/* -- Departments Tab ---------------------------------------------------- */}
       {tab === 'departments' && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-4">
@@ -769,7 +769,7 @@ export default function AdminOrganizationsPage() {
         </Card>
       )}
 
-      {/* ── Teams Tab ────────────────────────────────────────────────────────── */}
+      {/* -- Teams Tab ---------------------------------------------------------- */}
       {tab === 'teams' && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-4">
@@ -897,7 +897,7 @@ export default function AdminOrganizationsPage() {
         </Card>
       )}
 
-      {/* ── Department Dialog ───────────────────────────────────────────────── */}
+      {/* -- Department Dialog ------------------------------------------------- */}
       <Dialog
         open={deptDialog.open}
         onOpenChange={(open) => !open && setDeptDialog({ open: false, editing: null })}
@@ -921,7 +921,7 @@ export default function AdminOrganizationsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Team Dialog ─────────────────────────────────────────────────────── */}
+      {/* -- Team Dialog ------------------------------------------------------- */}
       <Dialog
         open={teamDialog.open}
         onOpenChange={(open) => !open && setTeamDialog({ open: false, editing: null })}
@@ -945,7 +945,7 @@ export default function AdminOrganizationsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Delete Confirm ──────────────────────────────────────────────────── */}
+      {/* -- Delete Confirm ---------------------------------------------------- */}
       <AlertDialog open={!!deleteDialog} onOpenChange={(open) => !open && setDeleteDialog(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

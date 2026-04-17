@@ -22,9 +22,9 @@ import { authApi, TwoFactorSetupResponse } from '@/lib/api'
 import { getFullName } from '@/lib/types'
 import { useRouter, useSearchParams } from 'next/navigation'
 
-// ─── 2FA sub-panel ────────────────────────────────────────────────────────────
+// --- 2FA sub-panel ------------------------------------------------------------
 
-// ─── ChangePasswordCard ───────────────────────────────────────────────────────
+// --- ChangePasswordCard -------------------------------------------------------
 
 function ChangePasswordCard({
   userEmail,
@@ -452,7 +452,7 @@ function TwoFactorPanel() {
   )
 }
 
-// ─── Main Settings page component with Suspense ───────────────────────────────
+// --- Main Settings page component with Suspense -------------------------------
 
 function SettingsContent() {
   const { user } = useAuth()
@@ -683,7 +683,7 @@ function SettingsContent() {
   )
 }
 
-// ─── Root Export Wrapped in Suspense ──────────────────────────────────────────
+// --- Root Export Wrapped in Suspense ------------------------------------------
 export default function SettingsPage() {
   return (
     <Suspense

@@ -1,6 +1,6 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
-// ─── Types matching backend DTOs ─────────────────────────────────────────────
+// --- Types matching backend DTOs ---------------------------------------------
 
 export interface AuthResponse {
   accessToken: string
@@ -82,14 +82,14 @@ export interface UpdateUserRequest {
   avatar?: string
 }
 
-// ── Email Verification DTOs ───────────────────────────────────────────────────
+// -- Email Verification DTOs ---------------------------------------------------
 
 export interface VerifyEmailRequest {
   email: string
   otp: string
 }
 
-// ── Password Reset DTOs ───────────────────────────────────────────────────────
+// -- Password Reset DTOs -------------------------------------------------------
 
 export interface ForgotPasswordRequest {
   email: string
@@ -106,7 +106,7 @@ export interface ResetPasswordRequest {
   newPassword: string
 }
 
-// ── 2FA DTOs ─────────────────────────────────────────────────────────────────
+// -- 2FA DTOs -----------------------------------------------------------------
 
 export interface TwoFactorVerifyRequest {
   email: string
@@ -123,7 +123,7 @@ export interface TwoFactorStatusResponse {
   twoFactorEnabled: boolean
 }
 
-// ─── Token storage helpers ────────────────────────────────────────────────────
+// --- Token storage helpers ----------------------------------------------------
 
 export const tokenStorage = {
   getAccessToken: () => localStorage.getItem('accessToken'),
@@ -138,7 +138,7 @@ export const tokenStorage = {
   },
 }
 
-// ─── Core fetch wrapper ───────────────────────────────────────────────────────
+// --- Core fetch wrapper -------------------------------------------------------
 
 async function apiFetch<T>(
   path: string,
@@ -202,7 +202,7 @@ async function apiFetch<T>(
   return body.data
 }
 
-// ─── Auth endpoints ───────────────────────────────────────────────────────────
+// --- Auth endpoints -----------------------------------------------------------
 
 export const authApi = {
   login: (data: LoginRequest) =>
@@ -228,7 +228,7 @@ export const authApi = {
       false
     ),
 
-  // ── Password Reset ──────────────────────────────────────────────────────────
+  // -- Password Reset ----------------------------------------------------------
 
   forgotPassword: (data: ForgotPasswordRequest) =>
     apiFetch<null>('/auth/forgot-password', { method: 'POST', body: JSON.stringify(data) }, false),
@@ -239,7 +239,7 @@ export const authApi = {
   resetPassword: (data: ResetPasswordRequest) =>
     apiFetch<null>('/auth/reset-password', { method: 'POST', body: JSON.stringify(data) }, false),
 
-  // ── 2FA ─────────────────────────────────────────────────────────────────────
+  // -- 2FA ---------------------------------------------------------------------
 
   verify2FALogin: (data: TwoFactorVerifyRequest) =>
     apiFetch<AuthResponse>(
@@ -259,7 +259,7 @@ export const authApi = {
   get2FAStatus: () => apiFetch<TwoFactorStatusResponse>('/auth/2fa/status'),
 }
 
-// ─── User endpoints ───────────────────────────────────────────────────────────
+// --- User endpoints -----------------------------------------------------------
 
 export const userApi = {
   getAll: () => apiFetch<UserResponse[]>('/users'),
@@ -295,7 +295,7 @@ export const userApi = {
     apiFetch<void>(`/users/${userId}/roles/${roleId}`, { method: 'DELETE' }),
 }
 
-// ─── Role & Permission types ───────────────────────────────────────────────────
+// --- Role & Permission types ---------------------------------------------------
 
 export interface PermissionResponse {
   id: string
@@ -324,7 +324,7 @@ export interface PermissionRequest {
   description?: string
 }
 
-// ─── Role endpoints ────────────────────────────────────────────────────────────
+// --- Role endpoints ------------------------------------------------------------
 
 export const roleApi = {
   getAll: () => apiFetch<RoleResponse[]>('/roles'),
@@ -340,7 +340,7 @@ export const roleApi = {
     apiFetch<void>(`/roles/${roleId}/permissions/${permissionId}`, { method: 'DELETE' }),
 }
 
-// ─── Media types & endpoints ───────────────────────────────────────────────────
+// --- Media types & endpoints ---------------------------------------------------
 
 export interface MediaResponse {
   id: string
@@ -394,7 +394,7 @@ export const mediaApi = {
   getById: (id: string) => apiFetch<MediaResponse>(`/media/${id}`),
 }
 
-// ─── Permission endpoints ──────────────────────────────────────────────────────
+// --- Permission endpoints ------------------------------------------------------
 
 export const permissionApi = {
   getAll: () => apiFetch<PermissionResponse[]>('/permissions'),
@@ -409,7 +409,7 @@ export const permissionApi = {
   delete: (id: string) => apiFetch<void>(`/permissions/${id}`, { method: 'DELETE' }),
 }
 
-// ─── Audit Log types & endpoints ──────────────────────────────────────────────
+// --- Audit Log types & endpoints ----------------------------------------------
 
 export interface AuditLogResponse {
   id: string
@@ -459,10 +459,10 @@ export const auditApi = {
   getStats: () => apiFetch<AuditLogStats>('/audit-logs/stats'),
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // ORGANIZATION SERVICE  –  Types & API
 // Append this block to src/lib/api.ts
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 export type VisibilityType = 'PUBLIC' | 'PRIVATE'
 
@@ -475,7 +475,7 @@ export interface UserSummary {
   jobTitle: string | null
 }
 
-// ── Department ────────────────────────────────────────────────────────────────
+// -- Department ----------------------------------------------------------------
 
 export interface DepartmentResponse {
   id: string
@@ -495,7 +495,7 @@ export interface DepartmentRequest {
   managerId?: string
 }
 
-// ── Team ──────────────────────────────────────────────────────────────────────
+// -- Team ----------------------------------------------------------------------
 
 export interface TeamResponse {
   id: string
@@ -530,7 +530,7 @@ export interface UserTeamResponse {
   joinedAt: string
 }
 
-// ── Department API ────────────────────────────────────────────────────────────
+// -- Department API ------------------------------------------------------------
 
 export const departmentApi = {
   getAll: () => apiFetch<DepartmentResponse[]>('/organizations/departments'),
@@ -575,7 +575,7 @@ export const departmentApi = {
     }),
 }
 
-// ── Team API ──────────────────────────────────────────────────────────────────
+// -- Team API ------------------------------------------------------------------
 
 export const teamApi = {
   getAll: () => apiFetch<TeamResponse[]>('/organizations/teams'),
