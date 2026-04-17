@@ -4,6 +4,9 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import tn.moonside.organizationservice.dtos.requests.AssignManagerRequest;
 import tn.moonside.organizationservice.dtos.requests.DepartmentRequest;
@@ -12,6 +15,7 @@ import tn.moonside.organizationservice.dtos.responses.DepartmentResponse;
 import tn.moonside.organizationservice.services.DepartmentService;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/organizations/departments")
@@ -50,9 +54,15 @@ public class DepartmentController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<DepartmentResponse>> updateDepartment(
             @PathVariable String id,
-            @Valid @RequestBody DepartmentRequest request) {
+            @Valid @RequestBody DepartmentRequest request,
+            @AuthenticationPrincipal String userId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ApiResponse.success(
-                departmentService.updateDepartment(id, request), "Department updated successfully"));
+                departmentService.updateDepartment(id, request, userId, roles),
+                "Department updated successfully"));
     }
 
     @DeleteMapping("/{id}")

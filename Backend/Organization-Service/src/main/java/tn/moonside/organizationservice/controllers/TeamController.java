@@ -5,6 +5,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import tn.moonside.organizationservice.dtos.requests.AssignLeadRequest;
 import tn.moonside.organizationservice.dtos.requests.TeamRequest;
@@ -14,6 +16,7 @@ import tn.moonside.organizationservice.dtos.responses.UserTeamResponse;
 import tn.moonside.organizationservice.services.TeamService;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/organizations/teams")
@@ -105,9 +108,14 @@ public class TeamController {
     @PutMapping("/{teamId}")
     public ResponseEntity<ApiResponse<TeamResponse>> updateTeam(
             @PathVariable String teamId,
-            @Valid @RequestBody TeamRequest request) {
+            @Valid @RequestBody TeamRequest request,
+            @AuthenticationPrincipal String userId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ApiResponse.success(
-                teamService.updateTeam(teamId, request), "Team updated successfully"));
+                teamService.updateTeam(teamId, request, userId, roles), "Team updated successfully"));
     }
 
     @DeleteMapping("/{teamId}")

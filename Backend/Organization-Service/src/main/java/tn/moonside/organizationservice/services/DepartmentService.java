@@ -12,6 +12,8 @@ import tn.moonside.organizationservice.entities.Department;
 import tn.moonside.organizationservice.repositories.DepartmentRepository;
 import tn.moonside.organizationservice.repositories.TeamRepository;
 
+import org.springframework.security.access.AccessDeniedException;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -58,11 +60,30 @@ public class DepartmentService {
         return toResponse(dept);
     }
 
-    public DepartmentResponse updateDepartment(String id, DepartmentRequest request) {
+    /**
+     * Update a department.
+     * Access rules:
+     *  - ADMIN              → always allowed (can also change managerId)
+     *  - DEPARTMENT_MANAGER → only if they manage this specific department
+     *                         (cannot change managerId — admin-only action)
+     */
+    public DepartmentResponse updateDepartment(String id, DepartmentRequest request,
+                                               String requestingUserId, List<String> roles) {
         Department dept = findById(id);
+
+        boolean isAdmin = roles.contains("ADMIN");
+        boolean isDeptManager = roles.contains("DEPARTMENT_MANAGER")
+                && requestingUserId.equals(dept.getManagerId());
+
+        if (!isAdmin && !isDeptManager) {
+            throw new AccessDeniedException(
+                    "You are not authorized to modify this department.");
+        }
+
         dept.setName(request.getName());
         dept.setDescription(request.getDescription());
-        if (request.getManagerId() != null) {
+        // Only admins may reassign the manager
+        if (isAdmin && request.getManagerId() != null) {
             dept.setManagerId(request.getManagerId());
         }
         dept.setUpdatedAt(LocalDateTime.now());

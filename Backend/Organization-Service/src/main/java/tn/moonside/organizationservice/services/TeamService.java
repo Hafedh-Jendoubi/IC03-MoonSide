@@ -17,6 +17,8 @@ import tn.moonside.organizationservice.repositories.DepartmentRepository;
 import tn.moonside.organizationservice.repositories.TeamRepository;
 import tn.moonside.organizationservice.repositories.UserTeamRepository;
 
+import org.springframework.security.access.AccessDeniedException;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -89,11 +91,36 @@ public class TeamService {
                 .collect(Collectors.toList());
     }
 
-    public TeamResponse updateTeam(String teamId, TeamRequest request) {
+    /**
+     * Update a team.
+     * Access rules:
+     *  - ADMIN          → always allowed
+     *  - TEAM_LEADER    → only if they are the lead of this specific team
+     *  - DEPARTMENT_MANAGER → only if they manage the department this team belongs to
+     */
+    public TeamResponse updateTeam(String teamId, TeamRequest request,
+                                   String requestingUserId, List<String> roles) {
         Team team = findById(teamId);
 
-        // Validate new department if changed
+        boolean isAdmin = roles.contains("ADMIN");
+        boolean isTeamLeader = roles.contains("TEAM_LEADER")
+                && requestingUserId.equals(team.getLeadId());
+        boolean isDeptManager = roles.contains("DEPARTMENT_MANAGER")
+                && departmentRepository.findById(team.getDepartmentId())
+                        .map(d -> requestingUserId.equals(d.getManagerId()))
+                        .orElse(false);
+
+        if (!isAdmin && !isTeamLeader && !isDeptManager) {
+            throw new AccessDeniedException(
+                    "You are not authorized to modify this team.");
+        }
+
+        // Validate new department if changed — only admins and dept managers may move a team
         if (!team.getDepartmentId().equals(request.getDepartmentId())) {
+            if (!isAdmin && !isDeptManager) {
+                throw new AccessDeniedException(
+                        "Only admins or department managers can move a team to a different department.");
+            }
             departmentRepository.findById(request.getDepartmentId())
                     .orElseThrow(() -> new IllegalArgumentException(
                             "Department not found: " + request.getDepartmentId()));
@@ -107,7 +134,7 @@ public class TeamService {
         if (request.getTeamVisibility() != null) team.setTeamVisibility(request.getTeamVisibility());
         team.setUpdatedAt(LocalDateTime.now());
 
-        return toResponse(teamRepository.save(team), null);
+        return toResponse(teamRepository.save(team), requestingUserId);
     }
 
     public void deleteTeam(String teamId) {

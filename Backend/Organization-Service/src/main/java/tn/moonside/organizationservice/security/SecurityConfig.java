@@ -46,14 +46,20 @@ public class SecurityConfig {
 
                 // ── Admin-only mutations ──────────────────────────────────────
                 .requestMatchers(HttpMethod.POST,   "/organizations/departments/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PUT,    "/organizations/departments/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/organizations/departments/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PATCH,  "/organizations/departments/**").hasRole("ADMIN")
 
+                // Department Managers can update their own department
+                .requestMatchers(HttpMethod.PUT,    "/organizations/departments/**")
+                    .hasAnyRole("ADMIN", "DEPARTMENT_MANAGER")
+
                 .requestMatchers(HttpMethod.POST,   "/organizations/teams").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PUT,    "/organizations/teams/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.DELETE, "/organizations/teams/**").hasRole("ADMIN")
                 .requestMatchers(HttpMethod.PATCH,  "/organizations/teams/**").hasRole("ADMIN")
+
+                // Team Leaders can update their own team; Dept Managers can update teams in their dept
+                .requestMatchers(HttpMethod.PUT,    "/organizations/teams/**")
+                    .hasAnyRole("ADMIN", "DEPARTMENT_MANAGER", "TEAM_LEADER")
 
                 // ── Everything else requires auth ─────────────────────────────
                 .anyRequest().authenticated()
