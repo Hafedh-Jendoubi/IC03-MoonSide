@@ -57,10 +57,17 @@ public class JwtService {
                 .map(a -> a.startsWith("ROLE_") ? a.substring(5) : a)
                 .collect(Collectors.toList());
 
+        // Embed the real user ID so downstream services can use it directly
+        // instead of the email (which is what getUsername() returns).
+        String userId = (userDetails instanceof UserDetailsServiceImpl.CustomUserDetails)
+                ? ((UserDetailsServiceImpl.CustomUserDetails) userDetails).getUserId()
+                : userDetails.getUsername();
+
         return Jwts.builder()
                 .claims(extraClaims)
-                .subject(userDetails.getUsername())
+                .subject(userDetails.getUsername())   // keep email as subject — nothing else breaks
                 .claim("roles", roles)
+                .claim("userId", userId)              // actual MongoDB ID for ownership checks
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + expiration))
                 .signWith(getSignInKey())

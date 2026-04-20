@@ -26,7 +26,8 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedRoles() {
-        List<String> defaultRoles = List.of("ADMIN", "MANAGER", "EMPLOYEE", "GUEST");
+        List<String> defaultRoles = List.of("ADMIN", "MANAGER", "EMPLOYEE", "GUEST",
+                "DEPARTMENT_MANAGER", "TEAM_LEADER");
 
         defaultRoles.forEach(roleName -> {
             if (!roleRepository.existsByName(roleName)) {

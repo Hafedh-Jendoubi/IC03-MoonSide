@@ -23,6 +23,14 @@ public class JwtService {
         return extractClaim(token, Claims::getSubject);
     }
 
+    /**
+     * Extracts the real user ID embedded by the User-Service as the "userId" claim.
+     * Falls back to null if the claim is absent (e.g. old tokens issued before the fix).
+     */
+    public String extractUserId(String token) {
+        return extractClaim(token, claims -> (String) claims.get("userId"));
+    }
+
     @SuppressWarnings("unchecked")
     public List<String> extractRoles(String token) {
         return extractClaim(token, claims -> (List<String>) claims.get("roles"));
