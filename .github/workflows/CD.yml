@@ -49,6 +49,10 @@ jobs:
       mongodb:
         image: mongo:7
         ports: [27017:27017]
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: admin123
+          MONGO_INITDB_DATABASE: admin
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
           --health-interval 10s --health-timeout 5s --health-retries 5
@@ -67,8 +71,10 @@ jobs:
       - if: matrix.service.java
         working-directory: ${{ matrix.service.path }}
         env:
-          SPRING_DATA_MONGODB_HOST: localhost
-          SPRING_DATA_MONGODB_PORT: 27017
+          MONGO_ROOT_USERNAME: admin
+          MONGO_ROOT_PASSWORD: admin123
+          MONGODB_HOST: localhost
+          MONGO_PORT: 27017
           SPRING_PROFILES_ACTIVE: test
         run: |
           chmod +x mvnw
