@@ -18,14 +18,30 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+/**
+ * Security configuration.
+ *
+ * Strategy
+ * ─────────
+ * • Public /auth/* endpoints are permitted without a token.
+ * • Every other endpoint requires a valid JWT (authenticated()).
+ * • Fine-grained per-endpoint permission checks are NOT done here.
+ *   They are enforced by {@link PermissionAuthorizationFilter}, which runs
+ *   after JWT authentication and inspects the {@link RequiresPermission}
+ *   annotation on each controller method.
+ *
+ * This keeps SecurityConfig lean and makes permissions fully data-driven:
+ * an admin can reassign permissions to roles via the API without touching code.
+ */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final UserDetailsServiceImpl userDetailsService;
+    private final JwtAuthenticationFilter        jwtAuthenticationFilter;
+    private final PermissionAuthorizationFilter  permissionAuthorizationFilter;
+    private final UserDetailsServiceImpl         userDetailsService;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -45,40 +61,22 @@ public class SecurityConfig {
                     "/auth/reset-password",
                     "/auth/2fa/verify-login"
                 ).permitAll()
+
                 // ── Actuator ────────────────────────────────────────────────
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                // ── Admin-only routes ────────────────────────────────────────
-                // Role management (create/update/delete) — ADMIN only
-                .requestMatchers(HttpMethod.POST,   "/roles/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PUT,    "/roles/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/roles/**").hasRole("ADMIN")
-                // Permission management — ADMIN only
-                .requestMatchers("/permissions/**").hasRole("ADMIN")
-                // Assign / revoke roles on users — ADMIN only
-                .requestMatchers(HttpMethod.POST,   "/users/*/roles").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/users/*/roles/**").hasRole("ADMIN")
-                // Activate / deactivate users — ADMIN only
-                .requestMatchers(HttpMethod.PATCH,  "/users/*/deactivate").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PATCH,  "/users/*/activate").hasRole("ADMIN")
-                // Invite users — ADMIN only
-                .requestMatchers(HttpMethod.POST,   "/users/invite").hasRole("ADMIN")
-                // Users can remove their own avatar
-                .requestMatchers(HttpMethod.DELETE, "/users/me/avatar").authenticated()
-                // Delete users — ADMIN only
-                .requestMatchers(HttpMethod.DELETE, "/users/**").hasRole("ADMIN")
-                // Audit logs — ADMIN only
-                .requestMatchers("/audit-logs/**").hasRole("ADMIN")
-                // ── Authenticated read-only routes ───────────────────────────
-                .requestMatchers(HttpMethod.GET, "/roles/**").authenticated()
-                .requestMatchers(HttpMethod.GET, "/users/**").authenticated()
-                // ── Everything else needs authentication ─────────────────────
+
+                // ── Everything else requires a valid JWT ────────────────────
+                // Fine-grained permission checks are handled by
+                // PermissionAuthorizationFilter via @RequiresPermission.
                 .anyRequest().authenticated()
             )
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
             )
             .authenticationProvider(authenticationProvider())
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            // JWT filter first, then permission check
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(permissionAuthorizationFilter, JwtAuthenticationFilter.class);
 
         return http.build();
     }
