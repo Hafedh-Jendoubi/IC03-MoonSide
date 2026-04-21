@@ -37,36 +37,24 @@ interface DepartmentCardProps {
   teamCount: number
 }
 
-// Helper function to generate a consistent color/image for each department
-function getDepartmentImage(deptId: string): string {
-  const images = [
-    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=600&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=600&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1426604966848-d7adac402bff?w=600&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=600&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=600&h=300&fit=crop',
-  ]
-  // Use department ID to deterministically pick an image (hash all characters)
-  const hash = Array.from(deptId).reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  const index = hash % images.length
-  return images[index]
-}
-
 function DepartmentCard({ dept, teamCount }: DepartmentCardProps) {
-  const imageUrl = getDepartmentImage(dept.id)
-
   return (
     <Link href={`/department/${dept.id}`}>
       <div className="group overflow-hidden rounded-lg transition-all duration-300 hover:shadow-lg">
         {/* Image Container */}
         <div className="relative h-48 w-full overflow-hidden bg-gradient-to-br from-slate-400 to-slate-600">
-          <img
-            src={imageUrl}
-            alt={dept.name}
-            className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-          />
-          <div className="absolute inset-0 bg-black/20 transition-opacity duration-300 group-hover:bg-black/10" />
+          {dept.bannerUrl ? (
+            <>
+              <img
+                src={dept.bannerUrl}
+                alt={dept.name}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-black/20 transition-opacity duration-300 group-hover:bg-black/10" />
+            </>
+          ) : (
+            <div className="h-full w-full bg-gradient-to-br from-slate-400 to-slate-600" />
+          )}
         </div>
 
         {/* Content Container */}
