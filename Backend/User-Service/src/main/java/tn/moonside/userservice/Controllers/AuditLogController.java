@@ -1,8 +1,5 @@
 package tn.moonside.userservice.controllers;
 
-import tn.moonside.userservice.dtos.responses.ApiResponse;
-import tn.moonside.userservice.dtos.responses.AuditLogResponse;
-import tn.moonside.userservice.services.AuditLogService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -10,6 +7,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import tn.moonside.userservice.dtos.responses.ApiResponse;
+import tn.moonside.userservice.dtos.responses.AuditLogResponse;
+import tn.moonside.userservice.security.AppPermission;
+import tn.moonside.userservice.security.RequiresPermission;
+import tn.moonside.userservice.services.AuditLogService;
 
 import java.util.Map;
 
@@ -21,9 +23,12 @@ public class AuditLogController {
     private final AuditLogService auditLogService;
 
     /**
+     * Query audit logs with optional filters.
      * GET /audit-logs?page=0&size=20&userId=...&action=LOGIN_SUCCESS&success=true
+     * Requires AUDIT_LOG_READ permission.
      */
     @GetMapping
+    @RequiresPermission(AppPermission.AUDIT_LOG_READ)
     public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> getAll(
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size,
@@ -47,8 +52,13 @@ public class AuditLogController {
         return ResponseEntity.ok(ApiResponse.success(result, "Audit logs retrieved"));
     }
 
-    /** GET /audit-logs/stats — quick summary for dashboard widgets */
+    /**
+     * Quick summary counts for dashboard widgets.
+     * GET /audit-logs/stats
+     * Requires AUDIT_LOG_STATS permission.
+     */
     @GetMapping("/stats")
+    @RequiresPermission(AppPermission.AUDIT_LOG_STATS)
     public ResponseEntity<ApiResponse<Map<String, Long>>> stats() {
         Map<String, Long> stats = Map.of(
                 "total",   auditLogService.countTotal(),
