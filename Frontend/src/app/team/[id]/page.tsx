@@ -7,12 +7,12 @@ import { teamApi, departmentApi, TeamResponse } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
 import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
+import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
 import { Post, User, hasRole } from '@/lib/types'
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-/** Returns true when the logged-in user may edit this team. */
 function canEditTeam(
   user: User | null,
   team: TeamResponse | null,
@@ -40,23 +40,36 @@ function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>(
     team.teamVisibility as 'PUBLIC' | 'PRIVATE'
   )
+  const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null | undefined>(undefined)
+  const [pendingBannerUrl, setPendingBannerUrl] = useState<string | null | undefined>(undefined)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const displayAvatar = pendingAvatarUrl !== undefined ? pendingAvatarUrl : team.avatarUrl
+  const displayBanner = pendingBannerUrl !== undefined ? pendingBannerUrl : team.bannerUrl
 
   const handleSave = async () => {
     if (!name.trim()) return
     try {
       setSaving(true)
       setError(null)
-      const updated = await teamApi.update(team.id, {
+
+      let result = await teamApi.update(team.id, {
         name: name.trim(),
         description: description.trim(),
         departmentId: team.departmentId,
         leadId: team.leadId ?? undefined,
-        image: team.image ?? undefined,
         teamVisibility: visibility,
       })
-      onSaved(updated)
+
+      if (pendingAvatarUrl !== undefined) {
+        result = await teamApi.updateAvatar(team.id, pendingAvatarUrl)
+      }
+      if (pendingBannerUrl !== undefined) {
+        result = await teamApi.updateBanner(team.id, pendingBannerUrl)
+      }
+
+      onSaved(result)
     } catch (e: any) {
       setError(e.message ?? 'Failed to save changes')
     } finally {
@@ -66,7 +79,7 @@ function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-background w-full max-w-md rounded-xl shadow-xl">
+      <div className="bg-background w-full max-w-lg rounded-xl shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b px-6 py-4">
           <h2 className="text-foreground text-lg font-semibold">Edit Team</h2>
@@ -79,22 +92,47 @@ function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
         </div>
 
         {/* Body */}
-        <div className="space-y-4 px-6 py-5">
+        <div className="space-y-5 px-6 py-5">
           {error && (
             <div className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm">
               {error}
             </div>
           )}
 
+          {/* Banner */}
           <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">Team Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={100}
-              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            <label className="text-foreground mb-2 block text-sm font-medium">Banner Image</label>
+            <OrgBannerUpload
+              currentUrl={displayBanner}
+              onUploaded={setPendingBannerUrl}
+              context="TEAM_BANNER"
+              disabled={saving}
             />
+          </div>
+
+          {/* Avatar + Name row */}
+          <div className="flex items-end gap-4">
+            <div className="flex-shrink-0">
+              <label className="text-foreground mb-2 block text-sm font-medium">Avatar</label>
+              <OrgAvatarUpload
+                currentUrl={displayAvatar}
+                onUploaded={setPendingAvatarUrl}
+                context="TEAM_AVATAR"
+                label="Change team avatar"
+                disabled={saving}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-foreground mb-1 block text-sm font-medium">Team Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={100}
+                disabled={saving}
+                className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
+              />
+            </div>
           </div>
 
           <div>
@@ -104,7 +142,8 @@ function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
               onChange={(e) => setDescription(e.target.value)}
               maxLength={500}
               rows={4}
-              className="border-border bg-background text-foreground w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              disabled={saving}
+              className="border-border bg-background text-foreground w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
             />
           </div>
 
@@ -113,7 +152,8 @@ function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
             <select
               value={visibility}
               onChange={(e) => setVisibility(e.target.value as 'PUBLIC' | 'PRIVATE')}
-              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              disabled={saving}
+              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
             >
               <option value="PUBLIC">Public — anyone can join</option>
               <option value="PRIVATE">Private — invite only</option>
@@ -152,30 +192,25 @@ export default function TeamFeedPage() {
 
   const [team, setTeam] = useState<TeamResponse | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
-  const [usersMap, setUsersMap] = useState<Record<string, User>>({})
+  const [usersMap] = useState<Record<string, User>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  // IDs of departments this user manages (needed for dept-manager check)
   const [userManagedDeptIds, setUserManagedDeptIds] = useState<string[]>([])
   const [editOpen, setEditOpen] = useState(false)
 
   useEffect(() => {
     if (!teamId) return
-
     const loadData = async () => {
       try {
         setLoading(true)
         const teamData = await teamApi.getById(teamId)
         setTeam(teamData)
-
-        // Load posts from localStorage
-        const storedPosts = localStorage.getItem(`team_posts_${teamId}`)
-        if (storedPosts) {
+        const stored = localStorage.getItem(`team_posts_${teamId}`)
+        if (stored) {
           try {
-            setPosts(JSON.parse(storedPosts))
+            setPosts(JSON.parse(stored))
           } catch {
-            console.error('Failed to parse stored posts')
+            /* ignore */
           }
         }
       } catch (e: any) {
@@ -184,19 +219,17 @@ export default function TeamFeedPage() {
         setLoading(false)
       }
     }
-
     loadData()
   }, [teamId])
 
-  // Fetch departments managed by this user (for DEPARTMENT_MANAGER role check)
+  // Fetch departments this user manages (for DEPARTMENT_MANAGER role check)
   useEffect(() => {
     if (!user || !hasRole(user, 'DEPARTMENT_MANAGER')) return
     departmentApi
       .getAll()
-      .then((depts) => {
-        const managed = depts.filter((d) => d.managerId === user.id).map((d) => d.id)
-        setUserManagedDeptIds(managed)
-      })
+      .then((depts) =>
+        setUserManagedDeptIds(depts.filter((d) => d.managerId === user.id).map((d) => d.id))
+      )
       .catch(() => {})
   }, [user])
 
@@ -210,14 +243,14 @@ export default function TeamFeedPage() {
       likes: [],
       comments: [],
     }
-    const updatedPosts = [newPost, ...posts]
-    setPosts(updatedPosts)
-    localStorage.setItem(`team_posts_${teamId}`, JSON.stringify(updatedPosts))
+    const updated = [newPost, ...posts]
+    setPosts(updated)
+    localStorage.setItem(`team_posts_${teamId}`, JSON.stringify(updated))
   }
 
   const handleLike = (postId: string) => {
     if (!user) return
-    const updatedPosts = posts.map((post) => {
+    const updated = posts.map((post) => {
       if (post.id !== postId) return post
       const hasLiked = post.likes.includes(user.id)
       return {
@@ -225,8 +258,8 @@ export default function TeamFeedPage() {
         likes: hasLiked ? post.likes.filter((id) => id !== user.id) : [...post.likes, user.id],
       }
     })
-    setPosts(updatedPosts)
-    localStorage.setItem(`team_posts_${teamId}`, JSON.stringify(updatedPosts))
+    setPosts(updated)
+    localStorage.setItem(`team_posts_${teamId}`, JSON.stringify(updated))
   }
 
   if (loading) {
@@ -258,17 +291,29 @@ export default function TeamFeedPage() {
     <AuthLayout>
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Cover Banner */}
-        <div className="from-primary/20 to-secondary/20 mb-6 h-48 rounded-xl bg-gradient-to-r"></div>
+        <div className="from-primary/20 to-secondary/20 relative mb-0 h-48 overflow-hidden rounded-xl bg-gradient-to-r">
+          {team.bannerUrl ? (
+            <img src={team.bannerUrl} alt={team.name} className="h-full w-full object-cover" />
+          ) : (
+            <div className="from-primary/20 to-secondary/20 h-full w-full bg-gradient-to-r" />
+          )}
+        </div>
 
-        {/* Team Header Card */}
-        <div className="bg-background mb-8 flex items-end gap-6">
-          {/* Team Icon */}
-          <div className="bg-muted flex h-32 w-32 flex-shrink-0 items-center justify-center rounded-full border-4 border-white shadow-lg dark:border-slate-800">
-            <Users className="text-foreground h-16 w-16" />
+        {/* Team Header — avatar overlaps banner */}
+        <div className="bg-background mb-8 flex items-end gap-6 px-2">
+          {/* Team Avatar */}
+          <div className="relative -mt-14 flex-shrink-0">
+            <div className="bg-muted flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-white shadow-lg dark:border-slate-800">
+              {team.avatarUrl ? (
+                <img src={team.avatarUrl} alt={team.name} className="h-full w-full object-cover" />
+              ) : (
+                <Users className="text-foreground h-14 w-14" />
+              )}
+            </div>
           </div>
 
           {/* Team Info */}
-          <div className="flex flex-1 items-end justify-between pb-2">
+          <div className="flex flex-1 items-end justify-between pt-4 pb-2">
             <div>
               <h1 className="text-foreground text-3xl font-bold">{team.name}</h1>
               {team.description && (
@@ -279,10 +324,9 @@ export default function TeamFeedPage() {
                   Led by {team.lead.firstName} {team.lead.lastName}
                 </p>
               )}
-              <p className="text-muted-foreground mt-2 text-xs">{team.memberCount} members</p>
+              <p className="text-muted-foreground mt-1 text-xs">{team.memberCount} members</p>
             </div>
 
-            {/* Edit button — visible only to authorised users */}
             {showEditButton && (
               <button
                 onClick={() => setEditOpen(true)}
@@ -295,12 +339,10 @@ export default function TeamFeedPage() {
           </div>
         </div>
 
-        {/* Main Content - Full Width Feed */}
+        {/* Posts Feed */}
         <div className="space-y-6">
-          {/* Create Post */}
           <CreatePost user={user} onPostCreate={handlePostCreate} />
 
-          {/* Posts Feed */}
           <div className="space-y-6">
             {posts.length === 0 ? (
               <div className="py-12 text-center">
@@ -326,7 +368,6 @@ export default function TeamFeedPage() {
         </div>
       </div>
 
-      {/* Edit Modal */}
       {editOpen && (
         <EditTeamModal
           team={team}

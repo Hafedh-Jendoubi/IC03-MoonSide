@@ -7,29 +7,13 @@ import { departmentApi, teamApi, DepartmentResponse, TeamResponse } from '@/lib/
 import { AuthLayout } from '@/components/auth-layout'
 import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
-import { Card } from '@/components/ui/card'
+import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
 import { Post, User, hasRole } from '@/lib/types'
 import Link from 'next/link'
 
-// Helper function to get consistent image for department (matches discover page)
-function getDepartmentImage(deptId: string): string {
-  const images = [
-    'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=600&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=600&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1426604966848-d7adac402bff?w=600&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=600&h=300&fit=crop',
-    'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?w=600&h=300&fit=crop',
-  ]
-  const hash = Array.from(deptId).reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  const index = hash % images.length
-  return images[index]
-}
-
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-/** Returns true when the logged-in user may edit this department. */
 function canEditDepartment(user: User | null, department: DepartmentResponse | null): boolean {
   if (!user || !department) return false
   if (hasRole(user, 'ADMIN')) return true
@@ -37,7 +21,6 @@ function canEditDepartment(user: User | null, department: DepartmentResponse | n
   return false
 }
 
-/** Returns true when the logged-in user may edit a given team inside this department. */
 function canEditTeam(
   user: User | null,
   team: TeamResponse,
@@ -54,26 +37,38 @@ function canEditTeam(
 
 interface EditDepartmentModalProps {
   department: DepartmentResponse
+  canEdit: boolean
   onClose: () => void
   onSaved: (updated: DepartmentResponse) => void
 }
 
-function EditDepartmentModal({ department, onClose, onSaved }: EditDepartmentModalProps) {
+function EditDepartmentModal({ department, canEdit, onClose, onSaved }: EditDepartmentModalProps) {
   const [name, setName] = useState(department.name)
   const [description, setDescription] = useState(department.description ?? '')
+  const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null | undefined>(undefined)
+  const [pendingBannerUrl, setPendingBannerUrl] = useState<string | null | undefined>(undefined)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const displayAvatar = pendingAvatarUrl !== undefined ? pendingAvatarUrl : department.avatarUrl
+  const displayBanner = pendingBannerUrl !== undefined ? pendingBannerUrl : department.bannerUrl
 
   const handleSave = async () => {
     if (!name.trim()) return
     try {
       setSaving(true)
       setError(null)
-      const updated = await departmentApi.update(department.id, {
+      let result = await departmentApi.update(department.id, {
         name: name.trim(),
         description: description.trim(),
       })
-      onSaved(updated)
+      if (pendingAvatarUrl !== undefined) {
+        result = await departmentApi.updateAvatar(department.id, pendingAvatarUrl)
+      }
+      if (pendingBannerUrl !== undefined) {
+        result = await departmentApi.updateBanner(department.id, pendingBannerUrl)
+      }
+      onSaved(result)
     } catch (e: any) {
       setError(e.message ?? 'Failed to save changes')
     } finally {
@@ -83,8 +78,7 @@ function EditDepartmentModal({ department, onClose, onSaved }: EditDepartmentMod
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-background w-full max-w-md rounded-xl shadow-xl">
-        {/* Header */}
+      <div className="bg-background w-full max-w-lg rounded-xl shadow-xl">
         <div className="flex items-center justify-between border-b px-6 py-4">
           <h2 className="text-foreground text-lg font-semibold">Edit Department</h2>
           <button
@@ -95,8 +89,7 @@ function EditDepartmentModal({ department, onClose, onSaved }: EditDepartmentMod
           </button>
         </div>
 
-        {/* Body */}
-        <div className="space-y-4 px-6 py-5">
+        <div className="space-y-5 px-6 py-5">
           {error && (
             <div className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm">
               {error}
@@ -104,16 +97,39 @@ function EditDepartmentModal({ department, onClose, onSaved }: EditDepartmentMod
           )}
 
           <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">
-              Department Name
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={100}
-              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            <label className="text-foreground mb-2 block text-sm font-medium">Banner Image</label>
+            <OrgBannerUpload
+              currentUrl={displayBanner}
+              onUploaded={setPendingBannerUrl}
+              context="DEPT_BANNER"
+              disabled={saving || !canEdit}
             />
+          </div>
+
+          <div className="flex items-end gap-4">
+            <div className="flex-shrink-0">
+              <label className="text-foreground mb-2 block text-sm font-medium">Avatar</label>
+              <OrgAvatarUpload
+                currentUrl={displayAvatar}
+                onUploaded={setPendingAvatarUrl}
+                context="DEPT_AVATAR"
+                label="Change department avatar"
+                disabled={saving || !canEdit}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-foreground mb-1 block text-sm font-medium">
+                Department Name
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={100}
+                disabled={saving}
+                className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
+              />
+            </div>
           </div>
 
           <div>
@@ -122,13 +138,13 @@ function EditDepartmentModal({ department, onClose, onSaved }: EditDepartmentMod
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               maxLength={500}
-              rows={4}
-              className="border-border bg-background text-foreground w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              rows={3}
+              disabled={saving}
+              className="border-border bg-background text-foreground w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
             />
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex justify-end gap-3 border-t px-6 py-4">
           <button
             onClick={onClose}
@@ -164,23 +180,31 @@ function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>(
     team.teamVisibility as 'PUBLIC' | 'PRIVATE'
   )
+  const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null | undefined>(undefined)
+  const [pendingBannerUrl, setPendingBannerUrl] = useState<string | null | undefined>(undefined)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const displayAvatar = pendingAvatarUrl !== undefined ? pendingAvatarUrl : team.avatarUrl
+  const displayBanner = pendingBannerUrl !== undefined ? pendingBannerUrl : team.bannerUrl
 
   const handleSave = async () => {
     if (!name.trim()) return
     try {
       setSaving(true)
       setError(null)
-      const updated = await teamApi.update(team.id, {
+      let result = await teamApi.update(team.id, {
         name: name.trim(),
         description: description.trim(),
         departmentId: team.departmentId,
         leadId: team.leadId ?? undefined,
-        image: team.image ?? undefined,
         teamVisibility: visibility,
       })
-      onSaved(updated)
+      if (pendingAvatarUrl !== undefined)
+        result = await teamApi.updateAvatar(team.id, pendingAvatarUrl)
+      if (pendingBannerUrl !== undefined)
+        result = await teamApi.updateBanner(team.id, pendingBannerUrl)
+      onSaved(result)
     } catch (e: any) {
       setError(e.message ?? 'Failed to save changes')
     } finally {
@@ -190,7 +214,7 @@ function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-background w-full max-w-md rounded-xl shadow-xl">
+      <div className="bg-background w-full max-w-lg rounded-xl shadow-xl">
         <div className="flex items-center justify-between border-b px-6 py-4">
           <h2 className="text-foreground text-lg font-semibold">Edit Team — {team.name}</h2>
           <button
@@ -201,7 +225,7 @@ function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
           </button>
         </div>
 
-        <div className="space-y-4 px-6 py-5">
+        <div className="space-y-5 px-6 py-5">
           {error && (
             <div className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm">
               {error}
@@ -209,14 +233,37 @@ function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
           )}
 
           <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">Team Name</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              maxLength={100}
-              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            <label className="text-foreground mb-2 block text-sm font-medium">Banner Image</label>
+            <OrgBannerUpload
+              currentUrl={displayBanner}
+              onUploaded={setPendingBannerUrl}
+              context="TEAM_BANNER"
+              disabled={saving}
             />
+          </div>
+
+          <div className="flex items-end gap-4">
+            <div className="flex-shrink-0">
+              <label className="text-foreground mb-2 block text-sm font-medium">Avatar</label>
+              <OrgAvatarUpload
+                currentUrl={displayAvatar}
+                onUploaded={setPendingAvatarUrl}
+                context="TEAM_AVATAR"
+                label="Change team avatar"
+                disabled={saving}
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-foreground mb-1 block text-sm font-medium">Team Name</label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                maxLength={100}
+                disabled={saving}
+                className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
+              />
+            </div>
           </div>
 
           <div>
@@ -226,7 +273,8 @@ function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
               onChange={(e) => setDescription(e.target.value)}
               maxLength={500}
               rows={3}
-              className="border-border bg-background text-foreground w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              disabled={saving}
+              className="border-border bg-background text-foreground w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
             />
           </div>
 
@@ -235,7 +283,8 @@ function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
             <select
               value={visibility}
               onChange={(e) => setVisibility(e.target.value as 'PUBLIC' | 'PRIVATE')}
-              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              disabled={saving}
+              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
             >
               <option value="PUBLIC">Public — anyone can join</option>
               <option value="PRIVATE">Private — invite only</option>
@@ -274,16 +323,14 @@ export default function DepartmentFeedPage() {
   const [department, setDepartment] = useState<DepartmentResponse | null>(null)
   const [teams, setTeams] = useState<TeamResponse[]>([])
   const [posts, setPosts] = useState<Post[]>([])
-  const [usersMap, setUsersMap] = useState<Record<string, User>>({})
+  const [usersMap] = useState<Record<string, User>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
   const [deptEditOpen, setDeptEditOpen] = useState(false)
   const [editingTeam, setEditingTeam] = useState<TeamResponse | null>(null)
 
   useEffect(() => {
     if (!deptId) return
-
     const loadData = async () => {
       try {
         setLoading(true)
@@ -291,18 +338,14 @@ export default function DepartmentFeedPage() {
           departmentApi.getById(deptId),
           teamApi.getPublic(),
         ])
-
         setDepartment(dept)
-        const deptTeams = allTeams.filter((t) => t.departmentId === deptId)
-        setTeams(deptTeams)
-
-        // Load posts from localStorage
-        const storedPosts = localStorage.getItem(`dept_posts_${deptId}`)
-        if (storedPosts) {
+        setTeams(allTeams.filter((t) => t.departmentId === deptId))
+        const stored = localStorage.getItem(`dept_posts_${deptId}`)
+        if (stored) {
           try {
-            setPosts(JSON.parse(storedPosts))
+            setPosts(JSON.parse(stored))
           } catch {
-            console.error('Failed to parse stored posts')
+            /* ignore */
           }
         }
       } catch (e: any) {
@@ -311,7 +354,6 @@ export default function DepartmentFeedPage() {
         setLoading(false)
       }
     }
-
     loadData()
   }, [deptId])
 
@@ -325,14 +367,14 @@ export default function DepartmentFeedPage() {
       likes: [],
       comments: [],
     }
-    const updatedPosts = [newPost, ...posts]
-    setPosts(updatedPosts)
-    localStorage.setItem(`dept_posts_${deptId}`, JSON.stringify(updatedPosts))
+    const updated = [newPost, ...posts]
+    setPosts(updated)
+    localStorage.setItem(`dept_posts_${deptId}`, JSON.stringify(updated))
   }
 
   const handleLike = (postId: string) => {
     if (!user) return
-    const updatedPosts = posts.map((post) => {
+    const updated = posts.map((post) => {
       if (post.id !== postId) return post
       const hasLiked = post.likes.includes(user.id)
       return {
@@ -340,11 +382,11 @@ export default function DepartmentFeedPage() {
         likes: hasLiked ? post.likes.filter((id) => id !== user.id) : [...post.likes, user.id],
       }
     })
-    setPosts(updatedPosts)
-    localStorage.setItem(`dept_posts_${deptId}`, JSON.stringify(updatedPosts))
+    setPosts(updated)
+    localStorage.setItem(`dept_posts_${deptId}`, JSON.stringify(updated))
   }
 
-  if (loading) {
+  if (loading)
     return (
       <AuthLayout>
         <div className="flex min-h-[60vh] items-center justify-center">
@@ -352,9 +394,7 @@ export default function DepartmentFeedPage() {
         </div>
       </AuthLayout>
     )
-  }
-
-  if (error || !department) {
+  if (error || !department)
     return (
       <AuthLayout>
         <div className="mx-auto max-w-4xl px-4 py-8 text-center">
@@ -363,31 +403,44 @@ export default function DepartmentFeedPage() {
         </div>
       </AuthLayout>
     )
-  }
-
   if (!user) return null
 
-  const bannerImage = getDepartmentImage(deptId)
   const showDeptEdit = canEditDepartment(user, department)
 
   return (
     <AuthLayout>
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         {/* Cover Banner */}
-        <div className="relative mb-6 h-64 w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-400 to-slate-600">
-          <img src={bannerImage} alt={department?.name} className="h-full w-full object-cover" />
+        <div className="relative mb-0 h-56 w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-400 to-slate-600">
+          {department.bannerUrl ? (
+            <img
+              src={department.bannerUrl}
+              alt={department.name}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="h-full w-full bg-gradient-to-br from-slate-400 to-slate-600" />
+          )}
           <div className="absolute inset-0 bg-black/20" />
         </div>
 
-        {/* Department Header */}
-        <div className="bg-background mb-8 flex items-end gap-6">
-          {/* Department Icon */}
-          <div className="bg-muted flex h-32 w-32 flex-shrink-0 items-center justify-center rounded-full border-4 border-white shadow-lg dark:border-slate-800">
-            <Building2 className="text-foreground h-16 w-16" />
+        {/* Department Header — avatar overlaps banner */}
+        <div className="bg-background mb-8 flex items-end gap-6 px-2">
+          <div className="relative -mt-16 flex-shrink-0">
+            <div className="bg-muted flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-white shadow-lg dark:border-slate-800">
+              {department.avatarUrl ? (
+                <img
+                  src={department.avatarUrl}
+                  alt={department.name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Building2 className="text-foreground h-16 w-16" />
+              )}
+            </div>
           </div>
 
-          {/* Department Info */}
-          <div className="flex flex-1 items-end justify-between pb-2">
+          <div className="flex flex-1 items-end justify-between pt-4 pb-2">
             <div>
               <h1 className="text-foreground text-3xl font-bold">{department.name}</h1>
               {department.description && (
@@ -399,8 +452,6 @@ export default function DepartmentFeedPage() {
                 </p>
               )}
             </div>
-
-            {/* Edit Department button — visible only to authorised users */}
             {showDeptEdit && (
               <button
                 onClick={() => setDeptEditOpen(true)}
@@ -413,9 +464,8 @@ export default function DepartmentFeedPage() {
           </div>
         </div>
 
-        {/* Main Content with Sidebar */}
+        {/* Grid */}
         <div className="grid gap-8 lg:grid-cols-4">
-          {/* Left Sidebar - Teams List */}
           {teams.length > 0 && (
             <div className="lg:col-span-1">
               <div className="border-border bg-background sticky top-4 rounded-lg border p-4">
@@ -427,16 +477,33 @@ export default function DepartmentFeedPage() {
                       <div key={team.id} className="group relative">
                         <Link href={`/team/${team.id}`}>
                           <div className="hover:bg-muted border-border/50 block rounded-lg border p-3 transition-colors">
-                            <h4 className="text-foreground line-clamp-1 text-sm font-medium">
-                              {team.name}
-                            </h4>
-                            <p className="text-muted-foreground mt-1 text-xs">
-                              {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <div className="bg-muted h-8 w-8 flex-shrink-0 overflow-hidden rounded-full border">
+                                {team.avatarUrl ? (
+                                  <img
+                                    src={team.avatarUrl}
+                                    alt={team.name}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-full w-full items-center justify-center">
+                                    <span className="text-muted-foreground text-xs font-semibold">
+                                      {team.name[0]?.toUpperCase()}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="text-foreground line-clamp-1 text-sm font-medium">
+                                  {team.name}
+                                </h4>
+                                <p className="text-muted-foreground mt-0.5 text-xs">
+                                  {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
+                                </p>
+                              </div>
+                            </div>
                           </div>
                         </Link>
-
-                        {/* Per-team edit button */}
                         {showTeamEdit && (
                           <button
                             onClick={(e) => {
@@ -457,12 +524,8 @@ export default function DepartmentFeedPage() {
             </div>
           )}
 
-          {/* Main Content - Posts Feed */}
           <div className={`space-y-6 ${teams.length > 0 ? 'lg:col-span-3' : 'lg:col-span-4'}`}>
-            {/* Create Post */}
             <CreatePost user={user} onPostCreate={handlePostCreate} />
-
-            {/* Posts Feed */}
             <div className="space-y-6">
               {posts.length === 0 ? (
                 <div className="py-12 text-center">
@@ -492,10 +555,10 @@ export default function DepartmentFeedPage() {
         </div>
       </div>
 
-      {/* Edit Department Modal */}
       {deptEditOpen && (
         <EditDepartmentModal
           department={department}
+          canEdit={showDeptEdit}
           onClose={() => setDeptEditOpen(false)}
           onSaved={(updated) => {
             setDepartment(updated)
@@ -503,8 +566,6 @@ export default function DepartmentFeedPage() {
           }}
         />
       )}
-
-      {/* Edit Team Modal (triggered from sidebar) */}
       {editingTeam && (
         <EditTeamModal
           team={editingTeam}

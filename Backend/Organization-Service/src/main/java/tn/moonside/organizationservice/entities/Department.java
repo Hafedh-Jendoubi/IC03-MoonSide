@@ -22,6 +22,12 @@ public class Department {
     private String name;
     private String description;
 
+    /** URL to the department avatar image stored in media-service. */
+    private String avatarUrl;
+
+    /** URL to the department banner image stored in media-service. */
+    private String bannerUrl;
+
     @Builder.Default
     private boolean isActive = true;
 

@@ -22,8 +22,11 @@ public class TeamRequest {
     /** User ID of the team lead — optional at creation. */
     private String leadId;
 
-    /** URL to the team image/logo — optional. */
-    private String image;
+    /** URL to the team avatar/logo — optional. */
+    private String avatarUrl;
+
+    /** URL to the team banner — optional. */
+    private String bannerUrl;
 
     @NotNull(message = "Visibility is required")
     private VisibilityType teamVisibility = VisibilityType.PUBLIC;

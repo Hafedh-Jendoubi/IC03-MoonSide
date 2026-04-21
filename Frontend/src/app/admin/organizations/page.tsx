@@ -190,7 +190,7 @@ function TeamForm({
   const [description, setDescription] = useState(initial?.description ?? '')
   const [departmentId, setDepartmentId] = useState(initial?.departmentId ?? defaultDeptId ?? '')
   const [leadId, setLeadId] = useState(initial?.leadId ?? '')
-  const [image, setImage] = useState(initial?.image ?? '')
+  const [image, setImage] = useState(initial?.avatarUrl ?? '')
   const [visibility, setVisibility] = useState<VisibilityType>(initial?.teamVisibility ?? 'PUBLIC')
 
   async function handleSubmit(e: React.FormEvent) {
@@ -200,7 +200,7 @@ function TeamForm({
       description,
       departmentId,
       leadId: leadId || undefined,
-      image: image || undefined,
+      avatarUrl: image || undefined,
       teamVisibility: visibility,
     })
   }
@@ -272,7 +272,7 @@ function TeamForm({
         </select>
       </div>
       <div>
-        <label className="text-foreground text-sm font-medium">Team Image URL (optional)</label>
+        <label className="text-foreground text-sm font-medium">Team Avatar URL (optional)</label>
         <Input
           value={image}
           onChange={(e) => setImage(e.target.value)}
@@ -692,9 +692,9 @@ export default function AdminOrganizationsPage() {
                                   className="border-border bg-background flex items-center justify-between rounded-md border px-3 py-2"
                                 >
                                   <div className="flex items-center gap-3">
-                                    {team.image ? (
+                                    {team.avatarUrl ? (
                                       <img
-                                        src={team.image}
+                                        src={team.avatarUrl}
                                         alt=""
                                         className="h-7 w-7 rounded-full object-cover"
                                       />
@@ -805,9 +805,9 @@ export default function AdminOrganizationsPage() {
                   <TableRow key={team.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        {team.image ? (
+                        {team.avatarUrl ? (
                           <img
-                            src={team.image}
+                            src={team.avatarUrl}
                             alt=""
                             className="h-8 w-8 rounded-full object-cover"
                           />

@@ -71,8 +71,12 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining }: TeamCardPro
         <div className="flex items-start gap-4">
           {/* Team image / icon */}
           <div className="flex-shrink-0">
-            {team.image ? (
-              <img src={team.image} alt={team.name} className="h-12 w-12 rounded-xl object-cover" />
+            {team.avatarUrl ? (
+              <img
+                src={team.avatarUrl}
+                alt={team.name}
+                className="h-12 w-12 rounded-xl object-cover"
+              />
             ) : (
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-500/10">
                 <Users className="h-6 w-6 text-violet-500" />

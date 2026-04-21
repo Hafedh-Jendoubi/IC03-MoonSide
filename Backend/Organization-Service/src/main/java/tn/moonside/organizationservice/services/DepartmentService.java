@@ -34,6 +34,8 @@ public class DepartmentService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .managerId(request.getManagerId())
+                .avatarUrl(request.getAvatarUrl())
+                .bannerUrl(request.getBannerUrl())
                 .isActive(true)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
@@ -86,6 +88,13 @@ public class DepartmentService {
         if (isAdmin && request.getManagerId() != null) {
             dept.setManagerId(request.getManagerId());
         }
+        // Update image URLs if provided (null = keep existing, explicit value = update)
+        if (request.getAvatarUrl() != null) {
+            dept.setAvatarUrl(request.getAvatarUrl().isBlank() ? null : request.getAvatarUrl());
+        }
+        if (request.getBannerUrl() != null) {
+            dept.setBannerUrl(request.getBannerUrl().isBlank() ? null : request.getBannerUrl());
+        }
         dept.setUpdatedAt(LocalDateTime.now());
         return toResponse(departmentRepository.save(dept));
     }
@@ -125,7 +134,44 @@ public class DepartmentService {
         return toResponse(departmentRepository.save(dept));
     }
 
+    // ── Image management ──────────────────────────────────────────────────────
+
+    /**
+     * Update or remove the department avatar.
+     * Access: ADMIN or the department manager.
+     */
+    public DepartmentResponse updateAvatar(String id, String avatarUrl,
+                                           String requestingUserId, List<String> roles) {
+        Department dept = findById(id);
+        assertCanEdit(dept, requestingUserId, roles);
+        dept.setAvatarUrl(avatarUrl);
+        dept.setUpdatedAt(LocalDateTime.now());
+        return toResponse(departmentRepository.save(dept));
+    }
+
+    /**
+     * Update or remove the department banner.
+     * Access: ADMIN or the department manager.
+     */
+    public DepartmentResponse updateBanner(String id, String bannerUrl,
+                                           String requestingUserId, List<String> roles) {
+        Department dept = findById(id);
+        assertCanEdit(dept, requestingUserId, roles);
+        dept.setBannerUrl(bannerUrl);
+        dept.setUpdatedAt(LocalDateTime.now());
+        return toResponse(departmentRepository.save(dept));
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private void assertCanEdit(Department dept, String requestingUserId, List<String> roles) {
+        boolean isAdmin = roles.contains("ADMIN");
+        boolean isDeptManager = roles.contains("DEPARTMENT_MANAGER")
+                && requestingUserId.equals(dept.getManagerId());
+        if (!isAdmin && !isDeptManager) {
+            throw new AccessDeniedException("You are not authorized to modify this department.");
+        }
+    }
 
     private Department findById(String id) {
         return departmentRepository.findById(id)
@@ -145,6 +191,8 @@ public class DepartmentService {
                 .manager(manager)
                 .name(dept.getName())
                 .description(dept.getDescription())
+                .avatarUrl(dept.getAvatarUrl())
+                .bannerUrl(dept.getBannerUrl())
                 .isActive(dept.isActive())
                 .teamCount(teamCount)
                 .createdAt(dept.getCreatedAt())

@@ -483,6 +483,8 @@ export interface DepartmentResponse {
   manager: UserSummary | null
   name: string
   description: string | null
+  avatarUrl: string | null
+  bannerUrl: string | null
   isActive: boolean
   teamCount: number
   createdAt: string
@@ -493,6 +495,8 @@ export interface DepartmentRequest {
   name: string
   description?: string
   managerId?: string
+  avatarUrl?: string
+  bannerUrl?: string
 }
 
 // -- Team ----------------------------------------------------------------------
@@ -505,7 +509,8 @@ export interface TeamResponse {
   lead: UserSummary | null
   name: string
   description: string | null
-  image: string | null
+  avatarUrl: string | null
+  bannerUrl: string | null
   teamVisibility: VisibilityType
   memberCount: number
   isMember: boolean
@@ -518,7 +523,8 @@ export interface TeamRequest {
   description?: string
   departmentId: string
   leadId?: string
-  image?: string
+  avatarUrl?: string
+  bannerUrl?: string
   teamVisibility: VisibilityType
 }
 
@@ -572,6 +578,18 @@ export const departmentApi = {
   removeManager: (id: string) =>
     apiFetch<DepartmentResponse>(`/organizations/departments/${id}/manager`, {
       method: 'DELETE',
+    }),
+
+  updateAvatar: (id: string, url: string | null) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/avatar`, {
+      method: 'PATCH',
+      body: JSON.stringify({ url }),
+    }),
+
+  updateBanner: (id: string, url: string | null) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/banner`, {
+      method: 'PATCH',
+      body: JSON.stringify({ url }),
     }),
 }
 
@@ -630,5 +648,17 @@ export const teamApi = {
   removeMember: (teamId: string, userId: string) =>
     apiFetch<void>(`/organizations/teams/${teamId}/members/${userId}`, {
       method: 'DELETE',
+    }),
+
+  updateAvatar: (id: string, url: string | null) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/avatar`, {
+      method: 'PATCH',
+      body: JSON.stringify({ url }),
+    }),
+
+  updateBanner: (id: string, url: string | null) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/banner`, {
+      method: 'PATCH',
+      body: JSON.stringify({ url }),
     }),
 }

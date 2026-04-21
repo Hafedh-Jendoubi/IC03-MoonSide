@@ -36,7 +36,6 @@ public class TeamService {
     // ── Admin CRUD ────────────────────────────────────────────────────────────
 
     public TeamResponse createTeam(TeamRequest request) {
-        // Validate department exists
         departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Department not found: " + request.getDepartmentId()));
@@ -46,7 +45,8 @@ public class TeamService {
                 .description(request.getDescription())
                 .departmentId(request.getDepartmentId())
                 .leadId(request.getLeadId())
-                .image(request.getImage())
+                .avatarUrl(request.getAvatarUrl())
+                .bannerUrl(request.getBannerUrl())
                 .teamVisibility(request.getTeamVisibility() != null
                         ? request.getTeamVisibility()
                         : VisibilityType.PUBLIC)
@@ -94,29 +94,22 @@ public class TeamService {
     /**
      * Update a team.
      * Access rules:
-     *  - ADMIN          → always allowed
-     *  - TEAM_LEADER    → only if they are the lead of this specific team
+     *  - ADMIN              → always allowed
+     *  - TEAM_LEADER        → only if they are the lead of this specific team
      *  - DEPARTMENT_MANAGER → only if they manage the department this team belongs to
      */
     public TeamResponse updateTeam(String teamId, TeamRequest request,
                                    String requestingUserId, List<String> roles) {
         Team team = findById(teamId);
-
-        boolean isAdmin = roles.contains("ADMIN");
-        boolean isTeamLeader = roles.contains("TEAM_LEADER")
-                && requestingUserId.equals(team.getLeadId());
-        boolean isDeptManager = roles.contains("DEPARTMENT_MANAGER")
-                && departmentRepository.findById(team.getDepartmentId())
-                        .map(d -> requestingUserId.equals(d.getManagerId()))
-                        .orElse(false);
-
-        if (!isAdmin && !isTeamLeader && !isDeptManager) {
-            throw new AccessDeniedException(
-                    "You are not authorized to modify this team.");
-        }
+        assertCanEdit(team, requestingUserId, roles);
 
         // Validate new department if changed — only admins and dept managers may move a team
         if (!team.getDepartmentId().equals(request.getDepartmentId())) {
+            boolean isAdmin = roles.contains("ADMIN");
+            boolean isDeptManager = roles.contains("DEPARTMENT_MANAGER")
+                    && departmentRepository.findById(team.getDepartmentId())
+                            .map(d -> requestingUserId.equals(d.getManagerId()))
+                            .orElse(false);
             if (!isAdmin && !isDeptManager) {
                 throw new AccessDeniedException(
                         "Only admins or department managers can move a team to a different department.");
@@ -130,7 +123,12 @@ public class TeamService {
         team.setDescription(request.getDescription());
         team.setDepartmentId(request.getDepartmentId());
         if (request.getLeadId() != null) team.setLeadId(request.getLeadId());
-        if (request.getImage() != null) team.setImage(request.getImage());
+        if (request.getAvatarUrl() != null) {
+            team.setAvatarUrl(request.getAvatarUrl().isBlank() ? null : request.getAvatarUrl());
+        }
+        if (request.getBannerUrl() != null) {
+            team.setBannerUrl(request.getBannerUrl().isBlank() ? null : request.getBannerUrl());
+        }
         if (request.getTeamVisibility() != null) team.setTeamVisibility(request.getTeamVisibility());
         team.setUpdatedAt(LocalDateTime.now());
 
@@ -139,7 +137,6 @@ public class TeamService {
 
     public void deleteTeam(String teamId) {
         Team team = findById(teamId);
-        // Remove all memberships first
         userTeamRepository.findByTeamId(teamId)
                 .forEach(ut -> userTeamRepository.deleteByUserIdAndTeamId(ut.getUserId(), teamId));
         teamRepository.delete(team);
@@ -159,6 +156,34 @@ public class TeamService {
         team.setLeadId(null);
         team.setUpdatedAt(LocalDateTime.now());
         return toResponse(teamRepository.save(team), null);
+    }
+
+    // ── Image management ──────────────────────────────────────────────────────
+
+    /**
+     * Update or remove the team avatar.
+     * Access: ADMIN, TEAM_LEADER of this team, or DEPARTMENT_MANAGER of its department.
+     */
+    public TeamResponse updateAvatar(String teamId, String avatarUrl,
+                                     String requestingUserId, List<String> roles) {
+        Team team = findById(teamId);
+        assertCanEdit(team, requestingUserId, roles);
+        team.setAvatarUrl(avatarUrl);
+        team.setUpdatedAt(LocalDateTime.now());
+        return toResponse(teamRepository.save(team), requestingUserId);
+    }
+
+    /**
+     * Update or remove the team banner.
+     * Access: ADMIN, TEAM_LEADER of this team, or DEPARTMENT_MANAGER of its department.
+     */
+    public TeamResponse updateBanner(String teamId, String bannerUrl,
+                                     String requestingUserId, List<String> roles) {
+        Team team = findById(teamId);
+        assertCanEdit(team, requestingUserId, roles);
+        team.setBannerUrl(bannerUrl);
+        team.setUpdatedAt(LocalDateTime.now());
+        return toResponse(teamRepository.save(team), requestingUserId);
     }
 
     // ── Membership (self-service) ─────────────────────────────────────────────
@@ -185,7 +210,7 @@ public class TeamService {
     }
 
     public void leaveTeam(String teamId, String userId) {
-        findById(teamId); // existence check
+        findById(teamId);
         if (!userTeamRepository.existsByUserIdAndTeamId(userId, teamId)) {
             throw new IllegalStateException("You are not a member of this team.");
         }
@@ -204,7 +229,7 @@ public class TeamService {
     // ── Members ───────────────────────────────────────────────────────────────
 
     public List<UserTeamResponse> getTeamMembers(String teamId) {
-        findById(teamId); // existence check
+        findById(teamId);
         return userTeamRepository.findByTeamId(teamId)
                 .stream()
                 .map(ut -> {
@@ -220,7 +245,6 @@ public class TeamService {
                 .collect(Collectors.toList());
     }
 
-    /** Admin: remove any member from a team. */
     public void removeMember(String teamId, String userId) {
         findById(teamId);
         if (!userTeamRepository.existsByUserIdAndTeamId(userId, teamId)) {
@@ -229,7 +253,6 @@ public class TeamService {
         userTeamRepository.deleteByUserIdAndTeamId(userId, teamId);
     }
 
-    /** Admin: add any user to a team (even PRIVATE teams). */
     public TeamResponse addMember(String teamId, String userId) {
         Team team = findById(teamId);
         if (userTeamRepository.existsByUserIdAndTeamId(userId, teamId)) {
@@ -245,6 +268,19 @@ public class TeamService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private void assertCanEdit(Team team, String requestingUserId, List<String> roles) {
+        boolean isAdmin = roles.contains("ADMIN");
+        boolean isTeamLeader = roles.contains("TEAM_LEADER")
+                && requestingUserId.equals(team.getLeadId());
+        boolean isDeptManager = roles.contains("DEPARTMENT_MANAGER")
+                && departmentRepository.findById(team.getDepartmentId())
+                        .map(d -> requestingUserId.equals(d.getManagerId()))
+                        .orElse(false);
+        if (!isAdmin && !isTeamLeader && !isDeptManager) {
+            throw new AccessDeniedException("You are not authorized to modify this team.");
+        }
+    }
 
     private Team findById(String id) {
         return teamRepository.findById(id)
@@ -273,7 +309,8 @@ public class TeamService {
                 .lead(lead)
                 .name(team.getName())
                 .description(team.getDescription())
-                .image(team.getImage())
+                .avatarUrl(team.getAvatarUrl())
+                .bannerUrl(team.getBannerUrl())
                 .teamVisibility(team.getTeamVisibility())
                 .memberCount(memberCount)
                 .isMember(isMember)

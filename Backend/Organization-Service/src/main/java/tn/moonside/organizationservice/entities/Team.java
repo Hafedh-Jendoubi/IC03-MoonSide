@@ -26,8 +26,11 @@ public class Team {
     private String name;
     private String description;
 
-    /** URL to a team banner / logo image stored in media-service. */
-    private String image;
+    /** URL to the team avatar/logo image stored in media-service. */
+    private String avatarUrl;
+
+    /** URL to a team banner image stored in media-service. */
+    private String bannerUrl;
 
     @Builder.Default
     private VisibilityType teamVisibility = VisibilityType.PUBLIC;

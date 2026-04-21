@@ -14,6 +14,8 @@ public class DepartmentResponse {
     private UserSummary manager;
     private String name;
     private String description;
+    private String avatarUrl;
+    private String bannerUrl;
     private boolean isActive;
     private long teamCount;
     private LocalDateTime createdAt;

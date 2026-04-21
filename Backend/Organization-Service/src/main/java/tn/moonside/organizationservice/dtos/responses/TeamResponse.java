@@ -17,7 +17,8 @@ public class TeamResponse {
     private UserSummary lead;
     private String name;
     private String description;
-    private String image;
+    private String avatarUrl;
+    private String bannerUrl;
     private VisibilityType teamVisibility;
     private long memberCount;
     /** True if the requesting user is already a member. */

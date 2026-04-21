@@ -10,6 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import tn.moonside.organizationservice.dtos.requests.AssignManagerRequest;
 import tn.moonside.organizationservice.dtos.requests.DepartmentRequest;
+import tn.moonside.organizationservice.dtos.requests.UpdateImagesRequest;
 import tn.moonside.organizationservice.dtos.responses.ApiResponse;
 import tn.moonside.organizationservice.dtos.responses.DepartmentResponse;
 import tn.moonside.organizationservice.services.DepartmentService;
@@ -95,5 +96,43 @@ public class DepartmentController {
     public ResponseEntity<ApiResponse<DepartmentResponse>> removeManager(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(
                 departmentService.removeManager(id), "Manager removed successfully"));
+    }
+
+    // ── Image management ──────────────────────────────────────────────────────
+
+    /**
+     * PATCH /organizations/departments/{id}/avatar
+     * Body: { "url": "https://..." }  — set to null or empty string to remove.
+     */
+    @PatchMapping("/{id}/avatar")
+    public ResponseEntity<ApiResponse<DepartmentResponse>> updateAvatar(
+            @PathVariable String id,
+            @RequestBody UpdateImagesRequest request,
+            @AuthenticationPrincipal String userId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(
+                departmentService.updateAvatar(id, request.getUrl(), userId, roles),
+                "Department avatar updated"));
+    }
+
+    /**
+     * PATCH /organizations/departments/{id}/banner
+     * Body: { "url": "https://..." }  — set to null or empty string to remove.
+     */
+    @PatchMapping("/{id}/banner")
+    public ResponseEntity<ApiResponse<DepartmentResponse>> updateBanner(
+            @PathVariable String id,
+            @RequestBody UpdateImagesRequest request,
+            @AuthenticationPrincipal String userId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(
+                departmentService.updateBanner(id, request.getUrl(), userId, roles),
+                "Department banner updated"));
     }
 }

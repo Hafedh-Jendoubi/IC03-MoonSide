@@ -16,4 +16,10 @@ public class DepartmentRequest {
 
     /** User ID of the manager — optional at creation, assignable separately. */
     private String managerId;
+
+    /** URL to the department avatar — optional. */
+    private String avatarUrl;
+
+    /** URL to the department banner — optional. */
+    private String bannerUrl;
 }

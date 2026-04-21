@@ -10,6 +10,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import tn.moonside.organizationservice.dtos.requests.AssignLeadRequest;
 import tn.moonside.organizationservice.dtos.requests.TeamRequest;
+import tn.moonside.organizationservice.dtos.requests.UpdateImagesRequest;
 import tn.moonside.organizationservice.dtos.responses.ApiResponse;
 import tn.moonside.organizationservice.dtos.responses.TeamResponse;
 import tn.moonside.organizationservice.dtos.responses.UserTeamResponse;
@@ -27,21 +28,18 @@ public class TeamController {
 
     // ── Public / authenticated reads ─────────────────────────────────────────
 
-    /** All teams (admin view — includes PRIVATE). */
     @GetMapping
     public ResponseEntity<ApiResponse<List<TeamResponse>>> getAllTeams(
             @AuthenticationPrincipal String userId) {
         return ResponseEntity.ok(ApiResponse.success(teamService.getAllTeams(userId)));
     }
 
-    /** Only PUBLIC teams — for the discover feed. */
     @GetMapping("/public")
     public ResponseEntity<ApiResponse<List<TeamResponse>>> getPublicTeams(
             @AuthenticationPrincipal String userId) {
         return ResponseEntity.ok(ApiResponse.success(teamService.getPublicTeams(userId)));
     }
 
-    /** Search teams by name (PUBLIC only). */
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<List<TeamResponse>>> searchTeams(
             @RequestParam String q,
@@ -49,14 +47,12 @@ public class TeamController {
         return ResponseEntity.ok(ApiResponse.success(teamService.searchTeams(q, userId)));
     }
 
-    /** Teams the current user has joined. */
     @GetMapping("/my")
     public ResponseEntity<ApiResponse<List<TeamResponse>>> getMyTeams(
             @AuthenticationPrincipal String userId) {
         return ResponseEntity.ok(ApiResponse.success(teamService.getMyTeams(userId)));
     }
 
-    /** Teams belonging to a department. */
     @GetMapping("/department/{departmentId}")
     public ResponseEntity<ApiResponse<List<TeamResponse>>> getByDepartment(
             @PathVariable String departmentId,
@@ -138,7 +134,6 @@ public class TeamController {
                 teamService.removeLead(teamId), "Team lead removed"));
     }
 
-    /** Admin: add any user to any team (bypasses PRIVATE restriction). */
     @PostMapping("/{teamId}/members/{userId}")
     public ResponseEntity<ApiResponse<TeamResponse>> addMember(
             @PathVariable String teamId,
@@ -147,12 +142,49 @@ public class TeamController {
                 teamService.addMember(teamId, userId), "Member added successfully"));
     }
 
-    /** Admin: remove any member from a team. */
     @DeleteMapping("/{teamId}/members/{userId}")
     public ResponseEntity<ApiResponse<Void>> removeMember(
             @PathVariable String teamId,
             @PathVariable String userId) {
         teamService.removeMember(teamId, userId);
         return ResponseEntity.ok(ApiResponse.success(null, "Member removed successfully"));
+    }
+
+    // ── Image management ──────────────────────────────────────────────────────
+
+    /**
+     * PATCH /organizations/teams/{teamId}/avatar
+     * Body: { "url": "https://..." }  — set to null or empty string to remove.
+     */
+    @PatchMapping("/{teamId}/avatar")
+    public ResponseEntity<ApiResponse<TeamResponse>> updateAvatar(
+            @PathVariable String teamId,
+            @RequestBody UpdateImagesRequest request,
+            @AuthenticationPrincipal String userId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(
+                teamService.updateAvatar(teamId, request.getUrl(), userId, roles),
+                "Team avatar updated"));
+    }
+
+    /**
+     * PATCH /organizations/teams/{teamId}/banner
+     * Body: { "url": "https://..." }  — set to null or empty string to remove.
+     */
+    @PatchMapping("/{teamId}/banner")
+    public ResponseEntity<ApiResponse<TeamResponse>> updateBanner(
+            @PathVariable String teamId,
+            @RequestBody UpdateImagesRequest request,
+            @AuthenticationPrincipal String userId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(
+                teamService.updateBanner(teamId, request.getUrl(), userId, roles),
+                "Team banner updated"));
     }
 }
