@@ -31,7 +31,6 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
 
                 // ── Public discovery (GET only) ───────────────────────────────
-                // Any authenticated user can browse departments and public teams
                 .requestMatchers(HttpMethod.GET, "/organizations/departments/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/public").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/search").authenticated()
@@ -39,27 +38,31 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/{teamId}/members").authenticated()
 
                 // ── User self-service ─────────────────────────────────────────
-                // Any authenticated user can join or leave a team
                 .requestMatchers(HttpMethod.POST, "/organizations/teams/{teamId}/join").authenticated()
                 .requestMatchers(HttpMethod.DELETE, "/organizations/teams/{teamId}/leave").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/my").authenticated()
 
-                // ── Admin-only mutations ──────────────────────────────────────
-                .requestMatchers(HttpMethod.POST,   "/organizations/departments/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/organizations/departments/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PATCH,  "/organizations/departments/**").hasRole("ADMIN")
+                // ── CEO-only mutations ──────────────────────────────────────
+                .requestMatchers(HttpMethod.POST,   "/organizations/departments/**").hasRole("CEO")
+                .requestMatchers(HttpMethod.DELETE, "/organizations/departments/**").hasRole("CEO")
 
-                // Department Managers can update their own department
-                .requestMatchers(HttpMethod.PUT,    "/organizations/departments/**")
-                    .hasAnyRole("ADMIN", "DEPARTMENT_MANAGER")
+                // CEO + Department Leader
+                .requestMatchers(HttpMethod.PATCH, "/organizations/departments/**")
+                    .hasAnyRole("CEO", "DEPARTMENT_LEADER")
 
-                .requestMatchers(HttpMethod.POST,   "/organizations/teams").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.DELETE, "/organizations/teams/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.PATCH,  "/organizations/teams/**").hasRole("ADMIN")
+                // Department Leader (instead of MANAGER)
+                .requestMatchers(HttpMethod.PUT, "/organizations/departments/**")
+                    .hasAnyRole("CEO", "DEPARTMENT_LEADER")
 
-                // Team Leaders can update their own team; Dept Managers can update teams in their dept
-                .requestMatchers(HttpMethod.PUT,    "/organizations/teams/**")
-                    .hasAnyRole("ADMIN", "DEPARTMENT_MANAGER", "TEAM_LEADER")
+                .requestMatchers(HttpMethod.POST,   "/organizations/teams").hasRole("CEO")
+                .requestMatchers(HttpMethod.DELETE, "/organizations/teams/**").hasRole("CEO")
+
+                // Team updates
+                .requestMatchers(HttpMethod.PATCH, "/organizations/teams/**")
+                    .hasAnyRole("CEO", "DEPARTMENT_LEADER", "TEAM_LEADER")
+
+                .requestMatchers(HttpMethod.PUT, "/organizations/teams/**")
+                    .hasAnyRole("CEO", "DEPARTMENT_LEADER", "TEAM_LEADER")
 
                 // ── Everything else requires auth ─────────────────────────────
                 .anyRequest().authenticated()

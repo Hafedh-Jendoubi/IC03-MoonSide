@@ -105,8 +105,8 @@ public class TeamService {
 
         // Validate new department if changed — only admins and dept managers may move a team
         if (!team.getDepartmentId().equals(request.getDepartmentId())) {
-            boolean isAdmin = roles.contains("ADMIN");
-            boolean isDeptManager = roles.contains("DEPARTMENT_MANAGER")
+            boolean isAdmin = roles.contains("CEO");
+            boolean isDeptManager = roles.contains("DEPARTMENT_LEADER")
                     && departmentRepository.findById(team.getDepartmentId())
                             .map(d -> requestingUserId.equals(d.getManagerId()))
                             .orElse(false);
@@ -270,10 +270,10 @@ public class TeamService {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void assertCanEdit(Team team, String requestingUserId, List<String> roles) {
-        boolean isAdmin = roles.contains("ADMIN");
+        boolean isAdmin = roles.contains("CEO");
         boolean isTeamLeader = roles.contains("TEAM_LEADER")
                 && requestingUserId.equals(team.getLeadId());
-        boolean isDeptManager = roles.contains("DEPARTMENT_MANAGER")
+        boolean isDeptManager = roles.contains("DEPARTMENT_LEADER")
                 && departmentRepository.findById(team.getDepartmentId())
                         .map(d -> requestingUserId.equals(d.getManagerId()))
                         .orElse(false);

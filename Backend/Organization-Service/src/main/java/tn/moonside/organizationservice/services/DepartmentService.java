@@ -73,8 +73,8 @@ public class DepartmentService {
                                                String requestingUserId, List<String> roles) {
         Department dept = findById(id);
 
-        boolean isAdmin = roles.contains("ADMIN");
-        boolean isDeptManager = roles.contains("DEPARTMENT_MANAGER")
+        boolean isAdmin = roles.contains("CEO");
+        boolean isDeptManager = roles.contains("DEPARTMENT_LEADER")
                 && requestingUserId.equals(dept.getManagerId());
 
         if (!isAdmin && !isDeptManager) {
@@ -165,8 +165,8 @@ public class DepartmentService {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void assertCanEdit(Department dept, String requestingUserId, List<String> roles) {
-        boolean isAdmin = roles.contains("ADMIN");
-        boolean isDeptManager = roles.contains("DEPARTMENT_MANAGER")
+        boolean isAdmin = roles.contains("CEO");
+        boolean isDeptManager = roles.contains("DEPARTMENT_LEADER")
                 && requestingUserId.equals(dept.getManagerId());
         if (!isAdmin && !isDeptManager) {
             throw new AccessDeniedException("You are not authorized to modify this department.");
