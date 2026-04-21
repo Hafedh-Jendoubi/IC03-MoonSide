@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Loader2, Users, Pencil, X } from 'lucide-react'
-import { teamApi, departmentApi, TeamResponse } from '@/lib/api'
+import { Loader2, Users, Pencil, X, UserMinus } from 'lucide-react'
+import { teamApi, departmentApi, TeamResponse, UserTeamResponse } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
 import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
@@ -11,7 +11,7 @@ import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
 import { Post, User, hasRole } from '@/lib/types'
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 function canEditTeam(
   user: User | null,
@@ -19,14 +19,199 @@ function canEditTeam(
   userManagedDeptIds: string[]
 ): boolean {
   if (!user || !team) return false
-  // CEO can do anything
   if (hasRole(user, 'CEO')) return true
-  // Team Leader can manage their own team
   if (hasRole(user, 'TEAM_LEADER') && team.leadId === user.id) return true
-  // Department Leader can manage teams within their department
   if (hasRole(user, 'DEPARTMENT_LEADER') && userManagedDeptIds.includes(team.departmentId))
     return true
   return false
+}
+
+// ── Team Members Modal ────────────────────────────────────────────────────────
+
+interface TeamMembersModalProps {
+  team: TeamResponse
+  canKick: boolean
+  onClose: () => void
+  onMemberKicked: () => void
+}
+
+function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMembersModalProps) {
+  const [members, setMembers] = useState<UserTeamResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [kickingId, setKickingId] = useState<string | null>(null)
+  const [confirmKick, setConfirmKick] = useState<UserTeamResponse | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    teamApi
+      .getMembers(team.id)
+      .then(setMembers)
+      .catch((e: any) => setError(e.message ?? 'Failed to load members'))
+      .finally(() => setLoading(false))
+  }, [team.id])
+
+  const handleKick = async (member: UserTeamResponse) => {
+    setConfirmKick(null)
+    setKickingId(member.userId)
+    try {
+      await teamApi.removeMember(team.id, member.userId)
+      setMembers((prev) => prev.filter((m) => m.userId !== member.userId))
+      onMemberKicked()
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to remove member')
+    } finally {
+      setKickingId(null)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-background w-full max-w-md rounded-xl shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <div className="flex items-center gap-2">
+            <Users className="text-muted-foreground h-5 w-5" />
+            <h2 className="text-foreground text-lg font-semibold">
+              Members
+              <span className="text-muted-foreground ml-2 text-base font-normal">
+                ({members.length})
+              </span>
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground rounded-full p-1 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+          {loading && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="text-primary h-8 w-8 animate-spin" />
+            </div>
+          )}
+
+          {error && (
+            <div className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm">
+              {error}
+            </div>
+          )}
+
+          {!loading && !error && members.length === 0 && (
+            <p className="text-muted-foreground py-8 text-center text-sm">No members yet.</p>
+          )}
+
+          {!loading && members.length > 0 && (
+            <ul className="space-y-1">
+              {members.map((member) => {
+                const u = member.user
+                const isLead = member.userId === team.leadId
+                const isKicking = kickingId === member.userId
+                return (
+                  <li
+                    key={member.id}
+                    className="flex items-center justify-between rounded-lg px-3 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="bg-muted h-9 w-9 flex-shrink-0 overflow-hidden rounded-full border">
+                        {u?.avatar ? (
+                          <img
+                            src={u.avatar}
+                            alt={`${u.firstName} ${u.lastName}`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <span className="text-muted-foreground text-xs font-semibold">
+                              {u?.firstName?.[0]?.toUpperCase() ?? '?'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-foreground text-sm leading-tight font-medium">
+                          {u ? `${u.firstName} ${u.lastName}` : 'Unknown User'}
+                          {isLead && (
+                            <span className="bg-primary/10 text-primary ml-2 rounded px-1.5 py-0.5 text-xs font-semibold">
+                              Leader
+                            </span>
+                          )}
+                        </p>
+                        {u?.jobTitle && (
+                          <p className="text-muted-foreground truncate text-xs">{u.jobTitle}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {canKick && !isLead && (
+                      <button
+                        onClick={() => setConfirmKick(member)}
+                        disabled={isKicking}
+                        title="Remove from team"
+                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-2 flex-shrink-0 rounded-lg p-1.5 transition-colors disabled:opacity-50"
+                      >
+                        {isKicking ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <UserMinus className="h-4 w-4" />
+                        )}
+                      </button>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end border-t px-6 py-4">
+          <button
+            onClick={onClose}
+            className="border-border text-foreground rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+
+      {/* Kick confirm dialog */}
+      {confirmKick && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-background w-full max-w-sm rounded-xl p-6 shadow-xl">
+            <h3 className="text-foreground mb-2 text-base font-semibold">Remove Member</h3>
+            <p className="text-muted-foreground mb-5 text-sm">
+              Are you sure you want to remove{' '}
+              <span className="text-foreground font-medium">
+                {confirmKick.user
+                  ? `${confirmKick.user.firstName} ${confirmKick.user.lastName}`
+                  : 'this member'}
+              </span>{' '}
+              from <span className="text-foreground font-medium">{team.name}</span>?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmKick(null)}
+                className="border-border text-foreground rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleKick(confirmKick)}
+                className="bg-destructive text-destructive-foreground rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 // ── Edit Modal ────────────────────────────────────────────────────────────────
@@ -200,6 +385,7 @@ export default function TeamFeedPage() {
   const [error, setError] = useState<string | null>(null)
   const [userManagedDeptIds, setUserManagedDeptIds] = useState<string[]>([])
   const [editOpen, setEditOpen] = useState(false)
+  const [membersOpen, setMembersOpen] = useState(false)
 
   useEffect(() => {
     if (!teamId) return
@@ -327,7 +513,15 @@ export default function TeamFeedPage() {
                   Led by {team.lead.firstName} {team.lead.lastName}
                 </p>
               )}
-              <p className="text-muted-foreground mt-1 text-xs">{team.memberCount} members</p>
+              {/* Clickable member count */}
+              <button
+                onClick={() => setMembersOpen(true)}
+                className="text-muted-foreground hover:text-primary mt-1 flex items-center gap-1.5 text-xs transition-colors hover:underline"
+                title="View members"
+              >
+                <Users className="h-3.5 w-3.5" />
+                {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
+              </button>
             </div>
 
             {showEditButton && (
@@ -379,6 +573,19 @@ export default function TeamFeedPage() {
             setTeam(updated)
             setEditOpen(false)
           }}
+        />
+      )}
+
+      {membersOpen && (
+        <TeamMembersModal
+          team={team}
+          canKick={showEditButton}
+          onClose={() => setMembersOpen(false)}
+          onMemberKicked={() =>
+            setTeam((prev) =>
+              prev ? { ...prev, memberCount: Math.max(0, prev.memberCount - 1) } : prev
+            )
+          }
         />
       )}
     </AuthLayout>
