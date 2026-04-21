@@ -60,6 +60,8 @@ import {
   InviteUserRequest,
   BulkInviteResult,
 } from '@/lib/api'
+import { useAuth } from '@/lib/auth-context'
+import { hasAnyPermission, PERM } from '@/lib/types'
 
 // --- Avatar component ---------------------------------------------------------
 
@@ -93,6 +95,7 @@ interface DropdownMenuProps {
   onContact: () => void
   onToggleActive: () => void
   onDelete: () => void
+  canManage?: boolean
 }
 
 function ActionDropdown({
@@ -102,6 +105,7 @@ function ActionDropdown({
   onContact,
   onToggleActive,
   onDelete,
+  canManage = false,
 }: DropdownMenuProps) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -141,13 +145,15 @@ function ActionDropdown({
               <Eye className="text-muted-foreground h-3.5 w-3.5" />
               View profile
             </button>
-            <button
-              className="hover:bg-muted flex w-full items-center gap-2.5 px-3 py-2"
-              onClick={() => action(onEdit)}
-            >
-              <Edit2 className="text-muted-foreground h-3.5 w-3.5" />
-              Edit
-            </button>
+            {canManage && (
+              <button
+                className="hover:bg-muted flex w-full items-center gap-2.5 px-3 py-2"
+                onClick={() => action(onEdit)}
+              >
+                <Edit2 className="text-muted-foreground h-3.5 w-3.5" />
+                Edit
+              </button>
+            )}
             <button
               className="hover:bg-muted flex w-full items-center gap-2.5 px-3 py-2"
               onClick={() => action(onContact)}
@@ -155,29 +161,33 @@ function ActionDropdown({
               <Mail className="text-muted-foreground h-3.5 w-3.5" />
               Contact
             </button>
-            <div className="border-border my-1 border-t dark:border-slate-700" />
-            <button
-              className={`hover:bg-muted flex w-full items-center gap-2.5 px-3 py-2 ${
-                user.active
-                  ? 'text-amber-600 dark:text-amber-400'
-                  : 'text-green-600 dark:text-green-400'
-              }`}
-              onClick={() => action(onToggleActive)}
-            >
-              {user.active ? (
-                <UserX className="h-3.5 w-3.5" />
-              ) : (
-                <UserCheck className="h-3.5 w-3.5" />
-              )}
-              {user.active ? 'Block user' : 'Unblock user'}
-            </button>
-            <button
-              className="text-destructive hover:bg-destructive/10 flex w-full items-center gap-2.5 px-3 py-2"
-              onClick={() => action(onDelete)}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-              Delete
-            </button>
+            {canManage && (
+              <>
+                <div className="border-border my-1 border-t dark:border-slate-700" />
+                <button
+                  className={`hover:bg-muted flex w-full items-center gap-2.5 px-3 py-2 ${
+                    user.active
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-green-600 dark:text-green-400'
+                  }`}
+                  onClick={() => action(onToggleActive)}
+                >
+                  {user.active ? (
+                    <UserX className="h-3.5 w-3.5" />
+                  ) : (
+                    <UserCheck className="h-3.5 w-3.5" />
+                  )}
+                  {user.active ? 'Block user' : 'Unblock user'}
+                </button>
+                <button
+                  className="text-destructive hover:bg-destructive/10 flex w-full items-center gap-2.5 px-3 py-2"
+                  onClick={() => action(onDelete)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Delete
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
@@ -189,6 +199,11 @@ function ActionDropdown({
 
 export default function UsersPage() {
   const router = useRouter()
+  const { user: currentUser } = useAuth()
+  // CEO can do everything; HR can only invite (single) and view
+  const canBulkInvite = hasAnyPermission(currentUser, PERM.ANYTHING)
+  const canManageUsers = hasAnyPermission(currentUser, PERM.ANYTHING) // deactivate/delete/edit
+  const canEditRoles = hasAnyPermission(currentUser, PERM.ANYTHING) // assign/revoke roles
   const [users, setUsers] = useState<UserResponse[]>([])
   const [roles, setRoles] = useState<RoleResponse[]>([])
   const [loading, setLoading] = useState(true)
@@ -585,6 +600,7 @@ export default function UsersPage() {
                             onContact={() => handleContact(user)}
                             onToggleActive={() => handleToggleActive(user)}
                             onDelete={() => setDeletingUser(user)}
+                            canManage={canManageUsers}
                           />
                         </TableCell>
                       </TableRow>
@@ -625,40 +641,42 @@ export default function UsersPage() {
             </DialogDescription>
           </DialogHeader>
 
-          {/* Tab switcher */}
-          <div className="flex rounded-md border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800/50">
-            <button
-              onClick={() => {
-                setInviteTab('single')
-                setBulkFile(null)
-                setBulkResult(null)
-                setBulkError(null)
-              }}
-              className={`flex-1 rounded py-1.5 text-sm font-medium transition-colors ${
-                inviteTab === 'single'
-                  ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
-                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-              }`}
-            >
-              Single Invite
-            </button>
-            <button
-              onClick={() => {
-                setInviteTab('bulk')
-                setInviteSuccess(null)
-                setInviteError(null)
-                setInviteEmail('')
-              }}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded py-1.5 text-sm font-medium transition-colors ${
-                inviteTab === 'bulk'
-                  ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
-                  : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
-              }`}
-            >
-              <FileSpreadsheet className="h-3.5 w-3.5" />
-              Bulk via Excel
-            </button>
-          </div>
+          {/* Tab switcher — only shown if user can bulk invite */}
+          {canBulkInvite && (
+            <div className="flex rounded-md border border-slate-200 bg-slate-50 p-1 dark:border-slate-700 dark:bg-slate-800/50">
+              <button
+                onClick={() => {
+                  setInviteTab('single')
+                  setBulkFile(null)
+                  setBulkResult(null)
+                  setBulkError(null)
+                }}
+                className={`flex-1 rounded py-1.5 text-sm font-medium transition-colors ${
+                  inviteTab === 'single'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
+              >
+                Single Invite
+              </button>
+              <button
+                onClick={() => {
+                  setInviteTab('bulk')
+                  setInviteSuccess(null)
+                  setInviteError(null)
+                  setInviteEmail('')
+                }}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded py-1.5 text-sm font-medium transition-colors ${
+                  inviteTab === 'bulk'
+                    ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-900 dark:text-slate-100'
+                    : 'text-slate-500 hover:text-slate-700 dark:text-slate-400'
+                }`}
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                Bulk via Excel
+              </button>
+            </div>
+          )}
 
           {/* -- Single Invite Tab -- */}
           {inviteTab === 'single' && (
@@ -986,48 +1004,50 @@ export default function UsersPage() {
                 />
               </div>
 
-              {/* Roles */}
-              <div>
-                <label className="text-sm font-medium">Roles</label>
-                <p className="text-muted-foreground mb-2 text-xs">
-                  Select one or more roles for this user
-                </p>
-                <div className="border-border grid grid-cols-2 gap-2 rounded-md border p-3 dark:border-slate-700">
-                  {roles.map((role) => (
-                    <label
-                      key={role.id}
-                      className="flex cursor-pointer items-center gap-2 rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={assignedRoleIds.has(role.id)}
-                        onChange={() => toggleRole(role.id)}
-                        className="accent-primary h-4 w-4"
-                      />
-                      <span className="text-sm">{role.name}</span>
-                    </label>
-                  ))}
-                </div>
-                {assignedRoleIds.size > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {[...assignedRoleIds].map((id) => {
-                      const role = roles.find((r) => r.id === id)
-                      if (!role) return null
-                      return (
-                        <Badge key={id} variant="secondary" className="gap-1 pr-1">
-                          {role.name}
-                          <button
-                            onClick={() => toggleRole(id)}
-                            className="hover:text-destructive ml-1"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      )
-                    })}
+              {/* Roles — CEO only */}
+              {canEditRoles && (
+                <div>
+                  <label className="text-sm font-medium">Roles</label>
+                  <p className="text-muted-foreground mb-2 text-xs">
+                    Select one or more roles for this user
+                  </p>
+                  <div className="border-border grid grid-cols-2 gap-2 rounded-md border p-3 dark:border-slate-700">
+                    {roles.map((role) => (
+                      <label
+                        key={role.id}
+                        className="flex cursor-pointer items-center gap-2 rounded p-1 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={assignedRoleIds.has(role.id)}
+                          onChange={() => toggleRole(role.id)}
+                          className="accent-primary h-4 w-4"
+                        />
+                        <span className="text-sm">{role.name}</span>
+                      </label>
+                    ))}
                   </div>
-                )}
-              </div>
+                  {assignedRoleIds.size > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {[...assignedRoleIds].map((id) => {
+                        const role = roles.find((r) => r.id === id)
+                        if (!role) return null
+                        return (
+                          <Badge key={id} variant="secondary" className="gap-1 pr-1">
+                            {role.name}
+                            <button
+                              onClick={() => toggleRole(id)}
+                              className="hover:text-destructive ml-1"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setEditingUser(null)}>

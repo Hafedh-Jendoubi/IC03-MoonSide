@@ -88,6 +88,12 @@ public class PermissionAuthorizationFilter extends OncePerRequestFilter {
                 .map(a -> a.substring(PERMISSION_PREFIX.length()))
                 .collect(Collectors.toSet());
 
+        // CEO wildcard — ANYTHING grants unrestricted access everywhere
+        if (userPermissions.contains(tn.moonside.userservice.security.AppPermission.ANYTHING)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
         boolean hasPermission = Arrays.stream(annotation.value())
                 .anyMatch(userPermissions::contains);
 

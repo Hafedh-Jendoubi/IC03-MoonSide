@@ -13,56 +13,85 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth-context'
+import { hasFullBackOfficeAccess, PERM, hasAnyPermission } from '@/lib/types'
 
 interface AdminSidebarProps {
   isOpen?: boolean
 }
 
+interface SidebarLink {
+  href: string
+  label: string
+  icon: React.ElementType
+  description: string
+  /** If supplied, link is shown only when user holds at least one of these permissions. */
+  requiredPermissions?: string[]
+}
+
 export function AdminSidebar({ isOpen = true }: AdminSidebarProps) {
   const pathname = usePathname()
+  const { user } = useAuth()
+  const isCEO = hasFullBackOfficeAccess(user)
 
-  const adminLinks = [
+  const allLinks: SidebarLink[] = [
     {
       href: '/admin/dashboard',
       label: 'Dashboard',
       icon: BarChart3,
       description: 'Analytics & overview',
+      // HR (BACKOFFICE_DASHBOARD_READ) and CEO (ANYTHING) both get this
+      requiredPermissions: [PERM.BACKOFFICE_DASHBOARD_READ, PERM.ANYTHING],
     },
     {
       href: '/admin/users',
       label: 'Users',
       icon: Users,
       description: 'Manage users',
+      // HR (USER_READ_ALL) and CEO both get this
+      requiredPermissions: [PERM.USER_READ_ALL, PERM.ANYTHING],
     },
     {
       href: '/admin/roles',
-      label: 'Roles',
+      label: 'Roles & Permissions',
       icon: Shield,
       description: 'Manage roles & permissions',
+      // CEO only
+      requiredPermissions: [PERM.ANYTHING],
     },
     {
       href: '/admin/organizations',
       label: 'Organizations',
       icon: Building2,
       description: 'Departments & teams',
+      // HR (ORG_READ) and CEO both get this
+      requiredPermissions: [PERM.ORG_READ, PERM.ANYTHING],
     },
     {
       href: '/admin/audit-logs',
       label: 'Audit Logs',
       icon: ClipboardList,
       description: 'Activity & security trail',
+      // CEO only
+      requiredPermissions: [PERM.ANYTHING],
     },
     {
       href: '/admin/settings',
       label: 'Settings',
       icon: Settings,
       description: 'System settings',
+      // CEO only
+      requiredPermissions: [PERM.ANYTHING],
     },
   ]
 
-  if (!isOpen) {
-    return null
-  }
+  // Filter links by what the current user is allowed to see
+  const visibleLinks = allLinks.filter((link) => {
+    if (!link.requiredPermissions) return true
+    return hasAnyPermission(user, ...link.requiredPermissions)
+  })
+
+  if (!isOpen) return null
 
   return (
     <aside className="border-border bg-background fixed top-0 left-0 h-screen w-64 overflow-y-auto border-r dark:bg-slate-950">
@@ -79,9 +108,9 @@ export function AdminSidebar({ isOpen = true }: AdminSidebarProps) {
       {/* Navigation links */}
       <nav className="space-y-1 p-3">
         <p className="text-muted-foreground px-3 py-2 text-xs font-semibold tracking-wider uppercase">
-          Administration
+          {isCEO ? 'Administration' : 'HR Office'}
         </p>
-        {adminLinks.map((link) => {
+        {visibleLinks.map((link) => {
           const Icon = link.icon
           const isActive = pathname.startsWith(link.href)
           return (

@@ -15,6 +15,8 @@ export interface AuthResponse {
 export interface UserResponse {
   id: string
   roles: string[]
+  /** Flat list of all permission action strings across all the user's roles. */
+  permissions: string[]
   email: string
   firstName: string
   lastName: string
@@ -265,6 +267,8 @@ export const userApi = {
   getAll: () => apiFetch<UserResponse[]>('/users'),
   getById: (id: string) => apiFetch<UserResponse>(`/users/${id}`),
   getMe: () => apiFetch<UserResponse>('/users/me'),
+  updateMe: (data: UpdateUserRequest) =>
+    apiFetch<UserResponse>('/users/me', { method: 'PUT', body: JSON.stringify(data) }),
   update: (id: string, data: UpdateUserRequest) =>
     apiFetch<UserResponse>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateAvatar: (avatarUrl: string) =>

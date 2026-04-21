@@ -16,8 +16,8 @@ import Link from 'next/link'
 
 function canEditDepartment(user: User | null, department: DepartmentResponse | null): boolean {
   if (!user || !department) return false
-  if (hasRole(user, 'ADMIN')) return true
-  if (hasRole(user, 'DEPARTMENT_MANAGER') && department.managerId === user.id) return true
+  if (hasRole(user, 'CEO')) return true
+  if (hasRole(user, 'DEPARTMENT_LEADER') && department.managerId === user.id) return true
   return false
 }
 
@@ -27,9 +27,9 @@ function canEditTeam(
   department: DepartmentResponse | null
 ): boolean {
   if (!user) return false
-  if (hasRole(user, 'ADMIN')) return true
+  if (hasRole(user, 'CEO')) return true
   if (hasRole(user, 'TEAM_LEADER') && team.leadId === user.id) return true
-  if (hasRole(user, 'DEPARTMENT_MANAGER') && department?.managerId === user.id) return true
+  if (hasRole(user, 'DEPARTMENT_LEADER') && department?.managerId === user.id) return true
   return false
 }
 

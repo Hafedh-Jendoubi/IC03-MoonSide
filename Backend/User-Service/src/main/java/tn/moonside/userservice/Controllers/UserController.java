@@ -76,6 +76,17 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserRoleNames(id)));
     }
 
+    /** Update own profile — requires USER_UPDATE_OWN permission */
+    @PutMapping("/me")
+    @RequiresPermission(AppPermission.USER_UPDATE_OWN)
+    public ResponseEntity<ApiResponse<UserResponse>> updateMyProfile(
+            @RequestBody UpdateUserRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        UserResponse me = userService.getUserByEmail(userDetails.getUsername());
+        UserResponse updated = userService.updateUser(me.getId(), request, userDetails.getUsername());
+        return ResponseEntity.ok(ApiResponse.success(updated, "Profile updated successfully"));
+    }
+
     /** Update any user — requires USER_UPDATE permission */
     @PutMapping("/{id}")
     @RequiresPermission(AppPermission.USER_UPDATE)

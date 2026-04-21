@@ -12,6 +12,9 @@ import tn.moonside.userservice.entities.UserRole;
 import tn.moonside.userservice.repositories.RoleRepository;
 import tn.moonside.userservice.repositories.UserRepository;
 import tn.moonside.userservice.repositories.UserRoleRepository;
+import tn.moonside.userservice.repositories.PermissionRoleRepository;
+import tn.moonside.userservice.repositories.PermissionRepository;
+import tn.moonside.userservice.entities.PermissionRole;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
@@ -43,6 +46,8 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
+    private final PermissionRoleRepository permissionRoleRepository;
+    private final PermissionRepository permissionRepository;
     private final AuditLogService auditLogService;
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender mailSender;
@@ -430,9 +435,27 @@ public class UserServiceImpl implements UserService {
 
     private UserResponse mapToUserResponse(User user) {
         List<String> roles = user.getId() != null ? getUserRoleNames(user.getId()) : List.of();
+
+        // Resolve flat permission list from all roles — used by frontend for UI guards
+        List<String> permissions = user.getId() != null
+            ? userRoleRepository.findByUserIdFlexible(user.getId()).stream()
+                .map(ur -> roleRepository.findById(ur.getRoleId()))
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .flatMap(role -> permissionRoleRepository.findByRoleId(role.getId()).stream())
+                .map(PermissionRole::getPermissionId)
+                .distinct()
+                .map(permId -> permissionRepository.findById(permId))
+                .filter(Optional::isPresent)
+                .map(opt -> opt.get().getAction().toUpperCase())
+                .distinct()
+                .collect(Collectors.toList())
+            : List.of();
+
         return UserResponse.builder()
                 .id(user.getId())
                 .roles(roles)
+                .permissions(permissions)
                 .email(user.getEmail())
                 .firstName(user.getFirstName())
                 .lastName(user.getLastName())

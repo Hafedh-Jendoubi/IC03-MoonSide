@@ -19,9 +19,12 @@ function canEditTeam(
   userManagedDeptIds: string[]
 ): boolean {
   if (!user || !team) return false
-  if (hasRole(user, 'ADMIN')) return true
+  // CEO can do anything
+  if (hasRole(user, 'CEO')) return true
+  // Team Leader can manage their own team
   if (hasRole(user, 'TEAM_LEADER') && team.leadId === user.id) return true
-  if (hasRole(user, 'DEPARTMENT_MANAGER') && userManagedDeptIds.includes(team.departmentId))
+  // Department Leader can manage teams within their department
+  if (hasRole(user, 'DEPARTMENT_LEADER') && userManagedDeptIds.includes(team.departmentId))
     return true
   return false
 }
@@ -222,9 +225,9 @@ export default function TeamFeedPage() {
     loadData()
   }, [teamId])
 
-  // Fetch departments this user manages (for DEPARTMENT_MANAGER role check)
+  // Fetch departments this user manages (for DEPARTMENT_LEADER role check)
   useEffect(() => {
-    if (!user || !hasRole(user, 'DEPARTMENT_MANAGER')) return
+    if (!user || (!hasRole(user, 'DEPARTMENT_LEADER') && !hasRole(user, 'CEO'))) return
     departmentApi
       .getAll()
       .then((depts) =>

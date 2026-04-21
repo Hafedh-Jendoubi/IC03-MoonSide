@@ -102,7 +102,7 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
         await userApi.updateAvatar(media.url)
       }
 
-      // Save profile fields
+      // Save profile fields — use the /users/me endpoint (requires USER_UPDATE_OWN)
       const payload: UpdateUserRequest = {
         firstName: form.firstName || undefined,
         lastName: form.lastName || undefined,
@@ -110,7 +110,7 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
         phoneNumber: form.phoneNumber || undefined,
         bio: form.bio || undefined,
       }
-      const updated = await userApi.update(user.id, payload)
+      const updated = await userApi.updateMe(payload)
       await refreshUser()
       onSaved(updated as unknown as User)
     } catch (err) {

@@ -36,6 +36,8 @@ import {
   Loader2,
 } from 'lucide-react'
 import { format } from 'date-fns'
+import { RoleGuard } from '@/components/role-guard'
+import { ROLE } from '@/lib/types'
 
 // -- Action badge colour map ---------------------------------------------------
 
@@ -172,6 +174,14 @@ function DetailDialog({ log, onClose }: { log: AuditLogResponse | null; onClose:
 const PAGE_SIZE = 20
 
 export default function AuditLogsPage() {
+  return (
+    <RoleGuard requiredRoles={ROLE.CEO}>
+      <AuditLogsPageContent />
+    </RoleGuard>
+  )
+}
+
+function AuditLogsPageContent() {
   const [page, setPage] = useState(0)
   const [data, setData] = useState<PageResponse<AuditLogResponse> | null>(null)
   const [stats, setStats] = useState<AuditLogStats | null>(null)
