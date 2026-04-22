@@ -70,6 +70,16 @@ jobs:
           # Prevents the build from failing on warnings treated as errors
           CI: false
 
+      - name: SonarQube Scan
+        if: github.event_name == 'pull_request'
+        working-directory: Frontend
+        run: |
+          npx sonar-scanner \
+            -Dsonar.projectKey=moonside-frontend \
+            -Dsonar.organization=hafedh-jendoubi \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
   # ─────────────────────────────────────────────
   # 2. Docker build smoke-test (no push)
   #    Only runs on feature/* pushes.

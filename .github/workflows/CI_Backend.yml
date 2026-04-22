@@ -52,3 +52,13 @@ jobs:
         run: |
           chmod +x mvnw
           ./mvnw verify -B
+
+      - name: SonarQube Scan
+        if: github.event_name == 'pull_request'
+        working-directory: ${{ matrix.service.path }}
+        run: |
+              ./mvnw sonar:sonar \
+                -Dsonar.projectKey=moonside-${{ matrix.service.name }} \
+                -Dsonar.organization=hafedh-jendoubi \
+                -Dsonar.host.url=https://sonarcloud.io \
+                -Dsonar.login=${{ secrets.SONAR_TOKEN }}
