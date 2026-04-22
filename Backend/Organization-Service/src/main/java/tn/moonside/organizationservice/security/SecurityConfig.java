@@ -42,6 +42,16 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, "/organizations/teams/{teamId}/leave").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/my").authenticated()
 
+                // ── Follow system (any authenticated user) ────────────────────
+                .requestMatchers(HttpMethod.POST, "/organizations/departments/{id}/follow").authenticated()
+                .requestMatchers(HttpMethod.DELETE, "/organizations/departments/{id}/follow").authenticated()
+                .requestMatchers(HttpMethod.POST, "/organizations/teams/{teamId}/follow").authenticated()
+                .requestMatchers(HttpMethod.DELETE, "/organizations/teams/{teamId}/follow").authenticated()
+
+                // ── Assign member (Team Leader, Dept Leader, HR, CEO) ─────────
+                .requestMatchers(HttpMethod.POST, "/organizations/teams/{teamId}/assign/{userId}")
+                    .hasAnyRole("CEO", "TEAM_LEADER", "DEPARTMENT_LEADER", "HUMAN_RESOURCES")
+
                 // ── CEO-only mutations ──────────────────────────────────────
                 .requestMatchers(HttpMethod.POST,   "/organizations/departments/**").hasRole("CEO")
                 .requestMatchers(HttpMethod.DELETE, "/organizations/departments/**").hasRole("CEO")

@@ -10,10 +10,13 @@ import tn.moonside.organizationservice.dtos.responses.TeamResponse;
 import tn.moonside.organizationservice.dtos.responses.UserSummary;
 import tn.moonside.organizationservice.dtos.responses.UserTeamResponse;
 import tn.moonside.organizationservice.entities.Department;
+import tn.moonside.organizationservice.entities.Follow;
 import tn.moonside.organizationservice.entities.Team;
 import tn.moonside.organizationservice.entities.UserTeam;
+import tn.moonside.organizationservice.enums.FollowTargetType;
 import tn.moonside.organizationservice.enums.VisibilityType;
 import tn.moonside.organizationservice.repositories.DepartmentRepository;
+import tn.moonside.organizationservice.repositories.FollowRepository;
 import tn.moonside.organizationservice.repositories.TeamRepository;
 import tn.moonside.organizationservice.repositories.UserTeamRepository;
 
@@ -32,6 +35,7 @@ public class TeamService {
     private final DepartmentRepository departmentRepository;
     private final UserTeamRepository userTeamRepository;
     private final UserServiceClient userServiceClient;
+    private final FollowRepository followRepository;
 
     // ── Admin CRUD ────────────────────────────────────────────────────────────
 
@@ -303,7 +307,70 @@ public class TeamService {
         return toResponse(team, userId);
     }
 
+    // ── Assign member (by leader / HR) ────────────────────────────────────────
+
+    /**
+     * Assign a user as a member of a team.
+     * Authorised callers: CEO, the team's own TEAM_LEADER, a DEPARTMENT_LEADER
+     * who manages the team's department, or HUMAN_RESOURCES (any team).
+     * The assigned user automatically receives the TEAM_MEMBER role.
+     */
+    public TeamResponse assignMemberToTeam(String teamId, String userId,
+                                           String requestingUserId, List<String> roles) {
+        Team team = findById(teamId);
+        assertCanAssignMember(team, requestingUserId, roles);
+
+        if (!userTeamRepository.existsByUserIdAndTeamId(userId, teamId)) {
+            UserTeam membership = UserTeam.builder()
+                    .userId(userId)
+                    .teamId(teamId)
+                    .joinedAt(LocalDateTime.now())
+                    .build();
+            userTeamRepository.save(membership);
+        }
+
+        // Auto-grant TEAM_MEMBER role to the assigned user
+        userServiceClient.assignLeaderRole(userId, "TEAM_MEMBER");
+
+        return toResponse(team, requestingUserId);
+    }
+
+    // ── Follow / Unfollow ─────────────────────────────────────────────────────
+
+    public TeamResponse followTeam(String teamId, String userId) {
+        Team team = findById(teamId);
+        if (!followRepository.existsByUserIdAndTargetIdAndTargetType(userId, teamId, FollowTargetType.TEAM)) {
+            followRepository.save(Follow.builder()
+                    .userId(userId)
+                    .targetId(teamId)
+                    .targetType(FollowTargetType.TEAM)
+                    .build());
+        }
+        return toResponse(team, userId);
+    }
+
+    public TeamResponse unfollowTeam(String teamId, String userId) {
+        Team team = findById(teamId);
+        followRepository.deleteByUserIdAndTargetIdAndTargetType(userId, teamId, FollowTargetType.TEAM);
+        return toResponse(team, userId);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private void assertCanAssignMember(Team team, String requestingUserId, List<String> roles) {
+        boolean isAdmin          = roles.contains("CEO");
+        boolean isHr             = roles.contains("HUMAN_RESOURCES");
+        boolean isTeamLeader     = roles.contains("TEAM_LEADER")
+                && requestingUserId.equals(team.getLeadId());
+        boolean isDeptManager    = roles.contains("DEPARTMENT_LEADER")
+                && departmentRepository.findById(team.getDepartmentId())
+                        .map(d -> requestingUserId.equals(d.getManagerId()))
+                        .orElse(false);
+        if (!isAdmin && !isHr && !isTeamLeader && !isDeptManager) {
+            throw new AccessDeniedException(
+                    "Only a Team Leader of this team, its Department Leader, HR, or CEO may assign members.");
+        }
+    }
 
     private void assertCanEdit(Team team, String requestingUserId, List<String> roles) {
         boolean isAdmin = roles.contains("CEO");
@@ -333,6 +400,13 @@ public class TeamService {
         boolean isMember = requestingUserId != null &&
                 userTeamRepository.existsByUserIdAndTeamId(requestingUserId, team.getId());
 
+        boolean isFollowing = requestingUserId != null &&
+                followRepository.existsByUserIdAndTargetIdAndTargetType(
+                        requestingUserId, team.getId(), FollowTargetType.TEAM);
+
+        long followerCount = followRepository.countByTargetIdAndTargetType(
+                team.getId(), FollowTargetType.TEAM);
+
         String departmentName = departmentRepository.findById(team.getDepartmentId())
                 .map(Department::getName)
                 .orElse(null);
@@ -350,6 +424,8 @@ public class TeamService {
                 .teamVisibility(team.getTeamVisibility())
                 .memberCount(memberCount)
                 .isMember(isMember)
+                .isFollowing(isFollowing)
+                .followerCount(followerCount)
                 .createdAt(team.getCreatedAt())
                 .updatedAt(team.getUpdatedAt())
                 .build();

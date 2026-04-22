@@ -2,7 +2,17 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Loader2, Building2, Pencil, X, Users, UserMinus } from 'lucide-react'
+import {
+  Loader2,
+  Building2,
+  Pencil,
+  X,
+  Users,
+  UserMinus,
+  Bell,
+  BellOff,
+  UserPlus,
+} from 'lucide-react'
 import {
   departmentApi,
   teamApi,
@@ -37,6 +47,119 @@ function canEditTeam(
   if (hasRole(user, 'TEAM_LEADER') && team.leadId === user.id) return true
   if (hasRole(user, 'DEPARTMENT_LEADER') && department?.managerId === user.id) return true
   return false
+}
+
+function canAssignToTeam(
+  user: User | null,
+  team: TeamResponse,
+  department: DepartmentResponse | null
+): boolean {
+  if (!user) return false
+  if (hasRole(user, 'CEO')) return true
+  if (hasRole(user, 'HUMAN_RESOURCES')) return true
+  if (hasRole(user, 'TEAM_LEADER') && team.leadId === user.id) return true
+  if (hasRole(user, 'DEPARTMENT_LEADER') && department?.managerId === user.id) return true
+  return false
+}
+
+// ── Assign Member Modal ───────────────────────────────────────────────────────
+
+interface AssignMemberModalProps {
+  team: TeamResponse
+  onClose: () => void
+  onAssigned: (teamId: string) => void
+}
+
+function AssignMemberModal({ team, onClose, onAssigned }: AssignMemberModalProps) {
+  const [userId, setUserId] = useState('')
+  const [assigning, setAssigning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+
+  const handleAssign = async () => {
+    const trimmed = userId.trim()
+    if (!trimmed) return
+    setAssigning(true)
+    setError(null)
+    setSuccess(false)
+    try {
+      await teamApi.assignMember(team.id, trimmed)
+      setSuccess(true)
+      setUserId('')
+      onAssigned(team.id)
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to assign member')
+    } finally {
+      setAssigning(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-background w-full max-w-md rounded-xl shadow-xl">
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <div className="flex items-center gap-2">
+            <UserPlus className="text-primary h-5 w-5" />
+            <h2 className="text-foreground text-lg font-semibold">Assign Member to {team.name}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground rounded-full p-1 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="space-y-4 px-6 py-5">
+          <p className="text-muted-foreground text-sm">
+            Enter the User ID of the employee to assign to{' '}
+            <span className="text-foreground font-medium">{team.name}</span>. They will
+            automatically be granted the <span className="font-medium">Team Member</span> role.
+          </p>
+          {error && (
+            <div className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
+              User successfully assigned and granted Team Member role.
+            </div>
+          )}
+          <div>
+            <label className="text-foreground mb-1 block text-sm font-medium">User ID</label>
+            <input
+              type="text"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              placeholder="Paste user ID here…"
+              disabled={assigning}
+              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-1">
+            <button
+              onClick={onClose}
+              className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+            >
+              Close
+            </button>
+            <button
+              onClick={handleAssign}
+              disabled={assigning || !userId.trim()}
+              className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {assigning ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UserPlus className="h-4 w-4" />
+              )}
+              Assign
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ── Team Members Modal ────────────────────────────────────────────────────────
@@ -523,6 +646,8 @@ export default function DepartmentFeedPage() {
   const [deptEditOpen, setDeptEditOpen] = useState(false)
   const [editingTeam, setEditingTeam] = useState<TeamResponse | null>(null)
   const [membersTeam, setMembersTeam] = useState<TeamResponse | null>(null)
+  const [assigningTeam, setAssigningTeam] = useState<TeamResponse | null>(null)
+  const [followLoading, setFollowLoading] = useState(false)
 
   useEffect(() => {
     if (!deptId) return
@@ -593,6 +718,27 @@ export default function DepartmentFeedPage() {
     )
   }
 
+  const handleMemberAssigned = (teamId: string) => {
+    setTeams((prev) =>
+      prev.map((t) => (t.id === teamId ? { ...t, memberCount: t.memberCount + 1 } : t))
+    )
+  }
+
+  const handleFollow = async () => {
+    if (!department) return
+    setFollowLoading(true)
+    try {
+      const updated = department.isFollowing
+        ? await departmentApi.unfollow(department.id)
+        : await departmentApi.follow(department.id)
+      setDepartment(updated)
+    } catch {
+      // silently ignore
+    } finally {
+      setFollowLoading(false)
+    }
+  }
+
   if (loading)
     return (
       <AuthLayout>
@@ -659,15 +805,44 @@ export default function DepartmentFeedPage() {
                 </p>
               )}
             </div>
-            {showDeptEdit && (
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {/* Follow / Unfollow */}
               <button
-                onClick={() => setDeptEditOpen(true)}
-                className="border-border text-foreground hover:bg-muted flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+                onClick={handleFollow}
+                disabled={followLoading}
+                className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
+                  department.isFollowing
+                    ? 'border-primary text-primary hover:bg-primary/10'
+                    : 'border-border text-foreground hover:bg-muted'
+                }`}
+                title={department.isFollowing ? 'Unfollow department' : 'Follow department'}
               >
-                <Pencil className="h-4 w-4" />
-                Edit Department
+                {followLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : department.isFollowing ? (
+                  <BellOff className="h-4 w-4" />
+                ) : (
+                  <Bell className="h-4 w-4" />
+                )}
+                {department.isFollowing ? 'Following' : 'Follow'}
+                {department.followerCount > 0 && (
+                  <span className="text-muted-foreground text-xs">
+                    ({department.followerCount})
+                  </span>
+                )}
               </button>
-            )}
+
+              {/* Edit Department */}
+              {showDeptEdit && (
+                <button
+                  onClick={() => setDeptEditOpen(true)}
+                  className="border-border text-foreground hover:bg-muted flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit Department
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -733,6 +908,30 @@ export default function DepartmentFeedPage() {
                             <Pencil className="h-3.5 w-3.5" />
                           </button>
                         )}
+                        {canAssignToTeam(user, team, department) && !showTeamEdit && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault()
+                              setAssigningTeam(team)
+                            }}
+                            title="Assign member"
+                            className="text-muted-foreground hover:text-primary hover:bg-muted absolute top-2 right-2 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                          >
+                            <UserPlus className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        {showTeamEdit && (
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault()
+                              setAssigningTeam(team)
+                            }}
+                            title="Assign member"
+                            className="text-muted-foreground hover:text-primary hover:bg-muted absolute top-2 right-9 rounded p-1 opacity-0 transition-opacity group-hover:opacity-100"
+                          >
+                            <UserPlus className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
                     )
                   })}
@@ -791,6 +990,13 @@ export default function DepartmentFeedPage() {
             setTeams((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
             setEditingTeam(null)
           }}
+        />
+      )}
+      {assigningTeam && (
+        <AssignMemberModal
+          team={assigningTeam}
+          onClose={() => setAssigningTeam(null)}
+          onAssigned={handleMemberAssigned}
         />
       )}
       {membersTeam && (

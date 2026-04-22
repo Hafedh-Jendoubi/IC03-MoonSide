@@ -38,8 +38,10 @@ public class DepartmentController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<DepartmentResponse>> getDepartmentById(@PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.success(departmentService.getDepartmentById(id)));
+    public ResponseEntity<ApiResponse<DepartmentResponse>> getDepartmentById(
+            @PathVariable String id,
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.success(departmentService.getDepartmentById(id, userId)));
     }
 
     // ── Admin mutations ───────────────────────────────────────────────────────
@@ -134,5 +136,31 @@ public class DepartmentController {
         return ResponseEntity.ok(ApiResponse.success(
                 departmentService.updateBanner(id, request.getUrl(), userId, roles),
                 "Department banner updated"));
+    }
+
+    // ── Follow / Unfollow ─────────────────────────────────────────────────────
+
+    /**
+     * POST /organizations/departments/{id}/follow
+     * The authenticated user starts following this department.
+     */
+    @PostMapping("/{id}/follow")
+    public ResponseEntity<ApiResponse<DepartmentResponse>> followDepartment(
+            @PathVariable String id,
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                departmentService.followDepartment(id, userId), "Now following department"));
+    }
+
+    /**
+     * DELETE /organizations/departments/{id}/follow
+     * The authenticated user unfollows this department.
+     */
+    @DeleteMapping("/{id}/follow")
+    public ResponseEntity<ApiResponse<DepartmentResponse>> unfollowDepartment(
+            @PathVariable String id,
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                departmentService.unfollowDepartment(id, userId), "Unfollowed department"));
     }
 }

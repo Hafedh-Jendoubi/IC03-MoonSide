@@ -53,7 +53,8 @@ public class DataSeeder implements CommandLineRunner {
     private void seedRoles() {
         List<RoleDef> roles = List.of(
             new RoleDef("EMPLOYEE",          "Default role — every user. Login, view content, manage own profile."),
-            new RoleDef("TEAM_LEADER",       "Manage everything within own team (details, members, lead)."),
+            new RoleDef("TEAM_MEMBER",        "Assigned when a user is added to a team by a leader or HR."),
+            new RoleDef("TEAM_LEADER",        "Manage everything within own team (details, members, lead)."),
             new RoleDef("DEPARTMENT_LEADER", "Manage own department and teams within it; inherits Team Leader authorities for dept teams."),
             new RoleDef("HUMAN_RESOURCES",   "Limited back-office access: dashboard, user list, single invite, organizations."),
             new RoleDef("CEO",               "Unrestricted access to everything via ANYTHING wildcard.")
@@ -103,6 +104,11 @@ public class DataSeeder implements CommandLineRunner {
             new PermissionDef(AppPermission.USER_READ_ALL,             TypeScope.GLOBAL, "List all users in back office"),
             new PermissionDef(AppPermission.USER_INVITE,               TypeScope.GLOBAL, "Invite a single user"),
             new PermissionDef(AppPermission.ORG_READ,                  TypeScope.GLOBAL, "Read organizations in back office"),
+            new PermissionDef(AppPermission.TEAM_ASSIGN_MEMBER,        TypeScope.GLOBAL, "Assign any user to any team as member (granted to leaders and HR)"),
+
+            // ── Follow system (EMPLOYEE) ───────────────────────────────────────
+            new PermissionDef(AppPermission.FOLLOW_DEPARTMENT,         TypeScope.GLOBAL, "Follow or unfollow a department"),
+            new PermissionDef(AppPermission.FOLLOW_TEAM,               TypeScope.GLOBAL, "Follow or unfollow a team"),
 
             // ── CEO-only full-admin (accessed via ANYTHING but defined for completeness) ─
             new PermissionDef(AppPermission.USER_INVITE_BULK,          TypeScope.GLOBAL, "Bulk invite users from Excel"),
@@ -153,21 +159,31 @@ public class DataSeeder implements CommandLineRunner {
             AppPermission.USER_UPDATE_OWN_AVATAR,
             AppPermission.USER_DELETE_OWN_AVATAR,
             AppPermission.USER_READ,
-            AppPermission.USER_READ_ROLES
+            AppPermission.USER_READ_ROLES,
+            AppPermission.FOLLOW_DEPARTMENT,
+            AppPermission.FOLLOW_TEAM
+        );
+
+        // ── TEAM_MEMBER — assigned automatically when added to a team ──────────
+        List<String> teamMemberPerms = List.of(
+            AppPermission.FOLLOW_DEPARTMENT,
+            AppPermission.FOLLOW_TEAM
         );
 
         // ── TEAM_LEADER — team-scoped management only (no overlap with EMPLOYEE) ─
         List<String> teamLeaderPerms = List.of(
             AppPermission.TEAM_MANAGE,
             AppPermission.TEAM_MANAGE_MEMBERS,
-            AppPermission.TEAM_MANAGE_LEAD
+            AppPermission.TEAM_MANAGE_LEAD,
+            AppPermission.TEAM_ASSIGN_MEMBER
         );
 
         // ── DEPARTMENT_LEADER — dept-scoped management (no overlap with TEAM_LEADER) ─
         List<String> departmentLeaderPerms = List.of(
             AppPermission.DEPT_MANAGE,
             AppPermission.DEPT_MANAGE_TEAMS,
-            AppPermission.DEPT_MANAGE_MANAGER
+            AppPermission.DEPT_MANAGE_MANAGER,
+            AppPermission.TEAM_ASSIGN_MEMBER
         );
 
         // ── HUMAN_RESOURCES — limited back-office (no overlap with above roles) ─
@@ -175,7 +191,8 @@ public class DataSeeder implements CommandLineRunner {
             AppPermission.BACKOFFICE_DASHBOARD_READ,
             AppPermission.USER_READ_ALL,
             AppPermission.USER_INVITE,
-            AppPermission.ORG_READ
+            AppPermission.ORG_READ,
+            AppPermission.TEAM_ASSIGN_MEMBER
         );
 
         // ── CEO — single ANYTHING wildcard (everything else is a subset) ────────
@@ -185,6 +202,7 @@ public class DataSeeder implements CommandLineRunner {
 
         Map<String, List<String>> rolePermissionMap = Map.of(
             "EMPLOYEE",          employeePerms,
+            "TEAM_MEMBER",       teamMemberPerms,
             "TEAM_LEADER",       teamLeaderPerms,
             "DEPARTMENT_LEADER", departmentLeaderPerms,
             "HUMAN_RESOURCES",   hrPerms,

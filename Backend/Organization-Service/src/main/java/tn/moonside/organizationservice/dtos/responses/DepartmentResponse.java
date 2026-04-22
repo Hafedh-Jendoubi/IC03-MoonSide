@@ -18,6 +18,10 @@ public class DepartmentResponse {
     private String bannerUrl;
     private boolean isActive;
     private long teamCount;
+    /** True if the requesting user is following this department. */
+    private boolean isFollowing;
+    /** Total number of followers. */
+    private long followerCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

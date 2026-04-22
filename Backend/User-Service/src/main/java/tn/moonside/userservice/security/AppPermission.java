@@ -42,6 +42,16 @@ public final class AppPermission {
     /** GET /users/{id}/roles — view a user's roles */
     public static final String USER_READ_ROLES           = "USER_READ_ROLES";
 
+    // ─── Team membership assignment (TEAM_LEADER, DEPARTMENT_LEADER, HUMAN_RESOURCES) ──
+    /** POST /organizations/teams/{id}/assign/{userId} — assign a user as member to a team */
+    public static final String TEAM_ASSIGN_MEMBER        = "TEAM_ASSIGN_MEMBER";
+
+    // ─── Follow system (EMPLOYEE role) ────────────────────────────────────────
+    /** POST/DELETE /organizations/departments/{id}/follow — follow or unfollow a department */
+    public static final String FOLLOW_DEPARTMENT         = "FOLLOW_DEPARTMENT";
+    /** POST/DELETE /organizations/teams/{id}/follow — follow or unfollow a team */
+    public static final String FOLLOW_TEAM               = "FOLLOW_TEAM";
+
     // ─── Team management (TEAM_LEADER role) ──────────────────────────────────
     /** GET/PUT /organizations/teams/{id} — manage team details for own team */
     public static final String TEAM_MANAGE               = "TEAM_MANAGE";

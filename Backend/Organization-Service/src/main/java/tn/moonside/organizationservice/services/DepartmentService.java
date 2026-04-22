@@ -9,7 +9,10 @@ import tn.moonside.organizationservice.dtos.requests.DepartmentRequest;
 import tn.moonside.organizationservice.dtos.responses.DepartmentResponse;
 import tn.moonside.organizationservice.dtos.responses.UserSummary;
 import tn.moonside.organizationservice.entities.Department;
+import tn.moonside.organizationservice.entities.Follow;
+import tn.moonside.organizationservice.enums.FollowTargetType;
 import tn.moonside.organizationservice.repositories.DepartmentRepository;
+import tn.moonside.organizationservice.repositories.FollowRepository;
 import tn.moonside.organizationservice.repositories.TeamRepository;
 
 import org.springframework.security.access.AccessDeniedException;
@@ -26,6 +29,7 @@ public class DepartmentService {
     private final DepartmentRepository departmentRepository;
     private final TeamRepository teamRepository;
     private final UserServiceClient userServiceClient;
+    private final FollowRepository followRepository;
 
     // ── CRUD ─────────────────────────────────────────────────────────────────
 
@@ -64,9 +68,9 @@ public class DepartmentService {
                 .collect(Collectors.toList());
     }
 
-    public DepartmentResponse getDepartmentById(String id) {
+    public DepartmentResponse getDepartmentById(String id, String requestingUserId) {
         Department dept = findById(id);
-        return toResponse(dept);
+        return toResponse(dept, requestingUserId);
     }
 
     /**
@@ -196,6 +200,28 @@ public class DepartmentService {
         return toResponse(departmentRepository.save(dept));
     }
 
+    // ── Follow / Unfollow ─────────────────────────────────────────────────────
+
+    public DepartmentResponse followDepartment(String departmentId, String userId) {
+        Department dept = findById(departmentId);
+        if (!followRepository.existsByUserIdAndTargetIdAndTargetType(
+                userId, departmentId, FollowTargetType.DEPARTMENT)) {
+            followRepository.save(Follow.builder()
+                    .userId(userId)
+                    .targetId(departmentId)
+                    .targetType(FollowTargetType.DEPARTMENT)
+                    .build());
+        }
+        return toResponse(dept, userId);
+    }
+
+    public DepartmentResponse unfollowDepartment(String departmentId, String userId) {
+        Department dept = findById(departmentId);
+        followRepository.deleteByUserIdAndTargetIdAndTargetType(
+                userId, departmentId, FollowTargetType.DEPARTMENT);
+        return toResponse(dept, userId);
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void assertCanEdit(Department dept, String requestingUserId, List<String> roles) {
@@ -213,11 +239,22 @@ public class DepartmentService {
     }
 
     public DepartmentResponse toResponse(Department dept) {
+        return toResponse(dept, null);
+    }
+
+    public DepartmentResponse toResponse(Department dept, String requestingUserId) {
         UserSummary manager = dept.getManagerId() != null
                 ? userServiceClient.findById(dept.getManagerId()).orElse(null)
                 : null;
 
         long teamCount = teamRepository.findByDepartmentId(dept.getId()).size();
+
+        boolean isFollowing = requestingUserId != null &&
+                followRepository.existsByUserIdAndTargetIdAndTargetType(
+                        requestingUserId, dept.getId(), FollowTargetType.DEPARTMENT);
+
+        long followerCount = followRepository.countByTargetIdAndTargetType(
+                dept.getId(), FollowTargetType.DEPARTMENT);
 
         return DepartmentResponse.builder()
                 .id(dept.getId())
@@ -229,6 +266,8 @@ public class DepartmentService {
                 .bannerUrl(dept.getBannerUrl())
                 .isActive(dept.isActive())
                 .teamCount(teamCount)
+                .isFollowing(isFollowing)
+                .followerCount(followerCount)
                 .createdAt(dept.getCreatedAt())
                 .updatedAt(dept.getUpdatedAt())
                 .build();

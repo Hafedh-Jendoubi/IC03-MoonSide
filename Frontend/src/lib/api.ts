@@ -491,6 +491,8 @@ export interface DepartmentResponse {
   bannerUrl: string | null
   isActive: boolean
   teamCount: number
+  isFollowing: boolean
+  followerCount: number
   createdAt: string
   updatedAt: string
 }
@@ -518,6 +520,8 @@ export interface TeamResponse {
   teamVisibility: VisibilityType
   memberCount: number
   isMember: boolean
+  isFollowing: boolean
+  followerCount: number
   createdAt: string
   updatedAt: string
 }
@@ -595,6 +599,12 @@ export const departmentApi = {
       method: 'PATCH',
       body: JSON.stringify({ url }),
     }),
+
+  follow: (id: string) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/follow`, { method: 'POST' }),
+
+  unfollow: (id: string) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/follow`, { method: 'DELETE' }),
 }
 
 // -- Team API ------------------------------------------------------------------
@@ -649,6 +659,11 @@ export const teamApi = {
       method: 'POST',
     }),
 
+  assignMember: (teamId: string, userId: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${teamId}/assign/${userId}`, {
+      method: 'POST',
+    }),
+
   removeMember: (teamId: string, userId: string) =>
     apiFetch<void>(`/organizations/teams/${teamId}/members/${userId}`, {
       method: 'DELETE',
@@ -665,4 +680,10 @@ export const teamApi = {
       method: 'PATCH',
       body: JSON.stringify({ url }),
     }),
+
+  follow: (id: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/follow`, { method: 'POST' }),
+
+  unfollow: (id: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/follow`, { method: 'DELETE' }),
 }

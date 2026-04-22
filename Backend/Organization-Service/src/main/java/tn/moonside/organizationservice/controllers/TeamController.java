@@ -142,6 +142,52 @@ public class TeamController {
                 teamService.addMember(teamId, userId), "Member added successfully"));
     }
 
+    /**
+     * POST /organizations/teams/{teamId}/assign/{userId}
+     * Assign a user as a team member — only Team Leader of this team,
+     * Department Leader of its department, HR, or CEO may call this.
+     * Automatically grants the TEAM_MEMBER role to the assigned user.
+     */
+    @PostMapping("/{teamId}/assign/{userId}")
+    public ResponseEntity<ApiResponse<TeamResponse>> assignMember(
+            @PathVariable String teamId,
+            @PathVariable String userId,
+            @AuthenticationPrincipal String requestingUserId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(
+                teamService.assignMemberToTeam(teamId, userId, requestingUserId, roles),
+                "User assigned to team successfully"));
+    }
+
+    // ── Follow / Unfollow ─────────────────────────────────────────────────────
+
+    /**
+     * POST /organizations/teams/{teamId}/follow
+     * The authenticated user starts following this team.
+     */
+    @PostMapping("/{teamId}/follow")
+    public ResponseEntity<ApiResponse<TeamResponse>> followTeam(
+            @PathVariable String teamId,
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                teamService.followTeam(teamId, userId), "Now following team"));
+    }
+
+    /**
+     * DELETE /organizations/teams/{teamId}/follow
+     * The authenticated user unfollows this team.
+     */
+    @DeleteMapping("/{teamId}/follow")
+    public ResponseEntity<ApiResponse<TeamResponse>> unfollowTeam(
+            @PathVariable String teamId,
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                teamService.unfollowTeam(teamId, userId), "Unfollowed team"));
+    }
+
     @DeleteMapping("/{teamId}/members/{userId}")
     public ResponseEntity<ApiResponse<Void>> removeMember(
             @PathVariable String teamId,

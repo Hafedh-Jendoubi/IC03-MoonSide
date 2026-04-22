@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Loader2, Users, Pencil, X, UserMinus } from 'lucide-react'
-import { teamApi, departmentApi, TeamResponse, UserTeamResponse } from '@/lib/api'
+import { Loader2, Users, Pencil, X, UserMinus, Bell, BellOff, UserPlus } from 'lucide-react'
+import { teamApi, departmentApi, TeamResponse, UserTeamResponse, UserResponse } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
 import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
@@ -24,6 +24,124 @@ function canEditTeam(
   if (hasRole(user, 'DEPARTMENT_LEADER') && userManagedDeptIds.includes(team.departmentId))
     return true
   return false
+}
+
+function canAssignMember(
+  user: User | null,
+  team: TeamResponse | null,
+  userManagedDeptIds: string[]
+): boolean {
+  if (!user || !team) return false
+  if (hasRole(user, 'CEO')) return true
+  if (hasRole(user, 'HUMAN_RESOURCES')) return true
+  if (hasRole(user, 'TEAM_LEADER') && team.leadId === user.id) return true
+  if (hasRole(user, 'DEPARTMENT_LEADER') && userManagedDeptIds.includes(team.departmentId))
+    return true
+  return false
+}
+
+// ── Assign Member Modal ───────────────────────────────────────────────────────
+
+interface AssignMemberModalProps {
+  team: TeamResponse
+  onClose: () => void
+  onAssigned: () => void
+}
+
+function AssignMemberModal({ team, onClose, onAssigned }: AssignMemberModalProps) {
+  const [userId, setUserId] = useState('')
+  const [assigning, setAssigning] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+
+  const handleAssign = async () => {
+    const trimmed = userId.trim()
+    if (!trimmed) return
+    setAssigning(true)
+    setError(null)
+    setSuccess(false)
+    try {
+      await teamApi.assignMember(team.id, trimmed)
+      setSuccess(true)
+      setUserId('')
+      onAssigned()
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to assign member')
+    } finally {
+      setAssigning(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-background w-full max-w-md rounded-xl shadow-xl">
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <div className="flex items-center gap-2">
+            <UserPlus className="text-primary h-5 w-5" />
+            <h2 className="text-foreground text-lg font-semibold">Assign Member</h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground rounded-full p-1 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4 px-6 py-5">
+          <p className="text-muted-foreground text-sm">
+            Enter the User ID of the employee you want to assign to{' '}
+            <span className="text-foreground font-medium">{team.name}</span>. They will
+            automatically be granted the <span className="font-medium">Team Member</span> role.
+          </p>
+
+          {error && (
+            <div className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
+              User successfully assigned to team and granted Team Member role.
+            </div>
+          )}
+
+          <div>
+            <label className="text-foreground mb-1 block text-sm font-medium">User ID</label>
+            <input
+              type="text"
+              value={userId}
+              onChange={(e) => setUserId(e.target.value)}
+              placeholder="Paste user ID here…"
+              disabled={assigning}
+              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-1">
+            <button
+              onClick={onClose}
+              className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+            >
+              Close
+            </button>
+            <button
+              onClick={handleAssign}
+              disabled={assigning || !userId.trim()}
+              className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {assigning ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UserPlus className="h-4 w-4" />
+              )}
+              Assign
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ── Team Members Modal ────────────────────────────────────────────────────────
@@ -386,6 +504,8 @@ export default function TeamFeedPage() {
   const [userManagedDeptIds, setUserManagedDeptIds] = useState<string[]>([])
   const [editOpen, setEditOpen] = useState(false)
   const [membersOpen, setMembersOpen] = useState(false)
+  const [assignOpen, setAssignOpen] = useState(false)
+  const [followLoading, setFollowLoading] = useState(false)
 
   useEffect(() => {
     if (!teamId) return
@@ -475,6 +595,22 @@ export default function TeamFeedPage() {
   if (!user) return null
 
   const showEditButton = canEditTeam(user, team, userManagedDeptIds)
+  const showAssignButton = canAssignMember(user, team, userManagedDeptIds)
+
+  const handleFollow = async () => {
+    if (!team) return
+    setFollowLoading(true)
+    try {
+      const updated = team.isFollowing
+        ? await teamApi.unfollow(team.id)
+        : await teamApi.follow(team.id)
+      setTeam(updated)
+    } catch {
+      // silently ignore
+    } finally {
+      setFollowLoading(false)
+    }
+  }
 
   return (
     <AuthLayout>
@@ -524,15 +660,54 @@ export default function TeamFeedPage() {
               </button>
             </div>
 
-            {showEditButton && (
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {/* Follow / Unfollow */}
               <button
-                onClick={() => setEditOpen(true)}
-                className="border-border text-foreground hover:bg-muted flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+                onClick={handleFollow}
+                disabled={followLoading}
+                className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
+                  team.isFollowing
+                    ? 'border-primary text-primary hover:bg-primary/10'
+                    : 'border-border text-foreground hover:bg-muted'
+                }`}
+                title={team.isFollowing ? 'Unfollow team' : 'Follow team'}
               >
-                <Pencil className="h-4 w-4" />
-                Edit Team
+                {followLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : team.isFollowing ? (
+                  <BellOff className="h-4 w-4" />
+                ) : (
+                  <Bell className="h-4 w-4" />
+                )}
+                {team.isFollowing ? 'Following' : 'Follow'}
+                {team.followerCount > 0 && (
+                  <span className="text-muted-foreground text-xs">({team.followerCount})</span>
+                )}
               </button>
-            )}
+
+              {/* Assign Member — only for leaders / HR / CEO */}
+              {showAssignButton && (
+                <button
+                  onClick={() => setAssignOpen(true)}
+                  className="border-border text-foreground hover:bg-muted flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Assign Member
+                </button>
+              )}
+
+              {/* Edit Team */}
+              {showEditButton && (
+                <button
+                  onClick={() => setEditOpen(true)}
+                  className="border-border text-foreground hover:bg-muted flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Edit Team
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
@@ -573,6 +748,16 @@ export default function TeamFeedPage() {
             setTeam(updated)
             setEditOpen(false)
           }}
+        />
+      )}
+
+      {assignOpen && (
+        <AssignMemberModal
+          team={team}
+          onClose={() => setAssignOpen(false)}
+          onAssigned={() =>
+            setTeam((prev) => (prev ? { ...prev, memberCount: prev.memberCount + 1 } : prev))
+          }
         />
       )}
 

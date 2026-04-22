@@ -23,6 +23,10 @@ public class TeamResponse {
     private long memberCount;
     /** True if the requesting user is already a member. */
     private boolean isMember;
+    /** True if the requesting user is following this team. */
+    private boolean isFollowing;
+    /** Total number of followers. */
+    private long followerCount;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
