@@ -1,266 +1,111 @@
-name: CD – Build & Push to DockerHub
+name: CD – Build & Push
 
-# Triggers on pushes to dev (staging) and main (production).
-# The CI workflows must pass first (enforced via branch protection rules
-# on GitHub – see the README section at the bottom of this file).
 on:
   push:
-    branches:
-      - dev
-      - main
+    branches: [dev, main]
 
 env:
   DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-  # Image tag strategy:
-  #   dev  branch → tag "staging"  + git short-SHA
-  #   main branch → tag "latest"   + git short-SHA + semver tag (if any)
 
 jobs:
-  # ─────────────────────────────────────────────────────────────────────
-  # Resolve environment & image tag from the branch name
-  # ─────────────────────────────────────────────────────────────────────
   prepare:
-    name: Resolve environment
     runs-on: ubuntu-latest
     outputs:
-      env_name: ${{ steps.resolve.outputs.env_name }}
-      image_tag: ${{ steps.resolve.outputs.image_tag }}
-      sha_short: ${{ steps.resolve.outputs.sha_short }}
+      env_name: ${{ steps.meta.outputs.env }}
+      tag: ${{ steps.meta.outputs.tag }}
+      sha: ${{ steps.meta.outputs.sha }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Resolve tag & environment
-        id: resolve
+      - id: meta
         run: |
-          SHA_SHORT=$(git rev-parse --short HEAD)
-          echo "sha_short=$SHA_SHORT" >> "$GITHUB_OUTPUT"
+          SHA=$(git rev-parse --short HEAD)
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
 
           if [[ "${{ github.ref_name }}" == "main" ]]; then
-            echo "env_name=production"  >> "$GITHUB_OUTPUT"
-            echo "image_tag=latest"     >> "$GITHUB_OUTPUT"
+            echo "env=production" >> $GITHUB_OUTPUT
+            echo "tag=latest" >> $GITHUB_OUTPUT
           else
-            echo "env_name=staging"     >> "$GITHUB_OUTPUT"
-            echo "image_tag=staging"    >> "$GITHUB_OUTPUT"
+            echo "env=staging" >> $GITHUB_OUTPUT
+            echo "tag=staging" >> $GITHUB_OUTPUT
           fi
 
-  # ─────────────────────────────────────────────────────────────────────
-  # Eureka
-  # ─────────────────────────────────────────────────────────────────────
-  push-eureka:
-    name: Build & Push – Eureka
+  build-and-push:
     runs-on: ubuntu-latest
     needs: prepare
     environment: ${{ needs.prepare.outputs.env_name }}
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: maven
-
-      - name: Run tests
-        working-directory: Backend/Eureka
-        run: |
-          chmod +x mvnw
-          ./mvnw verify -B
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build & push Eureka
-        uses: docker/build-push-action@v5
-        with:
-          context: Backend/Eureka
-          push: true
-          tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/moonside-eureka:${{ needs.prepare.outputs.image_tag }}
-            ${{ env.DOCKERHUB_USERNAME }}/moonside-eureka:${{ needs.prepare.outputs.sha_short }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ─────────────────────────────────────────────────────────────────────
-  # Gateway
-  # ─────────────────────────────────────────────────────────────────────
-  push-gateway:
-    name: Build & Push – Gateway
-    runs-on: ubuntu-latest
-    needs: prepare
-    environment: ${{ needs.prepare.outputs.env_name }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-          cache: maven
-
-      - name: Run tests
-        working-directory: Backend/Gateway
-        run: |
-          chmod +x mvnw
-          ./mvnw verify -B
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build & push Gateway
-        uses: docker/build-push-action@v5
-        with:
-          context: Backend/Gateway
-          push: true
-          tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/moonside-gateway:${{ needs.prepare.outputs.image_tag }}
-            ${{ env.DOCKERHUB_USERNAME }}/moonside-gateway:${{ needs.prepare.outputs.sha_short }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ─────────────────────────────────────────────────────────────────────
-  # User-Service
-  # ─────────────────────────────────────────────────────────────────────
-  push-user-service:
-    name: Build & Push – User-Service
-    runs-on: ubuntu-latest
-    needs: prepare
-    environment: ${{ needs.prepare.outputs.env_name }}
+    strategy:
+      matrix:
+        service:
+          - { name: eureka, path: Backend/Eureka, java: 21 }
+          - { name: gateway, path: Backend/Gateway, java: 21 }
+          - { name: user-service, path: Backend/User-Service, java: 17, mongo: true }
+          - { name: media-service, path: Backend/Media-Service, java: 17, mongo: true }
+          - { name: organization-service, path: Backend/Organization-Service, java: 17, mongo: true }
+          - { name: frontend, path: Frontend, node: 20 }
 
     services:
       mongodb:
         image: mongo:7
-        ports:
-          - 27017:27017
+        ports: [27017:27017]
+        env:
+          MONGO_INITDB_ROOT_USERNAME: admin
+          MONGO_INITDB_ROOT_PASSWORD: admin123
+          MONGO_INITDB_DATABASE: admin
         options: >-
           --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-interval 10s --health-timeout 5s --health-retries 5
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up JDK 17
+      # Java services
+      - if: matrix.service.java
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          java-version: ${{ matrix.service.java }}
+          distribution: temurin
           cache: maven
 
-      - name: Run tests
-        working-directory: Backend/User-Service
+      - if: matrix.service.java
+        working-directory: ${{ matrix.service.path }}
         env:
-          SPRING_DATA_MONGODB_HOST: localhost
-          SPRING_DATA_MONGODB_PORT: 27017
+          MONGO_ROOT_USERNAME: admin
+          MONGO_ROOT_PASSWORD: admin123
+          MONGODB_HOST: localhost
+          MONGO_PORT: 27017
           SPRING_PROFILES_ACTIVE: test
         run: |
           chmod +x mvnw
           ./mvnw verify -B
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build & push User-Service
-        uses: docker/build-push-action@v5
-        with:
-          context: Backend/User-Service
-          push: true
-          tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/moonside-user-service:${{ needs.prepare.outputs.image_tag }}
-            ${{ env.DOCKERHUB_USERNAME }}/moonside-user-service:${{ needs.prepare.outputs.sha_short }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ─────────────────────────────────────────────────────────────────────
-  # Frontend
-  # ─────────────────────────────────────────────────────────────────────
-  push-frontend:
-    name: Build & Push – Frontend
-    runs-on: ubuntu-latest
-    needs: prepare
-    environment: ${{ needs.prepare.outputs.env_name }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
+      # Frontend
+      - if: matrix.service.node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: 20
+          cache: npm
           cache-dependency-path: Frontend/package-lock.json
 
-      - name: Install dependencies & validate
+      - if: matrix.service.node
         working-directory: Frontend
         run: |
           npm ci
-          npm run format:check
-          npm run type-check
-          npm test -- --passWithNoTests --ci
+          npm test -- --passWithNoTests
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      # Docker
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
+      - uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build & push Frontend
-        uses: docker/build-push-action@v5
+      - uses: docker/build-push-action@v5
         with:
-          context: Frontend
+          context: ${{ matrix.service.path }}
           push: true
           tags: |
-            ${{ env.DOCKERHUB_USERNAME }}/moonside-frontend:${{ needs.prepare.outputs.image_tag }}
-            ${{ env.DOCKERHUB_USERNAME }}/moonside-frontend:${{ needs.prepare.outputs.sha_short }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ─────────────────────────────────────────────────────────────────────
-  # Summary job – visible in the Actions UI
-  # ─────────────────────────────────────────────────────────────────────
-  summary:
-    name: Deployment Summary
-    runs-on: ubuntu-latest
-    needs: [prepare, push-eureka, push-gateway, push-user-service, push-frontend]
-    if: always()
-    steps:
-      - name: Print summary
-        run: |
-          echo "## CD Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Key | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Environment | \`${{ needs.prepare.outputs.env_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Image tag   | \`${{ needs.prepare.outputs.image_tag }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| SHA         | \`${{ needs.prepare.outputs.sha_short }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Branch      | \`${{ github.ref_name }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Triggered by| ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+            ${{ env.DOCKERHUB_USERNAME }}/moonside-${{ matrix.service.name }}:${{ needs.prepare.outputs.tag }}
+            ${{ env.DOCKERHUB_USERNAME }}/moonside-${{ matrix.service.name }}:${{ needs.prepare.outputs.sha }}

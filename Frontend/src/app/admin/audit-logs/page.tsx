@@ -36,8 +36,10 @@ import {
   Loader2,
 } from 'lucide-react'
 import { format } from 'date-fns'
+import { RoleGuard } from '@/components/role-guard'
+import { ROLE } from '@/lib/types'
 
-// ── Action badge colour map ───────────────────────────────────────────────────
+// -- Action badge colour map ---------------------------------------------------
 
 const ACTION_COLORS: Record<string, string> = {
   LOGIN_SUCCESS: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
@@ -83,7 +85,7 @@ function ActionBadge({ action }: { action: string }) {
   )
 }
 
-// ── Detail dialog ─────────────────────────────────────────────────────────────
+// -- Detail dialog -------------------------------------------------------------
 
 function DetailDialog({ log, onClose }: { log: AuditLogResponse | null; onClose: () => void }) {
   if (!log) return null
@@ -167,11 +169,19 @@ function DetailDialog({ log, onClose }: { log: AuditLogResponse | null; onClose:
   )
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// -- Main page -----------------------------------------------------------------
 
 const PAGE_SIZE = 20
 
 export default function AuditLogsPage() {
+  return (
+    <RoleGuard requiredRoles={ROLE.CEO}>
+      <AuditLogsPageContent />
+    </RoleGuard>
+  )
+}
+
+function AuditLogsPageContent() {
   const [page, setPage] = useState(0)
   const [data, setData] = useState<PageResponse<AuditLogResponse> | null>(null)
   const [stats, setStats] = useState<AuditLogStats | null>(null)
@@ -234,7 +244,7 @@ export default function AuditLogsPage() {
 
   return (
     <div className="flex-1 space-y-6 p-6">
-      {/* ── Header ── */}
+      {/* -- Header -- */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Audit Logs</h1>
@@ -248,7 +258,7 @@ export default function AuditLogsPage() {
         </Button>
       </div>
 
-      {/* ── Stats cards ── */}
+      {/* -- Stats cards -- */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {[
           {
@@ -287,7 +297,7 @@ export default function AuditLogsPage() {
         ))}
       </div>
 
-      {/* ── Filters ── */}
+      {/* -- Filters -- */}
       <div className="flex flex-wrap items-end gap-3">
         {/* User ID filter */}
         <div className="flex gap-2">
@@ -340,7 +350,7 @@ export default function AuditLogsPage() {
         )}
       </div>
 
-      {/* ── Table ── */}
+      {/* -- Table -- */}
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -405,7 +415,7 @@ export default function AuditLogsPage() {
         </Table>
       </div>
 
-      {/* ── Pagination ── */}
+      {/* -- Pagination -- */}
       {data && totalPages > 1 && (
         <div className="text-muted-foreground flex items-center justify-between text-sm">
           <span>
@@ -437,7 +447,7 @@ export default function AuditLogsPage() {
         </div>
       )}
 
-      {/* ── Detail dialog ── */}
+      {/* -- Detail dialog -- */}
       <DetailDialog log={detail} onClose={() => setDetail(null)} />
     </div>
   )

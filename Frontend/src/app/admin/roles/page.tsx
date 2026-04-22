@@ -25,8 +25,10 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Input } from '@/components/ui/input'
 import { roleApi, permissionApi, RoleResponse, PermissionResponse } from '@/lib/api'
+import { RoleGuard } from '@/components/role-guard'
+import { ROLE } from '@/lib/types'
 
-export default function RolesPage() {
+function RolesPageContent() {
   const [roles, setRoles] = useState<RoleResponse[]>([])
   const [allPermissions, setAllPermissions] = useState<PermissionResponse[]>([])
   const [loading, setLoading] = useState(true)
@@ -417,5 +419,13 @@ export default function RolesPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+export default function RolesPage() {
+  return (
+    <RoleGuard requiredRoles={ROLE.CEO}>
+      <RolesPageContent />
+    </RoleGuard>
   )
 }

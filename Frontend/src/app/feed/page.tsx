@@ -57,12 +57,6 @@ export default function FeedPage() {
   return (
     <AuthLayout>
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Page Header */}
-        <div className="animate-fade-in mb-8">
-          <h1 className="text-foreground mb-2 text-3xl font-bold">Your Feed</h1>
-          <p className="text-muted-foreground">Stay connected with your team</p>
-        </div>
-
         {/* Create Post */}
         <CreatePost user={user} onPostCreate={handlePostCreate} />
 

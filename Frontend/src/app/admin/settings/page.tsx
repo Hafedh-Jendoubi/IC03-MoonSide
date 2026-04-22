@@ -15,6 +15,8 @@ import {
   RoleResponse,
   PermissionResponse,
 } from '@/lib/api'
+import { RoleGuard } from '@/components/role-guard'
+import { ROLE } from '@/lib/types'
 
 const SETTINGS_KEY = 'worksphere_admin_settings'
 
@@ -30,6 +32,14 @@ const defaultSettings = {
 }
 
 export default function AdminSettingsPage() {
+  return (
+    <RoleGuard requiredRoles={ROLE.CEO}>
+      <AdminSettingsPageContent />
+    </RoleGuard>
+  )
+}
+
+function AdminSettingsPageContent() {
   const [settings, setSettings] = useState(defaultSettings)
   const [isSaving, setIsSaving] = useState(false)
   const [saved, setSaved] = useState(false)
