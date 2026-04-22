@@ -162,4 +162,40 @@ public class UserController {
                 "Bulk invite completed: " + result.getSucceeded() + " invited, " +
                 result.getSkipped() + " skipped, " + result.getFailed() + " failed."));
     }
+
+    // ── Internal service-to-service endpoints (no permission guard) ───────────
+
+    /**
+     * Internal endpoint — called by other microservices (e.g. Organization-Service)
+     * to fetch a user's info without requiring USER_READ permission on the caller's token.
+     * Only requires a valid JWT (any authenticated user/service).
+     */
+    @GetMapping("/internal/{id}")
+    public ResponseEntity<ApiResponse<UserResponse>> getUserByIdInternal(@PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id)));
+    }
+
+    /**
+     * Internal endpoint — called by other microservices to assign a role to a user
+     * (e.g. when a Team Leader or Department Leader is designated).
+     * Only requires a valid JWT; no USER_ASSIGN_ROLE permission needed.
+     */
+    @PostMapping("/internal/{userId}/roles")
+    public ResponseEntity<ApiResponse<Void>> assignRoleInternal(
+            @PathVariable String userId,
+            @Valid @RequestBody AssignRoleRequest request) {
+        userService.assignRole(userId, request);
+        return ResponseEntity.ok(ApiResponse.success(null, "Role assigned successfully"));
+    }
+
+    /**
+     * Internal endpoint — called by other microservices to revoke a role from a user.
+     */
+    @DeleteMapping("/internal/{userId}/roles/{roleName}")
+    public ResponseEntity<ApiResponse<Void>> revokeRoleByNameInternal(
+            @PathVariable String userId,
+            @PathVariable String roleName) {
+        userService.revokeRoleByName(userId, roleName);
+        return ResponseEntity.ok(ApiResponse.success(null, "Role revoked successfully"));
+    }
 }

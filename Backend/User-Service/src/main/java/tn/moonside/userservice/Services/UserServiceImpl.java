@@ -373,6 +373,20 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public void revokeRoleByName(String userId, String roleName) {
+        User user = findUserById(userId);
+        roleRepository.findByName(roleName).ifPresent(role -> {
+            userRoleRepository.deleteByUserIdAndRoleIdFlexible(userId, role.getId());
+            log.info("Revoked role '{}' from user {}", roleName, userId);
+            auditLogService.log(userId, userId, "USER",
+                    "ROLE_REVOKED",
+                    "Role '" + roleName + "' revoked from " + user.getEmail(),
+                    true, roleName, null, null);
+        });
+    }
+
+    @Override
+    @Transactional
     public void deactivateUser(String id) {
         User user = findUserById(id);
         user.setActive(false);

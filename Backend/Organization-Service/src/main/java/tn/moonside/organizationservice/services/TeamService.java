@@ -54,7 +54,14 @@ public class TeamService {
                 .updatedAt(LocalDateTime.now())
                 .build();
 
-        return toResponse(teamRepository.save(team), null);
+        TeamResponse response = toResponse(teamRepository.save(team), null);
+
+        // Assign TEAM_LEADER role to the designated lead
+        if (request.getLeadId() != null && !request.getLeadId().isBlank()) {
+            userServiceClient.assignLeaderRole(request.getLeadId(), "TEAM_LEADER");
+        }
+
+        return response;
     }
 
     public TeamResponse getTeamById(String teamId, String requestingUserId) {
@@ -122,7 +129,17 @@ public class TeamService {
         team.setName(request.getName());
         team.setDescription(request.getDescription());
         team.setDepartmentId(request.getDepartmentId());
-        if (request.getLeadId() != null) team.setLeadId(request.getLeadId());
+        if (request.getLeadId() != null) {
+            String previousLeadId = team.getLeadId();
+            String newLeadId = request.getLeadId();
+            if (!newLeadId.isBlank() && !newLeadId.equals(previousLeadId)) {
+                if (previousLeadId != null && !previousLeadId.isBlank()) {
+                    userServiceClient.revokeLeaderRole(previousLeadId, "TEAM_LEADER");
+                }
+                userServiceClient.assignLeaderRole(newLeadId, "TEAM_LEADER");
+            }
+            team.setLeadId(newLeadId);
+        }
         if (request.getAvatarUrl() != null) {
             team.setAvatarUrl(request.getAvatarUrl().isBlank() ? null : request.getAvatarUrl());
         }
@@ -146,16 +163,35 @@ public class TeamService {
 
     public TeamResponse assignLead(String teamId, AssignLeadRequest request) {
         Team team = findById(teamId);
+        String previousLeadId = team.getLeadId();
         team.setLeadId(request.getLeadId());
         team.setUpdatedAt(LocalDateTime.now());
-        return toResponse(teamRepository.save(team), null);
+        TeamResponse response = toResponse(teamRepository.save(team), null);
+
+        // Revoke role from old lead (if changed) and assign to new one
+        if (request.getLeadId() != null && !request.getLeadId().isBlank()) {
+            if (previousLeadId != null && !previousLeadId.equals(request.getLeadId())) {
+                userServiceClient.revokeLeaderRole(previousLeadId, "TEAM_LEADER");
+            }
+            userServiceClient.assignLeaderRole(request.getLeadId(), "TEAM_LEADER");
+        }
+
+        return response;
     }
 
     public TeamResponse removeLead(String teamId) {
         Team team = findById(teamId);
+        String previousLeadId = team.getLeadId();
         team.setLeadId(null);
         team.setUpdatedAt(LocalDateTime.now());
-        return toResponse(teamRepository.save(team), null);
+        TeamResponse response = toResponse(teamRepository.save(team), null);
+
+        // Revoke TEAM_LEADER role from former lead
+        if (previousLeadId != null && !previousLeadId.isBlank()) {
+            userServiceClient.revokeLeaderRole(previousLeadId, "TEAM_LEADER");
+        }
+
+        return response;
     }
 
     // ── Image management ──────────────────────────────────────────────────────

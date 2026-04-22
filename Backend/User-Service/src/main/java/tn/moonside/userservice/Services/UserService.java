@@ -18,6 +18,8 @@ public interface UserService {
     void deleteUser(String id);
     void assignRole(String userId, AssignRoleRequest request);
     void revokeRole(String userId, String roleId);
+    /** Revoke a role from a user by role name (e.g. "TEAM_LEADER"). No-op if not assigned. */
+    void revokeRoleByName(String userId, String roleName);
     void deactivateUser(String id);
     void activateUser(String id);
     /** Returns the role names (e.g. ["ADMIN", "EMPLOYEE"]) for a given user. */

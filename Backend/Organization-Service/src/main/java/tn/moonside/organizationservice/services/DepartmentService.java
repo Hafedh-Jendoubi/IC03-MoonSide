@@ -40,7 +40,14 @@ public class DepartmentService {
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
-        return toResponse(departmentRepository.save(dept));
+        DepartmentResponse response = toResponse(departmentRepository.save(dept));
+
+        // Assign DEPARTMENT_LEADER role to the designated manager
+        if (request.getManagerId() != null && !request.getManagerId().isBlank()) {
+            userServiceClient.assignLeaderRole(request.getManagerId(), "DEPARTMENT_LEADER");
+        }
+
+        return response;
     }
 
     public List<DepartmentResponse> getAllDepartments() {
@@ -86,7 +93,15 @@ public class DepartmentService {
         dept.setDescription(request.getDescription());
         // Only admins may reassign the manager
         if (isAdmin && request.getManagerId() != null) {
-            dept.setManagerId(request.getManagerId());
+            String previousManagerId = dept.getManagerId();
+            String newManagerId = request.getManagerId();
+            if (!newManagerId.equals(previousManagerId)) {
+                if (previousManagerId != null && !previousManagerId.isBlank()) {
+                    userServiceClient.revokeLeaderRole(previousManagerId, "DEPARTMENT_LEADER");
+                }
+                userServiceClient.assignLeaderRole(newManagerId, "DEPARTMENT_LEADER");
+            }
+            dept.setManagerId(newManagerId);
         }
         // Update image URLs if provided (null = keep existing, explicit value = update)
         if (request.getAvatarUrl() != null) {
@@ -122,16 +137,35 @@ public class DepartmentService {
 
     public DepartmentResponse assignManager(String departmentId, AssignManagerRequest request) {
         Department dept = findById(departmentId);
+        String previousManagerId = dept.getManagerId();
         dept.setManagerId(request.getManagerId());
         dept.setUpdatedAt(LocalDateTime.now());
-        return toResponse(departmentRepository.save(dept));
+        DepartmentResponse response = toResponse(departmentRepository.save(dept));
+
+        // Revoke role from old manager (if changed) and assign to new one
+        if (request.getManagerId() != null && !request.getManagerId().isBlank()) {
+            if (previousManagerId != null && !previousManagerId.equals(request.getManagerId())) {
+                userServiceClient.revokeLeaderRole(previousManagerId, "DEPARTMENT_LEADER");
+            }
+            userServiceClient.assignLeaderRole(request.getManagerId(), "DEPARTMENT_LEADER");
+        }
+
+        return response;
     }
 
     public DepartmentResponse removeManager(String departmentId) {
         Department dept = findById(departmentId);
+        String previousManagerId = dept.getManagerId();
         dept.setManagerId(null);
         dept.setUpdatedAt(LocalDateTime.now());
-        return toResponse(departmentRepository.save(dept));
+        DepartmentResponse response = toResponse(departmentRepository.save(dept));
+
+        // Revoke DEPARTMENT_LEADER role from former manager
+        if (previousManagerId != null && !previousManagerId.isBlank()) {
+            userServiceClient.revokeLeaderRole(previousManagerId, "DEPARTMENT_LEADER");
+        }
+
+        return response;
     }
 
     // ── Image management ──────────────────────────────────────────────────────

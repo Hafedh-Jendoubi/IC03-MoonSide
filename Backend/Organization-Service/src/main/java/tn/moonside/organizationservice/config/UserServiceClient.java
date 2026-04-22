@@ -18,14 +18,14 @@ import java.util.Optional;
 
 /**
  * Lightweight REST client that calls the user-service to resolve user IDs
- * to displayable info (name, avatar, etc.).
+ * to displayable info (name, avatar, etc.) and to manage leader roles.
  *
- * Calls go through the Gateway so Eureka load-balancing is respected.
- * If the user-service is unreachable we return an empty Optional so the
- * caller can degrade gracefully rather than blowing up.
+ * Calls go through the internal /users/internal/** endpoints so that no
+ * USER_READ or USER_ASSIGN_ROLE permission is required on the caller's token.
+ * A valid JWT is still forwarded so the user-service can authenticate the call.
  *
- * The JWT Authorization header from the current request is forwarded so
- * that the user-service authenticates the inter-service call correctly.
+ * If the user-service is unreachable we return an empty Optional / log a warning
+ * so the caller can degrade gracefully rather than blowing up.
  */
 @Component
 @Slf4j
@@ -41,22 +41,16 @@ public class UserServiceClient {
         this.userServiceUrl = userServiceUrl;
     }
 
+    // ── User lookup ───────────────────────────────────────────────────────────
+
     @SuppressWarnings("unchecked")
     public Optional<UserSummary> findById(String userId) {
         if (userId == null || userId.isBlank()) return Optional.empty();
         try {
-            HttpHeaders headers = new HttpHeaders();
-
-            // Forward the JWT token from the current incoming request so that
-            // the user-service can authenticate this inter-service call.
-            String token = extractBearerToken();
-            if (token != null) {
-                headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + token);
-            }
-
+            HttpHeaders headers = buildHeaders();
             HttpEntity<Void> entity = new HttpEntity<>(headers);
             ResponseEntity<Map> responseEntity = restTemplate.exchange(
-                    userServiceUrl + "/users/" + userId,
+                    userServiceUrl + "/users/internal/" + userId,
                     HttpMethod.GET,
                     entity,
                     Map.class);
@@ -82,6 +76,100 @@ public class UserServiceClient {
             log.warn("Could not fetch user {} from user-service: {}", userId, e.getMessage());
             return Optional.empty();
         }
+    }
+
+    // ── Leader role management ────────────────────────────────────────────────
+
+    /**
+     * Assigns a leader role (e.g. "TEAM_LEADER" or "DEPARTMENT_LEADER") to a user.
+     * Silently ignores duplicate-assignment errors (role already assigned).
+     */
+    public void assignLeaderRole(String userId, String roleName) {
+        if (userId == null || userId.isBlank()) return;
+        try {
+            HttpHeaders headers = buildHeaders();
+            headers.set(HttpHeaders.CONTENT_TYPE, "application/json");
+
+            // Look up role ID by name first, then assign by ID
+            String roleId = findRoleIdByName(roleName);
+            if (roleId == null) {
+                log.warn("Role '{}' not found in user-service — cannot assign to user {}", roleName, userId);
+                return;
+            }
+
+            Map<String, String> body = Map.of(
+                    "roleId", roleId,
+                    "scopeType", "GLOBAL",
+                    "scopeId", "GLOBAL");
+
+            HttpEntity<Map<String, String>> entity = new HttpEntity<>(body, headers);
+            restTemplate.exchange(
+                    userServiceUrl + "/users/internal/" + userId + "/roles",
+                    HttpMethod.POST,
+                    entity,
+                    Map.class);
+
+            log.info("Assigned role '{}' to user {}", roleName, userId);
+        } catch (Exception e) {
+            // 409 Conflict means already assigned — that's fine
+            log.warn("Could not assign role '{}' to user {}: {}", roleName, userId, e.getMessage());
+        }
+    }
+
+    /**
+     * Revokes a leader role (e.g. "TEAM_LEADER" or "DEPARTMENT_LEADER") from a user.
+     * Silently ignores not-found errors.
+     */
+    public void revokeLeaderRole(String userId, String roleName) {
+        if (userId == null || userId.isBlank()) return;
+        try {
+            HttpHeaders headers = buildHeaders();
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            restTemplate.exchange(
+                    userServiceUrl + "/users/internal/" + userId + "/roles/" + roleName,
+                    HttpMethod.DELETE,
+                    entity,
+                    Map.class);
+            log.info("Revoked role '{}' from user {}", roleName, userId);
+        } catch (Exception e) {
+            log.warn("Could not revoke role '{}' from user {}: {}", roleName, userId, e.getMessage());
+        }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    private String findRoleIdByName(String roleName) {
+        try {
+            HttpHeaders headers = buildHeaders();
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    userServiceUrl + "/roles",
+                    HttpMethod.GET,
+                    entity,
+                    Map.class);
+            Map<String, Object> body = response.getBody();
+            if (body == null || !Boolean.TRUE.equals(body.get("success"))) return null;
+            java.util.List<Map<String, Object>> roles = (java.util.List<Map<String, Object>>) body.get("data");
+            if (roles == null) return null;
+            return roles.stream()
+                    .filter(r -> roleName.equals(r.get("name")))
+                    .map(r -> (String) r.get("id"))
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception e) {
+            log.warn("Could not look up role '{}': {}", roleName, e.getMessage());
+            return null;
+        }
+    }
+
+    private HttpHeaders buildHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        String token = extractBearerToken();
+        if (token != null) {
+            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        }
+        return headers;
     }
 
     /**
