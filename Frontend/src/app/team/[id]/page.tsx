@@ -1,9 +1,34 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Loader2, Users, Pencil, X, UserMinus, Bell, BellOff, UserPlus } from 'lucide-react'
-import { teamApi, departmentApi, TeamResponse, UserTeamResponse, UserResponse } from '@/lib/api'
+import {
+  Loader2,
+  Users,
+  X,
+  UserMinus,
+  Bell,
+  BellOff,
+  UserPlus,
+  ArrowLeft,
+  Settings,
+  LayoutDashboard,
+  Search,
+  CheckCircle2,
+  Image as ImageIcon,
+  Type,
+  Eye,
+  ChevronRight,
+  Shield,
+} from 'lucide-react'
+import {
+  teamApi,
+  departmentApi,
+  TeamResponse,
+  UserTeamResponse,
+  UserResponse,
+  userApi,
+} from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
 import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
@@ -13,7 +38,7 @@ import { Post, User, hasRole } from '@/lib/types'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function canEditTeam(
+function canManageTeam(
   user: User | null,
   team: TeamResponse | null,
   userManagedDeptIds: string[]
@@ -40,134 +65,317 @@ function canAssignMember(
   return false
 }
 
-// ── Assign Member Modal ───────────────────────────────────────────────────────
+// ── Manage Team Panel ─────────────────────────────────────────────────────────
 
-interface AssignMemberModalProps {
+type ManageSection = 'general' | 'members' | 'settings'
+
+interface ManageTeamPanelProps {
   team: TeamResponse
+  canKick: boolean
   onClose: () => void
-  onAssigned: () => void
+  onSaved: (updated: TeamResponse) => void
+  onMemberChange: (delta: number) => void
 }
 
-function AssignMemberModal({ team, onClose, onAssigned }: AssignMemberModalProps) {
-  const [userId, setUserId] = useState('')
-  const [assigning, setAssigning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
+function ManageTeamPanel({
+  team,
+  canKick,
+  onClose,
+  onSaved,
+  onMemberChange,
+}: ManageTeamPanelProps) {
+  const [section, setSection] = useState<ManageSection>('general')
 
-  const handleAssign = async () => {
-    const trimmed = userId.trim()
-    if (!trimmed) return
-    setAssigning(true)
-    setError(null)
-    setSuccess(false)
+  const navItems: { id: ManageSection; label: string; icon: React.ReactNode }[] = [
+    { id: 'general', label: 'General', icon: <LayoutDashboard className="h-4 w-4" /> },
+    { id: 'members', label: 'Members', icon: <Users className="h-4 w-4" /> },
+    { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
+  ]
+
+  return (
+    <div className="bg-background fixed inset-0 z-50 flex">
+      {/* Left Sidebar */}
+      <aside className="bg-muted/30 flex w-60 flex-shrink-0 flex-col border-r">
+        {/* Header */}
+        <div className="flex items-center gap-3 border-b px-5 py-4">
+          <div className="bg-muted flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border">
+            {team.avatarUrl ? (
+              <img src={team.avatarUrl} alt={team.name} className="h-full w-full object-cover" />
+            ) : (
+              <Users className="text-muted-foreground h-4 w-4" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-muted-foreground mb-0.5 text-xs leading-none font-medium tracking-wide uppercase">
+              Team
+            </p>
+            <p className="text-foreground truncate text-sm font-semibold">{team.name}</p>
+          </div>
+        </div>
+
+        {/* Nav */}
+        <nav className="flex-1 space-y-0.5 px-3 py-4">
+          {navItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setSection(item.id)}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                section === item.id
+                  ? 'bg-background text-foreground border-border/60 border shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+              }`}
+            >
+              {item.icon}
+              {item.label}
+              {section === item.id && (
+                <ChevronRight className="text-muted-foreground ml-auto h-3.5 w-3.5" />
+              )}
+            </button>
+          ))}
+        </nav>
+
+        {/* Back button */}
+        <div className="border-t px-3 py-4">
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground hover:bg-background/60 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Team
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-2xl px-8 py-8">
+          {section === 'general' && <GeneralSection team={team} onSaved={onSaved} />}
+          {section === 'members' && (
+            <MembersSection team={team} canKick={canKick} onMemberChange={onMemberChange} />
+          )}
+          {section === 'settings' && <SettingsSection team={team} onSaved={onSaved} />}
+        </div>
+      </main>
+    </div>
+  )
+}
+
+// ── General Section ───────────────────────────────────────────────────────────
+
+function GeneralSection({
+  team,
+  onSaved,
+}: {
+  team: TeamResponse
+  onSaved: (t: TeamResponse) => void
+}) {
+  const [name, setName] = useState(team.name)
+  const [description, setDescription] = useState(team.description ?? '')
+  const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null | undefined>(undefined)
+  const [pendingBannerUrl, setPendingBannerUrl] = useState<string | null | undefined>(undefined)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [savedMsg, setSavedMsg] = useState(false)
+
+  const displayAvatar = pendingAvatarUrl !== undefined ? pendingAvatarUrl : team.avatarUrl
+  const displayBanner = pendingBannerUrl !== undefined ? pendingBannerUrl : team.bannerUrl
+
+  const handleSave = async () => {
+    if (!name.trim()) return
     try {
-      await teamApi.assignMember(team.id, trimmed)
-      setSuccess(true)
-      setUserId('')
-      onAssigned()
+      setSaving(true)
+      setError(null)
+      let result = await teamApi.update(team.id, {
+        name: name.trim(),
+        description: description.trim(),
+        departmentId: team.departmentId,
+        leadId: team.leadId ?? undefined,
+        teamVisibility: team.teamVisibility as 'PUBLIC' | 'PRIVATE',
+      })
+      if (pendingAvatarUrl !== undefined)
+        result = await teamApi.updateAvatar(team.id, pendingAvatarUrl)
+      if (pendingBannerUrl !== undefined)
+        result = await teamApi.updateBanner(team.id, pendingBannerUrl)
+      onSaved(result)
+      setSavedMsg(true)
+      setTimeout(() => setSavedMsg(false), 3000)
     } catch (e: any) {
-      setError(e.message ?? 'Failed to assign member')
+      setError(e.message ?? 'Failed to save changes')
     } finally {
-      setAssigning(false)
+      setSaving(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-background w-full max-w-md rounded-xl shadow-xl">
-        <div className="flex items-center justify-between border-b px-6 py-4">
-          <div className="flex items-center gap-2">
-            <UserPlus className="text-primary h-5 w-5" />
-            <h2 className="text-foreground text-lg font-semibold">Assign Member</h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground rounded-full p-1 transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-foreground text-2xl font-bold">General</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Manage your team's profile and appearance.
+        </p>
+      </div>
+
+      {error && (
+        <div className="bg-destructive/10 text-destructive border-destructive/20 rounded-lg border px-4 py-3 text-sm">
+          {error}
         </div>
-
-        <div className="space-y-4 px-6 py-5">
-          <p className="text-muted-foreground text-sm">
-            Enter the User ID of the employee you want to assign to{' '}
-            <span className="text-foreground font-medium">{team.name}</span>. They will
-            automatically be granted the <span className="font-medium">Team Member</span> role.
-          </p>
-
-          {error && (
-            <div className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm">
-              {error}
-            </div>
-          )}
-          {success && (
-            <div className="rounded-lg bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
-              User successfully assigned to team and granted Team Member role.
-            </div>
-          )}
-
-          <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">User ID</label>
-            <input
-              type="text"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              placeholder="Paste user ID here…"
-              disabled={assigning}
-              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
-            />
-          </div>
-
-          <div className="flex justify-end gap-3 pt-1">
-            <button
-              onClick={onClose}
-              className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
-            >
-              Close
-            </button>
-            <button
-              onClick={handleAssign}
-              disabled={assigning || !userId.trim()}
-              className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {assigning ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <UserPlus className="h-4 w-4" />
-              )}
-              Assign
-            </button>
-          </div>
+      )}
+      {savedMsg && (
+        <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
+          <CheckCircle2 className="h-4 w-4" />
+          Changes saved successfully.
         </div>
+      )}
+
+      {/* Banner */}
+      <div className="space-y-2">
+        <div className="flex items-center gap-2">
+          <ImageIcon className="text-muted-foreground h-4 w-4" />
+          <label className="text-foreground text-sm font-medium">Banner Image</label>
+        </div>
+        <OrgBannerUpload
+          currentUrl={displayBanner}
+          onUploaded={setPendingBannerUrl}
+          context="TEAM_BANNER"
+          disabled={saving}
+        />
+      </div>
+
+      {/* Avatar + Name */}
+      <div className="flex items-end gap-5">
+        <div className="flex-shrink-0">
+          <label className="text-foreground mb-2 block text-sm font-medium">Team Avatar</label>
+          <OrgAvatarUpload
+            currentUrl={displayAvatar}
+            onUploaded={setPendingAvatarUrl}
+            context="TEAM_AVATAR"
+            label="Change avatar"
+            disabled={saving}
+          />
+        </div>
+        <div className="flex-1">
+          <div className="mb-1 flex items-center gap-2">
+            <Type className="text-muted-foreground h-4 w-4" />
+            <label className="text-foreground text-sm font-medium">Team Name</label>
+          </div>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={100}
+            disabled={saving}
+            className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none disabled:opacity-60"
+          />
+        </div>
+      </div>
+
+      {/* Description */}
+      <div className="space-y-2">
+        <label className="text-foreground text-sm font-medium">Description</label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          maxLength={500}
+          rows={4}
+          disabled={saving}
+          placeholder="What does this team do?"
+          className="border-border bg-background text-foreground focus:ring-primary w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none disabled:opacity-60"
+        />
+        <p className="text-muted-foreground text-right text-xs">{description.length}/500</p>
+      </div>
+
+      <div className="flex justify-end border-t pt-2">
+        <button
+          onClick={handleSave}
+          disabled={saving || !name.trim()}
+          className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          {saving ? 'Saving…' : 'Save Changes'}
+        </button>
       </div>
     </div>
   )
 }
 
-// ── Team Members Modal ────────────────────────────────────────────────────────
+// ── Members Section ───────────────────────────────────────────────────────────
 
-interface TeamMembersModalProps {
+function MembersSection({
+  team,
+  canKick,
+  onMemberChange,
+}: {
   team: TeamResponse
   canKick: boolean
-  onClose: () => void
-  onMemberKicked: () => void
-}
-
-function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMembersModalProps) {
+  onMemberChange: (delta: number) => void
+}) {
   const [members, setMembers] = useState<UserTeamResponse[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [loadingMembers, setLoadingMembers] = useState(true)
+  const [membersError, setMembersError] = useState<string | null>(null)
   const [kickingId, setKickingId] = useState<string | null>(null)
   const [confirmKick, setConfirmKick] = useState<UserTeamResponse | null>(null)
 
+  const [query, setQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<UserResponse[]>([])
+  const [searching, setSearching] = useState(false)
+  const [assigningId, setAssigningId] = useState<string | null>(null)
+  const [assignError, setAssignError] = useState<string | null>(null)
+  const searchRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   useEffect(() => {
-    setLoading(true)
+    setLoadingMembers(true)
     teamApi
       .getMembers(team.id)
       .then(setMembers)
-      .catch((e: any) => setError(e.message ?? 'Failed to load members'))
-      .finally(() => setLoading(false))
+      .catch((e: any) => setMembersError(e.message ?? 'Failed to load members'))
+      .finally(() => setLoadingMembers(false))
   }, [team.id])
+
+  useEffect(() => {
+    if (searchRef.current) clearTimeout(searchRef.current)
+    if (!query.trim()) {
+      setSearchResults([])
+      return
+    }
+    setSearching(true)
+    searchRef.current = setTimeout(async () => {
+      try {
+        const all = await userApi.getAll()
+        const q = query.toLowerCase()
+        const memberIds = new Set(members.map((m) => m.userId))
+        const filtered = all.filter(
+          (u) =>
+            !memberIds.has(u.id) &&
+            (u.firstName.toLowerCase().includes(q) ||
+              u.lastName.toLowerCase().includes(q) ||
+              u.email.toLowerCase().includes(q) ||
+              (u.jobTitle ?? '').toLowerCase().includes(q))
+        )
+        setSearchResults(filtered.slice(0, 8))
+      } catch {
+        setSearchResults([])
+      } finally {
+        setSearching(false)
+      }
+    }, 300)
+  }, [query, members])
+
+  const handleAssign = async (u: UserResponse) => {
+    setAssignError(null)
+    setAssigningId(u.id)
+    try {
+      await teamApi.assignMember(team.id, u.id)
+      onMemberChange(1)
+      const updated = await teamApi.getMembers(team.id)
+      setMembers(updated)
+      setQuery('')
+      setSearchResults([])
+    } catch (e: any) {
+      setAssignError(e.message ?? 'Failed to assign member')
+    } finally {
+      setAssigningId(null)
+    }
+  }
 
   const handleKick = async (member: UserTeamResponse) => {
     setConfirmKick(null)
@@ -175,68 +383,69 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
     try {
       await teamApi.removeMember(team.id, member.userId)
       setMembers((prev) => prev.filter((m) => m.userId !== member.userId))
-      onMemberKicked()
+      onMemberChange(-1)
     } catch (e: any) {
-      setError(e.message ?? 'Failed to remove member')
+      setMembersError(e.message ?? 'Failed to remove member')
     } finally {
       setKickingId(null)
     }
   }
 
+  const currentMemberIds = new Set(members.map((m) => m.userId))
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-background w-full max-w-md rounded-xl shadow-xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b px-6 py-4">
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-foreground text-2xl font-bold">Members</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          {members.length} member{members.length !== 1 ? 's' : ''} in this team.
+        </p>
+      </div>
+
+      {/* Add Member — Search */}
+      {canKick && (
+        <div className="bg-muted/20 space-y-3 rounded-xl border p-5">
           <div className="flex items-center gap-2">
-            <Users className="text-muted-foreground h-5 w-5" />
-            <h2 className="text-foreground text-lg font-semibold">
-              Members
-              <span className="text-muted-foreground ml-2 text-base font-normal">
-                ({members.length})
-              </span>
-            </h2>
+            <UserPlus className="text-primary h-4 w-4" />
+            <h2 className="text-foreground text-sm font-semibold">Add a Member</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground rounded-full p-1 transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+          <p className="text-muted-foreground text-xs">
+            Search by name, email, or job title to find and add employees.
+          </p>
 
-        {/* Body */}
-        <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
-          {loading && (
-            <div className="flex justify-center py-8">
-              <Loader2 className="text-primary h-8 w-8 animate-spin" />
+          {assignError && (
+            <div className="bg-destructive/10 text-destructive border-destructive/20 rounded-lg border px-3 py-2 text-xs">
+              {assignError}
             </div>
           )}
 
-          {error && (
-            <div className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm">
-              {error}
-            </div>
-          )}
+          <div className="relative">
+            <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search employees by name, email, or role…"
+              className="bg-background focus:ring-primary w-full rounded-lg border py-2 pr-4 pl-9 text-sm focus:ring-2 focus:outline-none"
+            />
+            {searching && (
+              <Loader2 className="text-muted-foreground absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 animate-spin" />
+            )}
+          </div>
 
-          {!loading && !error && members.length === 0 && (
-            <p className="text-muted-foreground py-8 text-center text-sm">No members yet.</p>
-          )}
-
-          {!loading && members.length > 0 && (
-            <ul className="space-y-1">
-              {members.map((member) => {
-                const u = member.user
-                const isLead = member.userId === team.leadId
-                const isKicking = kickingId === member.userId
+          {searchResults.length > 0 && (
+            <ul className="bg-background divide-y overflow-hidden rounded-lg border shadow-sm">
+              {searchResults.map((u) => {
+                const isAssigning = assigningId === u.id
+                const alreadyMember = currentMemberIds.has(u.id)
                 return (
                   <li
-                    key={member.id}
-                    className="flex items-center justify-between rounded-lg px-3 py-2 transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                    key={u.id}
+                    className="hover:bg-muted/40 flex items-center justify-between px-4 py-2.5 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className="bg-muted h-9 w-9 flex-shrink-0 overflow-hidden rounded-full border">
-                        {u?.avatar ? (
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="bg-muted h-8 w-8 flex-shrink-0 overflow-hidden rounded-full border">
+                        {u.avatar ? (
                           <img
                             src={u.avatar}
                             alt={`${u.firstName} ${u.lastName}`}
@@ -245,62 +454,138 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
                         ) : (
                           <div className="flex h-full w-full items-center justify-center">
                             <span className="text-muted-foreground text-xs font-semibold">
-                              {u?.firstName?.[0]?.toUpperCase() ?? '?'}
+                              {u.firstName[0]?.toUpperCase()}
                             </span>
                           </div>
                         )}
                       </div>
                       <div className="min-w-0">
                         <p className="text-foreground text-sm leading-tight font-medium">
-                          {u ? `${u.firstName} ${u.lastName}` : 'Unknown User'}
-                          {isLead && (
-                            <span className="bg-primary/10 text-primary ml-2 rounded px-1.5 py-0.5 text-xs font-semibold">
-                              Leader
-                            </span>
-                          )}
+                          {u.firstName} {u.lastName}
                         </p>
-                        {u?.jobTitle && (
+                        {u.jobTitle && (
                           <p className="text-muted-foreground truncate text-xs">{u.jobTitle}</p>
                         )}
                       </div>
                     </div>
-
-                    {canKick && !isLead && (
-                      <button
-                        onClick={() => setConfirmKick(member)}
-                        disabled={isKicking}
-                        title="Remove from team"
-                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-2 flex-shrink-0 rounded-lg p-1.5 transition-colors disabled:opacity-50"
-                      >
-                        {isKicking ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <UserMinus className="h-4 w-4" />
-                        )}
-                      </button>
-                    )}
+                    <button
+                      onClick={() => handleAssign(u)}
+                      disabled={isAssigning || alreadyMember}
+                      className="bg-primary/10 text-primary hover:bg-primary/20 ml-3 flex flex-shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+                    >
+                      {isAssigning ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : alreadyMember ? (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      ) : (
+                        <UserPlus className="h-3.5 w-3.5" />
+                      )}
+                      {alreadyMember ? 'Member' : 'Add'}
+                    </button>
                   </li>
                 )
               })}
             </ul>
           )}
-        </div>
 
-        {/* Footer */}
-        <div className="flex justify-end border-t px-6 py-4">
-          <button
-            onClick={onClose}
-            className="border-border text-foreground rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
-          >
-            Close
-          </button>
+          {query.trim() && !searching && searchResults.length === 0 && (
+            <p className="text-muted-foreground py-3 text-center text-xs">
+              No employees found matching &quot;{query}&quot;
+            </p>
+          )}
         </div>
+      )}
+
+      {/* Current Members */}
+      <div className="space-y-3">
+        <h2 className="text-foreground text-sm font-semibold">Current Members</h2>
+
+        {membersError && (
+          <div className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm">
+            {membersError}
+          </div>
+        )}
+
+        {loadingMembers && (
+          <div className="flex justify-center py-8">
+            <Loader2 className="text-primary h-7 w-7 animate-spin" />
+          </div>
+        )}
+
+        {!loadingMembers && !membersError && members.length === 0 && (
+          <div className="rounded-xl border border-dashed py-10 text-center">
+            <Users className="text-muted-foreground mx-auto mb-2 h-8 w-8" />
+            <p className="text-muted-foreground text-sm">No members yet.</p>
+          </div>
+        )}
+
+        {!loadingMembers && members.length > 0 && (
+          <ul className="divide-y overflow-hidden rounded-xl border">
+            {members.map((member) => {
+              const u = member.user
+              const isLead = member.userId === team.leadId
+              const isKicking = kickingId === member.userId
+              return (
+                <li
+                  key={member.id}
+                  className="bg-background hover:bg-muted/30 flex items-center justify-between px-4 py-3 transition-colors"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="bg-muted h-9 w-9 flex-shrink-0 overflow-hidden rounded-full border">
+                      {u?.avatar ? (
+                        <img
+                          src={u.avatar}
+                          alt={`${u.firstName} ${u.lastName}`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <span className="text-muted-foreground text-xs font-semibold">
+                            {u?.firstName?.[0]?.toUpperCase() ?? '?'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-foreground text-sm leading-tight font-medium">
+                          {u ? `${u.firstName} ${u.lastName}` : 'Unknown User'}
+                        </p>
+                        {isLead && (
+                          <span className="bg-primary/10 text-primary inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold">
+                            <Shield className="h-2.5 w-2.5" /> Leader
+                          </span>
+                        )}
+                      </div>
+                      {u?.jobTitle && (
+                        <p className="text-muted-foreground truncate text-xs">{u.jobTitle}</p>
+                      )}
+                    </div>
+                  </div>
+                  {canKick && !isLead && (
+                    <button
+                      onClick={() => setConfirmKick(member)}
+                      disabled={isKicking}
+                      title="Remove from team"
+                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-2 flex-shrink-0 rounded-lg p-1.5 transition-colors disabled:opacity-50"
+                    >
+                      {isKicking ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <UserMinus className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
       </div>
 
-      {/* Kick confirm dialog */}
       {confirmKick && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-background w-full max-w-sm rounded-xl p-6 shadow-xl">
+          <div className="bg-background w-full max-w-sm rounded-xl border p-6 shadow-xl">
             <h3 className="text-foreground mb-2 text-base font-semibold">Remove Member</h3>
             <p className="text-muted-foreground mb-5 text-sm">
               Are you sure you want to remove{' '}
@@ -314,7 +599,7 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setConfirmKick(null)}
-                className="border-border text-foreground rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800"
+                className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium"
               >
                 Cancel
               </button>
@@ -332,63 +617,150 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
   )
 }
 
-// ── Edit Modal ────────────────────────────────────────────────────────────────
+// ── Settings Section ──────────────────────────────────────────────────────────
 
-interface EditTeamModalProps {
+function SettingsSection({
+  team,
+  onSaved,
+}: {
   team: TeamResponse
-  onClose: () => void
-  onSaved: (updated: TeamResponse) => void
-}
-
-function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
-  const [name, setName] = useState(team.name)
-  const [description, setDescription] = useState(team.description ?? '')
+  onSaved: (t: TeamResponse) => void
+}) {
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>(
     team.teamVisibility as 'PUBLIC' | 'PRIVATE'
   )
-  const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null | undefined>(undefined)
-  const [pendingBannerUrl, setPendingBannerUrl] = useState<string | null | undefined>(undefined)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const displayAvatar = pendingAvatarUrl !== undefined ? pendingAvatarUrl : team.avatarUrl
-  const displayBanner = pendingBannerUrl !== undefined ? pendingBannerUrl : team.bannerUrl
+  const [savedMsg, setSavedMsg] = useState(false)
 
   const handleSave = async () => {
-    if (!name.trim()) return
     try {
       setSaving(true)
       setError(null)
-
-      let result = await teamApi.update(team.id, {
-        name: name.trim(),
-        description: description.trim(),
+      const result = await teamApi.update(team.id, {
+        name: team.name,
+        description: team.description ?? '',
         departmentId: team.departmentId,
         leadId: team.leadId ?? undefined,
         teamVisibility: visibility,
       })
-
-      if (pendingAvatarUrl !== undefined) {
-        result = await teamApi.updateAvatar(team.id, pendingAvatarUrl)
-      }
-      if (pendingBannerUrl !== undefined) {
-        result = await teamApi.updateBanner(team.id, pendingBannerUrl)
-      }
-
       onSaved(result)
+      setSavedMsg(true)
+      setTimeout(() => setSavedMsg(false), 3000)
     } catch (e: any) {
-      setError(e.message ?? 'Failed to save changes')
+      setError(e.message ?? 'Failed to save settings')
     } finally {
       setSaving(false)
     }
   }
 
   return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-foreground text-2xl font-bold">Settings</h1>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Configure team visibility and access control.
+        </p>
+      </div>
+
+      {error && (
+        <div className="bg-destructive/10 text-destructive border-destructive/20 rounded-lg border px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
+      {savedMsg && (
+        <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
+          <CheckCircle2 className="h-4 w-4" /> Settings saved.
+        </div>
+      )}
+
+      <div className="divide-y rounded-xl border">
+        <div className="space-y-3 p-5">
+          <div className="flex items-center gap-2">
+            <Eye className="text-muted-foreground h-4 w-4" />
+            <h2 className="text-foreground text-sm font-semibold">Visibility</h2>
+          </div>
+          <p className="text-muted-foreground text-xs">Control who can see and join this team.</p>
+          <div className="space-y-2">
+            {(['PUBLIC', 'PRIVATE'] as const).map((v) => (
+              <label
+                key={v}
+                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3.5 transition-colors ${
+                  visibility === v ? 'border-primary bg-primary/5' : 'hover:bg-muted/40'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="visibility"
+                  value={v}
+                  checked={visibility === v}
+                  onChange={() => setVisibility(v)}
+                  className="accent-primary mt-0.5"
+                />
+                <div>
+                  <p className="text-foreground text-sm font-medium">
+                    {v === 'PUBLIC' ? 'Public' : 'Private'}
+                  </p>
+                  <p className="text-muted-foreground mt-0.5 text-xs">
+                    {v === 'PUBLIC'
+                      ? 'Anyone in the organisation can find and join this team.'
+                      : 'Only invited members can join this team.'}
+                  </p>
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end border-t pt-2">
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+        >
+          {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+          {saving ? 'Saving…' : 'Save Settings'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── Team Members Modal (view-only) ────────────────────────────────────────────
+
+interface TeamMembersModalProps {
+  team: TeamResponse
+  onClose: () => void
+}
+
+function TeamMembersModal({ team, onClose }: TeamMembersModalProps) {
+  const [members, setMembers] = useState<UserTeamResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    teamApi
+      .getMembers(team.id)
+      .then(setMembers)
+      .catch((e: any) => setError(e.message ?? 'Failed to load members'))
+      .finally(() => setLoading(false))
+  }, [team.id])
+
+  return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-background w-full max-w-lg rounded-xl shadow-xl">
-        {/* Header */}
+      <div className="bg-background w-full max-w-md rounded-xl shadow-xl">
         <div className="flex items-center justify-between border-b px-6 py-4">
-          <h2 className="text-foreground text-lg font-semibold">Edit Team</h2>
+          <div className="flex items-center gap-2">
+            <Users className="text-muted-foreground h-5 w-5" />
+            <h2 className="text-foreground text-lg font-semibold">
+              Members{' '}
+              <span className="text-muted-foreground ml-1 text-base font-normal">
+                ({members.length})
+              </span>
+            </h2>
+          </div>
           <button
             onClick={onClose}
             className="text-muted-foreground hover:text-foreground rounded-full p-1 transition-colors"
@@ -396,92 +768,70 @@ function EditTeamModal({ team, onClose, onSaved }: EditTeamModalProps) {
             <X className="h-5 w-5" />
           </button>
         </div>
-
-        {/* Body */}
-        <div className="space-y-5 px-6 py-5">
+        <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+          {loading && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="text-primary h-8 w-8 animate-spin" />
+            </div>
+          )}
           {error && (
             <div className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm">
               {error}
             </div>
           )}
-
-          {/* Banner */}
-          <div>
-            <label className="text-foreground mb-2 block text-sm font-medium">Banner Image</label>
-            <OrgBannerUpload
-              currentUrl={displayBanner}
-              onUploaded={setPendingBannerUrl}
-              context="TEAM_BANNER"
-              disabled={saving}
-            />
-          </div>
-
-          {/* Avatar + Name row */}
-          <div className="flex items-end gap-4">
-            <div className="flex-shrink-0">
-              <label className="text-foreground mb-2 block text-sm font-medium">Avatar</label>
-              <OrgAvatarUpload
-                currentUrl={displayAvatar}
-                onUploaded={setPendingAvatarUrl}
-                context="TEAM_AVATAR"
-                label="Change team avatar"
-                disabled={saving}
-              />
-            </div>
-            <div className="flex-1">
-              <label className="text-foreground mb-1 block text-sm font-medium">Team Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                maxLength={100}
-                disabled={saving}
-                className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              maxLength={500}
-              rows={4}
-              disabled={saving}
-              className="border-border bg-background text-foreground w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
-            />
-          </div>
-
-          <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">Visibility</label>
-            <select
-              value={visibility}
-              onChange={(e) => setVisibility(e.target.value as 'PUBLIC' | 'PRIVATE')}
-              disabled={saving}
-              className="border-border bg-background text-foreground w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:opacity-60"
-            >
-              <option value="PUBLIC">Public — anyone can join</option>
-              <option value="PRIVATE">Private — invite only</option>
-            </select>
-          </div>
+          {!loading && !error && members.length === 0 && (
+            <p className="text-muted-foreground py-8 text-center text-sm">No members yet.</p>
+          )}
+          {!loading && members.length > 0 && (
+            <ul className="space-y-1">
+              {members.map((member) => {
+                const u = member.user
+                const isLead = member.userId === team.leadId
+                return (
+                  <li
+                    key={member.id}
+                    className="hover:bg-muted/40 flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+                  >
+                    <div className="bg-muted h-9 w-9 flex-shrink-0 overflow-hidden rounded-full border">
+                      {u?.avatar ? (
+                        <img
+                          src={u.avatar}
+                          alt={`${u.firstName} ${u.lastName}`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <span className="text-muted-foreground text-xs font-semibold">
+                            {u?.firstName?.[0]?.toUpperCase() ?? '?'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-foreground text-sm leading-tight font-medium">
+                        {u ? `${u.firstName} ${u.lastName}` : 'Unknown User'}
+                        {isLead && (
+                          <span className="bg-primary/10 text-primary ml-2 rounded px-1.5 py-0.5 text-xs font-semibold">
+                            Leader
+                          </span>
+                        )}
+                      </p>
+                      {u?.jobTitle && (
+                        <p className="text-muted-foreground truncate text-xs">{u.jobTitle}</p>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
         </div>
-
-        {/* Footer */}
-        <div className="flex justify-end gap-3 border-t px-6 py-4">
+        <div className="flex justify-end border-t px-6 py-4">
           <button
             onClick={onClose}
-            disabled={saving}
-            className="border-border text-foreground rounded-lg border px-4 py-2 text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+            className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium"
           >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || !name.trim()}
-            className="bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-50"
-          >
-            {saving ? 'Saving…' : 'Save Changes'}
+            Close
           </button>
         </div>
       </div>
@@ -502,9 +852,8 @@ export default function TeamFeedPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [userManagedDeptIds, setUserManagedDeptIds] = useState<string[]>([])
-  const [editOpen, setEditOpen] = useState(false)
+  const [manageOpen, setManageOpen] = useState(false)
   const [membersOpen, setMembersOpen] = useState(false)
-  const [assignOpen, setAssignOpen] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
 
   useEffect(() => {
@@ -531,7 +880,6 @@ export default function TeamFeedPage() {
     loadData()
   }, [teamId])
 
-  // Fetch departments this user manages (for DEPARTMENT_LEADER role check)
   useEffect(() => {
     if (!user || (!hasRole(user, 'DEPARTMENT_LEADER') && !hasRole(user, 'CEO'))) return
     departmentApi
@@ -594,8 +942,9 @@ export default function TeamFeedPage() {
 
   if (!user) return null
 
-  const showEditButton = canEditTeam(user, team, userManagedDeptIds)
-  const showAssignButton = canAssignMember(user, team, userManagedDeptIds)
+  const showManageButton =
+    canManageTeam(user, team, userManagedDeptIds) || canAssignMember(user, team, userManagedDeptIds)
+  const canKick = canManageTeam(user, team, userManagedDeptIds)
 
   const handleFollow = async () => {
     if (!team) return
@@ -606,7 +955,7 @@ export default function TeamFeedPage() {
         : await teamApi.follow(team.id)
       setTeam(updated)
     } catch {
-      // silently ignore
+      /* silently ignore */
     } finally {
       setFollowLoading(false)
     }
@@ -624,9 +973,8 @@ export default function TeamFeedPage() {
           )}
         </div>
 
-        {/* Team Header — avatar overlaps banner */}
+        {/* Team Header */}
         <div className="bg-background mb-8 flex items-end gap-6 px-2">
-          {/* Team Avatar */}
           <div className="relative -mt-14 flex-shrink-0">
             <div className="bg-muted flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-white shadow-lg dark:border-slate-800">
               {team.avatarUrl ? (
@@ -637,7 +985,6 @@ export default function TeamFeedPage() {
             </div>
           </div>
 
-          {/* Team Info */}
           <div className="flex flex-1 items-end justify-between pt-4 pb-2">
             <div>
               <h1 className="text-foreground text-3xl font-bold">{team.name}</h1>
@@ -649,7 +996,6 @@ export default function TeamFeedPage() {
                   Led by {team.lead.firstName} {team.lead.lastName}
                 </p>
               )}
-              {/* Clickable member count */}
               <button
                 onClick={() => setMembersOpen(true)}
                 className="text-muted-foreground hover:text-primary mt-1 flex items-center gap-1.5 text-xs transition-colors hover:underline"
@@ -660,9 +1006,7 @@ export default function TeamFeedPage() {
               </button>
             </div>
 
-            {/* Action Buttons */}
             <div className="flex flex-wrap items-center justify-end gap-2">
-              {/* Follow / Unfollow */}
               <button
                 onClick={handleFollow}
                 disabled={followLoading}
@@ -671,7 +1015,6 @@ export default function TeamFeedPage() {
                     ? 'border-primary text-primary hover:bg-primary/10'
                     : 'border-border text-foreground hover:bg-muted'
                 }`}
-                title={team.isFollowing ? 'Unfollow team' : 'Follow team'}
               >
                 {followLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -686,25 +1029,13 @@ export default function TeamFeedPage() {
                 )}
               </button>
 
-              {/* Assign Member — only for leaders / HR / CEO */}
-              {showAssignButton && (
+              {showManageButton && (
                 <button
-                  onClick={() => setAssignOpen(true)}
-                  className="border-border text-foreground hover:bg-muted flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
+                  onClick={() => setManageOpen(true)}
+                  className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
                 >
-                  <UserPlus className="h-4 w-4" />
-                  Assign Member
-                </button>
-              )}
-
-              {/* Edit Team */}
-              {showEditButton && (
-                <button
-                  onClick={() => setEditOpen(true)}
-                  className="border-border text-foreground hover:bg-muted flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors"
-                >
-                  <Pencil className="h-4 w-4" />
-                  Edit Team
+                  <Settings className="h-4 w-4" />
+                  Manage Team
                 </button>
               )}
             </div>
@@ -714,7 +1045,6 @@ export default function TeamFeedPage() {
         {/* Posts Feed */}
         <div className="space-y-6">
           <CreatePost user={user} onPostCreate={handlePostCreate} />
-
           <div className="space-y-6">
             {posts.length === 0 ? (
               <div className="py-12 text-center">
@@ -740,39 +1070,21 @@ export default function TeamFeedPage() {
         </div>
       </div>
 
-      {editOpen && (
-        <EditTeamModal
+      {manageOpen && (
+        <ManageTeamPanel
           team={team}
-          onClose={() => setEditOpen(false)}
-          onSaved={(updated) => {
-            setTeam(updated)
-            setEditOpen(false)
-          }}
-        />
-      )}
-
-      {assignOpen && (
-        <AssignMemberModal
-          team={team}
-          onClose={() => setAssignOpen(false)}
-          onAssigned={() =>
-            setTeam((prev) => (prev ? { ...prev, memberCount: prev.memberCount + 1 } : prev))
-          }
-        />
-      )}
-
-      {membersOpen && (
-        <TeamMembersModal
-          team={team}
-          canKick={showEditButton}
-          onClose={() => setMembersOpen(false)}
-          onMemberKicked={() =>
+          canKick={canKick}
+          onClose={() => setManageOpen(false)}
+          onSaved={(updated) => setTeam(updated)}
+          onMemberChange={(delta) =>
             setTeam((prev) =>
-              prev ? { ...prev, memberCount: Math.max(0, prev.memberCount - 1) } : prev
+              prev ? { ...prev, memberCount: Math.max(0, prev.memberCount + delta) } : prev
             )
           }
         />
       )}
+
+      {membersOpen && <TeamMembersModal team={team} onClose={() => setMembersOpen(false)} />}
     </AuthLayout>
   )
 }
