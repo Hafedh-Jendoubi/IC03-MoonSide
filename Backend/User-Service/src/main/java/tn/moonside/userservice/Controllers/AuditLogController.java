@@ -24,7 +24,13 @@ public class AuditLogController {
 
     /**
      * Query audit logs with optional filters.
-     * GET /audit-logs?page=0&size=20&userId=...&action=LOGIN_SUCCESS&success=true
+     *
+     * GET /audit-logs?page=0&size=20
+     *                &userId=...
+     *                &action=TEAM_CREATED
+     *                &entityType=TEAM        ← NEW — filter by TEAM, DEPARTMENT, USER, etc.
+     *                &success=true
+     *
      * Requires AUDIT_LOG_READ permission.
      */
     @GetMapping
@@ -34,6 +40,7 @@ public class AuditLogController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false)    String userId,
             @RequestParam(required = false)    String action,
+            @RequestParam(required = false)    String entityType,
             @RequestParam(required = false)    Boolean success) {
 
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
@@ -43,6 +50,8 @@ public class AuditLogController {
             result = auditLogService.findByUser(userId, pageable);
         } else if (action != null && !action.isBlank()) {
             result = auditLogService.findByAction(action, pageable);
+        } else if (entityType != null && !entityType.isBlank()) {
+            result = auditLogService.findByEntityType(entityType, pageable);
         } else if (success != null) {
             result = auditLogService.findBySuccess(success, pageable);
         } else {

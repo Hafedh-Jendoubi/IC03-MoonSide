@@ -3,6 +3,8 @@ package tn.moonside.organizationservice.services;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import tn.moonside.organizationservice.audit.AuditClient;
+import tn.moonside.organizationservice.audit.OrgAuditAction;
 import tn.moonside.organizationservice.config.UserServiceClient;
 import tn.moonside.organizationservice.dtos.requests.AssignLeadRequest;
 import tn.moonside.organizationservice.dtos.requests.TeamRequest;
@@ -31,11 +33,12 @@ import java.util.stream.Collectors;
 @Slf4j
 public class TeamService {
 
-    private final TeamRepository teamRepository;
+    private final TeamRepository      teamRepository;
     private final DepartmentRepository departmentRepository;
-    private final UserTeamRepository userTeamRepository;
-    private final UserServiceClient userServiceClient;
-    private final FollowRepository followRepository;
+    private final UserTeamRepository  userTeamRepository;
+    private final UserServiceClient   userServiceClient;
+    private final FollowRepository    followRepository;
+    private final AuditClient         auditClient;          // ← NEW
 
     // ── Admin CRUD ────────────────────────────────────────────────────────────
 
@@ -58,12 +61,23 @@ public class TeamService {
                 .updatedAt(LocalDateTime.now())
                 .build();
 
-        TeamResponse response = toResponse(teamRepository.save(team), null);
+        Team saved = teamRepository.save(team);
+        TeamResponse response = toResponse(saved, null);
 
         // Assign TEAM_LEADER role to the designated lead
         if (request.getLeadId() != null && !request.getLeadId().isBlank()) {
             userServiceClient.assignLeaderRole(request.getLeadId(), "TEAM_LEADER");
         }
+
+        auditClient.log(
+                null,                            // actor resolved by controller layer; null = system/admin
+                saved.getId(),
+                "TEAM",
+                OrgAuditAction.TEAM_CREATED,
+                "Team '" + saved.getName() + "' created in department " + saved.getDepartmentId(),
+                true,
+                null,
+                toJson(saved));
 
         return response;
     }
@@ -114,6 +128,8 @@ public class TeamService {
         Team team = findById(teamId);
         assertCanEdit(team, requestingUserId, roles);
 
+        String oldSnapshot = toJson(team);
+
         // Validate new department if changed — only admins and dept managers may move a team
         if (!team.getDepartmentId().equals(request.getDepartmentId())) {
             boolean isAdmin = roles.contains("CEO");
@@ -153,14 +169,38 @@ public class TeamService {
         if (request.getTeamVisibility() != null) team.setTeamVisibility(request.getTeamVisibility());
         team.setUpdatedAt(LocalDateTime.now());
 
-        return toResponse(teamRepository.save(team), requestingUserId);
+        Team saved = teamRepository.save(team);
+
+        auditClient.log(
+                requestingUserId,
+                saved.getId(),
+                "TEAM",
+                OrgAuditAction.TEAM_UPDATED,
+                "Team '" + saved.getName() + "' updated by user " + requestingUserId,
+                true,
+                oldSnapshot,
+                toJson(saved));
+
+        return toResponse(saved, requestingUserId);
     }
 
     public void deleteTeam(String teamId) {
         Team team = findById(teamId);
+        String snapshot = toJson(team);
+
         userTeamRepository.findByTeamId(teamId)
                 .forEach(ut -> userTeamRepository.deleteByUserIdAndTeamId(ut.getUserId(), teamId));
         teamRepository.delete(team);
+
+        auditClient.log(
+                null,
+                teamId,
+                "TEAM",
+                OrgAuditAction.TEAM_DELETED,
+                "Team '" + team.getName() + "' deleted",
+                true,
+                snapshot,
+                null);
     }
 
     // ── Lead assignment ───────────────────────────────────────────────────────
@@ -180,6 +220,17 @@ public class TeamService {
             userServiceClient.assignLeaderRole(request.getLeadId(), "TEAM_LEADER");
         }
 
+        auditClient.log(
+                null,
+                teamId,
+                "TEAM",
+                OrgAuditAction.TEAM_LEAD_ASSIGNED,
+                "Lead of team '" + team.getName() + "' assigned to user " + request.getLeadId()
+                        + " (was: " + previousLeadId + ")",
+                true,
+                previousLeadId,
+                request.getLeadId());
+
         return response;
     }
 
@@ -190,40 +241,67 @@ public class TeamService {
         team.setUpdatedAt(LocalDateTime.now());
         TeamResponse response = toResponse(teamRepository.save(team), null);
 
-        // Revoke TEAM_LEADER role from former lead
         if (previousLeadId != null && !previousLeadId.isBlank()) {
             userServiceClient.revokeLeaderRole(previousLeadId, "TEAM_LEADER");
         }
+
+        auditClient.log(
+                null,
+                teamId,
+                "TEAM",
+                OrgAuditAction.TEAM_LEAD_REMOVED,
+                "Lead removed from team '" + team.getName() + "' (was: " + previousLeadId + ")",
+                true,
+                previousLeadId,
+                null);
 
         return response;
     }
 
     // ── Image management ──────────────────────────────────────────────────────
 
-    /**
-     * Update or remove the team avatar.
-     * Access: ADMIN, TEAM_LEADER of this team, or DEPARTMENT_MANAGER of its department.
-     */
     public TeamResponse updateAvatar(String teamId, String avatarUrl,
                                      String requestingUserId, List<String> roles) {
         Team team = findById(teamId);
         assertCanEdit(team, requestingUserId, roles);
+        String old = team.getAvatarUrl();
         team.setAvatarUrl(avatarUrl);
         team.setUpdatedAt(LocalDateTime.now());
-        return toResponse(teamRepository.save(team), requestingUserId);
+        Team saved = teamRepository.save(team);
+
+        auditClient.log(
+                requestingUserId,
+                teamId,
+                "TEAM",
+                OrgAuditAction.TEAM_AVATAR_UPDATED,
+                "Avatar updated for team '" + team.getName() + "'",
+                true,
+                old,
+                avatarUrl);
+
+        return toResponse(saved, requestingUserId);
     }
 
-    /**
-     * Update or remove the team banner.
-     * Access: ADMIN, TEAM_LEADER of this team, or DEPARTMENT_MANAGER of its department.
-     */
     public TeamResponse updateBanner(String teamId, String bannerUrl,
                                      String requestingUserId, List<String> roles) {
         Team team = findById(teamId);
         assertCanEdit(team, requestingUserId, roles);
+        String old = team.getBannerUrl();
         team.setBannerUrl(bannerUrl);
         team.setUpdatedAt(LocalDateTime.now());
-        return toResponse(teamRepository.save(team), requestingUserId);
+        Team saved = teamRepository.save(team);
+
+        auditClient.log(
+                requestingUserId,
+                teamId,
+                "TEAM",
+                OrgAuditAction.TEAM_BANNER_UPDATED,
+                "Banner updated for team '" + team.getName() + "'",
+                true,
+                old,
+                bannerUrl);
+
+        return toResponse(saved, requestingUserId);
     }
 
     // ── Membership (self-service) ─────────────────────────────────────────────
@@ -234,7 +312,6 @@ public class TeamService {
         if (team.getTeamVisibility() == VisibilityType.PRIVATE) {
             throw new IllegalStateException("This team is private. Contact an admin to join.");
         }
-
         if (userTeamRepository.existsByUserIdAndTeamId(userId, teamId)) {
             throw new IllegalStateException("You are already a member of this team.");
         }
@@ -246,15 +323,35 @@ public class TeamService {
                 .build();
         userTeamRepository.save(membership);
 
+        auditClient.log(
+                userId,
+                teamId,
+                "TEAM",
+                OrgAuditAction.TEAM_JOINED,
+                "User " + userId + " joined team '" + team.getName() + "'",
+                true,
+                null,
+                null);
+
         return toResponse(team, userId);
     }
 
     public void leaveTeam(String teamId, String userId) {
-        findById(teamId);
+        Team team = findById(teamId);
         if (!userTeamRepository.existsByUserIdAndTeamId(userId, teamId)) {
             throw new IllegalStateException("You are not a member of this team.");
         }
         userTeamRepository.deleteByUserIdAndTeamId(userId, teamId);
+
+        auditClient.log(
+                userId,
+                teamId,
+                "TEAM",
+                OrgAuditAction.TEAM_LEFT,
+                "User " + userId + " left team '" + team.getName() + "'",
+                true,
+                null,
+                null);
     }
 
     public List<TeamResponse> getMyTeams(String userId) {
@@ -266,7 +363,7 @@ public class TeamService {
                 .collect(Collectors.toList());
     }
 
-    // ── Members ───────────────────────────────────────────────────────────────
+    // ── Members (admin) ───────────────────────────────────────────────────────
 
     public List<UserTeamResponse> getTeamMembers(String teamId) {
         findById(teamId);
@@ -286,11 +383,21 @@ public class TeamService {
     }
 
     public void removeMember(String teamId, String userId) {
-        findById(teamId);
+        Team team = findById(teamId);
         if (!userTeamRepository.existsByUserIdAndTeamId(userId, teamId)) {
             throw new IllegalStateException("User is not a member of this team.");
         }
         userTeamRepository.deleteByUserIdAndTeamId(userId, teamId);
+
+        auditClient.log(
+                null,
+                teamId,
+                "TEAM",
+                OrgAuditAction.TEAM_MEMBER_REMOVED,
+                "User " + userId + " removed from team '" + team.getName() + "'",
+                true,
+                userId,
+                null);
     }
 
     public TeamResponse addMember(String teamId, String userId) {
@@ -304,17 +411,22 @@ public class TeamService {
                 .joinedAt(LocalDateTime.now())
                 .build();
         userTeamRepository.save(membership);
+
+        auditClient.log(
+                null,
+                teamId,
+                "TEAM",
+                OrgAuditAction.TEAM_MEMBER_ADDED,
+                "User " + userId + " added to team '" + team.getName() + "'",
+                true,
+                null,
+                userId);
+
         return toResponse(team, userId);
     }
 
     // ── Assign member (by leader / HR) ────────────────────────────────────────
 
-    /**
-     * Assign a user as a member of a team.
-     * Authorised callers: CEO, the team's own TEAM_LEADER, a DEPARTMENT_LEADER
-     * who manages the team's department, or HUMAN_RESOURCES (any team).
-     * The assigned user automatically receives the TEAM_MEMBER role.
-     */
     public TeamResponse assignMemberToTeam(String teamId, String userId,
                                            String requestingUserId, List<String> roles) {
         Team team = findById(teamId);
@@ -332,6 +444,17 @@ public class TeamService {
         // Auto-grant TEAM_MEMBER role to the assigned user
         userServiceClient.assignLeaderRole(userId, "TEAM_MEMBER");
 
+        auditClient.log(
+                requestingUserId,
+                teamId,
+                "TEAM",
+                OrgAuditAction.TEAM_MEMBER_ASSIGNED,
+                "User " + userId + " assigned to team '" + team.getName()
+                        + "' by " + requestingUserId,
+                true,
+                null,
+                userId);
+
         return toResponse(team, requestingUserId);
     }
 
@@ -345,6 +468,16 @@ public class TeamService {
                     .targetId(teamId)
                     .targetType(FollowTargetType.TEAM)
                     .build());
+
+            auditClient.log(
+                    userId,
+                    teamId,
+                    "TEAM",
+                    OrgAuditAction.TEAM_FOLLOWED,
+                    "User " + userId + " followed team '" + team.getName() + "'",
+                    true,
+                    null,
+                    null);
         }
         return toResponse(team, userId);
     }
@@ -352,17 +485,28 @@ public class TeamService {
     public TeamResponse unfollowTeam(String teamId, String userId) {
         Team team = findById(teamId);
         followRepository.deleteByUserIdAndTargetIdAndTargetType(userId, teamId, FollowTargetType.TEAM);
+
+        auditClient.log(
+                userId,
+                teamId,
+                "TEAM",
+                OrgAuditAction.TEAM_UNFOLLOWED,
+                "User " + userId + " unfollowed team '" + team.getName() + "'",
+                true,
+                null,
+                null);
+
         return toResponse(team, userId);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void assertCanAssignMember(Team team, String requestingUserId, List<String> roles) {
-        boolean isAdmin          = roles.contains("CEO");
-        boolean isHr             = roles.contains("HUMAN_RESOURCES");
-        boolean isTeamLeader     = roles.contains("TEAM_LEADER")
+        boolean isAdmin       = roles.contains("CEO");
+        boolean isHr          = roles.contains("HUMAN_RESOURCES");
+        boolean isTeamLeader  = roles.contains("TEAM_LEADER")
                 && requestingUserId.equals(team.getLeadId());
-        boolean isDeptManager    = roles.contains("DEPARTMENT_LEADER")
+        boolean isDeptManager = roles.contains("DEPARTMENT_LEADER")
                 && departmentRepository.findById(team.getDepartmentId())
                         .map(d -> requestingUserId.equals(d.getManagerId()))
                         .orElse(false);
@@ -373,7 +517,7 @@ public class TeamService {
     }
 
     private void assertCanEdit(Team team, String requestingUserId, List<String> roles) {
-        boolean isAdmin = roles.contains("CEO");
+        boolean isAdmin      = roles.contains("CEO");
         boolean isTeamLeader = roles.contains("TEAM_LEADER")
                 && requestingUserId.equals(team.getLeadId());
         boolean isDeptManager = roles.contains("DEPARTMENT_LEADER")
@@ -389,6 +533,18 @@ public class TeamService {
         return teamRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Team not found: " + id));
     }
+
+    /** Minimal JSON snapshot for audit old/newValue fields. */
+    private String toJson(Team t) {
+        return "{\"id\":\"" + t.getId() + "\""
+                + ",\"name\":\"" + esc(t.getName()) + "\""
+                + ",\"departmentId\":\"" + esc(t.getDepartmentId()) + "\""
+                + ",\"leadId\":" + (t.getLeadId() == null ? "null" : "\"" + t.getLeadId() + "\"")
+                + ",\"visibility\":\"" + t.getTeamVisibility() + "\""
+                + "}";
+    }
+
+    private String esc(String s) { return s == null ? "" : s.replace("\"", "\\\""); }
 
     public TeamResponse toResponse(Team team, String requestingUserId) {
         UserSummary lead = team.getLeadId() != null

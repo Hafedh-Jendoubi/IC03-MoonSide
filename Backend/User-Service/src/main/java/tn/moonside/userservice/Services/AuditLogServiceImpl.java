@@ -56,6 +56,11 @@ public class AuditLogServiceImpl implements AuditLogService {
     }
 
     @Override
+    public Page<AuditLogResponse> findByEntityType(String entityType, Pageable pageable) {
+        return auditLogRepository.findByEntityType(entityType, pageable).map(this::toResponse);
+    }
+
+    @Override
     public long countTotal() {
         return auditLogRepository.count();
     }
