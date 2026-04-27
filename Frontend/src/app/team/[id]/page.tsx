@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import {
   Loader2,
   Users,
@@ -20,6 +20,7 @@ import {
   Eye,
   ChevronRight,
   Shield,
+  Trash2,
 } from 'lucide-react'
 import {
   teamApi,
@@ -75,6 +76,7 @@ interface ManageTeamPanelProps {
   onClose: () => void
   onSaved: (updated: TeamResponse) => void
   onMemberChange: (delta: number) => void
+  onDeleted: () => void
 }
 
 function ManageTeamPanel({
@@ -83,6 +85,7 @@ function ManageTeamPanel({
   onClose,
   onSaved,
   onMemberChange,
+  onDeleted,
 }: ManageTeamPanelProps) {
   const [section, setSection] = useState<ManageSection>('general')
 
@@ -153,7 +156,9 @@ function ManageTeamPanel({
           {section === 'members' && (
             <MembersSection team={team} canKick={canKick} onMemberChange={onMemberChange} />
           )}
-          {section === 'settings' && <SettingsSection team={team} onSaved={onSaved} />}
+          {section === 'settings' && (
+            <SettingsSection team={team} onSaved={onSaved} onDeleted={onDeleted} />
+          )}
         </div>
       </main>
     </div>
@@ -622,9 +627,11 @@ function MembersSection({
 function SettingsSection({
   team,
   onSaved,
+  onDeleted,
 }: {
   team: TeamResponse
   onSaved: (t: TeamResponse) => void
+  onDeleted: () => void
 }) {
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>(
     team.teamVisibility as 'PUBLIC' | 'PRIVATE'
@@ -632,6 +639,8 @@ function SettingsSection({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const handleSave = async () => {
     try {
@@ -651,6 +660,18 @@ function SettingsSection({
       setError(e.message ?? 'Failed to save settings')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setConfirmDelete(false)
+    setDeleting(true)
+    try {
+      await teamApi.delete(team.id)
+      onDeleted()
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to delete team')
+      setDeleting(false)
     }
   }
 
@@ -723,6 +744,58 @@ function SettingsSection({
           {saving ? 'Saving…' : 'Save Settings'}
         </button>
       </div>
+
+      {/* Danger Zone */}
+      <div className="rounded-xl border border-red-200 dark:border-red-900">
+        <div className="p-5">
+          <div className="mb-2 flex items-center gap-2">
+            <Trash2 className="text-destructive h-4 w-4" />
+            <h2 className="text-destructive text-sm font-semibold">Danger Zone</h2>
+          </div>
+          <p className="text-muted-foreground mb-4 text-xs">
+            Permanently delete this team. This action cannot be undone.
+          </p>
+          <button
+            onClick={() => setConfirmDelete(true)}
+            disabled={deleting}
+            className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            {deleting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            {deleting ? 'Deleting…' : 'Delete Team'}
+          </button>
+        </div>
+      </div>
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-background w-full max-w-sm rounded-xl border p-6 shadow-xl">
+            <h3 className="text-foreground mb-2 text-base font-semibold">Delete Team</h3>
+            <p className="text-muted-foreground mb-5 text-sm">
+              Are you sure you want to delete{' '}
+              <span className="text-foreground font-medium">{team.name}</span>? This action cannot
+              be undone and all members will be removed.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="bg-destructive text-destructive-foreground rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -843,6 +916,7 @@ function TeamMembersModal({ team, onClose }: TeamMembersModalProps) {
 
 export default function TeamFeedPage() {
   const params = useParams()
+  const router = useRouter()
   const { user } = useAuth()
   const teamId = params?.id as string
 
@@ -1081,6 +1155,7 @@ export default function TeamFeedPage() {
               prev ? { ...prev, memberCount: Math.max(0, prev.memberCount + delta) } : prev
             )
           }
+          onDeleted={() => router.push(`/department/${team.departmentId}`)}
         />
       )}
 

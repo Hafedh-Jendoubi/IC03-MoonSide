@@ -28,6 +28,7 @@ import {
   UserResponse,
 } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
+import { useAuth } from '@/lib/auth-context'
 import Link from 'next/link'
 
 // --- Department Card ----------------------------------------------------------
@@ -219,6 +220,7 @@ const DEPARTMENTS_PER_PAGE = 6
 type DeptSortType = 'name' | 'teams' | 'followers'
 
 export default function DiscoverPage() {
+  const { user: currentUser } = useAuth()
   const [departments, setDepartments] = useState<DepartmentResponse[]>([])
   const [teams, setTeams] = useState<TeamResponse[]>([])
   const [myTeams, setMyTeams] = useState<TeamResponse[]>([])
@@ -275,7 +277,7 @@ export default function DiscoverPage() {
       setDepartments(depts)
       setTeams(merged)
       setMyTeams(mine)
-      setUsers(allUsers)
+      setUsers(allUsers.filter((u) => u.id !== currentUser?.id))
     } catch (e: any) {
       setError(e.message ?? 'Failed to load data')
     } finally {

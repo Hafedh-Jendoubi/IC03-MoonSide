@@ -22,6 +22,8 @@ import {
   ChevronRight,
   Shield,
   Layers,
+  Trash2,
+  Plus,
 } from 'lucide-react'
 import {
   departmentApi,
@@ -84,6 +86,8 @@ interface ManageDeptPanelProps {
   onClose: () => void
   onSaved: (updated: DepartmentResponse) => void
   onTeamUpdated: (updated: TeamResponse) => void
+  onTeamDeleted: (teamId: string) => void
+  onTeamCreated: (team: TeamResponse) => void
   onMemberChange: (teamId: string, delta: number) => void
   user: User
 }
@@ -94,6 +98,8 @@ function ManageDeptPanel({
   onClose,
   onSaved,
   onTeamUpdated,
+  onTeamDeleted,
+  onTeamCreated,
   onMemberChange,
   user,
 }: ManageDeptPanelProps) {
@@ -172,6 +178,8 @@ function ManageDeptPanel({
               teams={teams}
               user={user}
               onTeamUpdated={onTeamUpdated}
+              onTeamDeleted={onTeamDeleted}
+              onTeamCreated={onTeamCreated}
               onMemberChange={onMemberChange}
             />
           )}
@@ -322,41 +330,160 @@ function DeptTeamsSection({
   teams,
   user,
   onTeamUpdated,
+  onTeamDeleted,
+  onTeamCreated,
   onMemberChange,
 }: {
   department: DepartmentResponse
   teams: TeamResponse[]
   user: User
   onTeamUpdated: (t: TeamResponse) => void
+  onTeamDeleted: (teamId: string) => void
+  onTeamCreated: (team: TeamResponse) => void
   onMemberChange: (teamId: string, delta: number) => void
 }) {
+  const [localTeams, setLocalTeams] = useState<TeamResponse[]>(teams)
   const [selectedTeam, setSelectedTeam] = useState<TeamResponse | null>(teams[0] ?? null)
+  const [showCreateForm, setShowCreateForm] = useState(false)
+  const [newTeamName, setNewTeamName] = useState('')
+  const [newTeamDesc, setNewTeamDesc] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
+  const [deletingTeamId, setDeletingTeamId] = useState<string | null>(null)
+  const [confirmDeleteTeam, setConfirmDeleteTeam] = useState<TeamResponse | null>(null)
+
+  const canDeleteTeams =
+    user &&
+    (hasRole(user, 'CEO') ||
+      (hasRole(user, 'DEPARTMENT_LEADER') && department.managerId === user.id))
+
+  const handleCreateTeam = async () => {
+    if (!newTeamName.trim()) return
+    setCreating(true)
+    setCreateError(null)
+    try {
+      const created = await teamApi.create({
+        name: newTeamName.trim(),
+        description: newTeamDesc.trim(),
+        departmentId: department.id,
+        teamVisibility: 'PUBLIC',
+      })
+      const updated = [created, ...localTeams]
+      setLocalTeams(updated)
+      setSelectedTeam(created)
+      setShowCreateForm(false)
+      setNewTeamName('')
+      setNewTeamDesc('')
+      onTeamCreated(created)
+    } catch (e: any) {
+      setCreateError(e.message ?? 'Failed to create team')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleDeleteTeam = async (team: TeamResponse) => {
+    setConfirmDeleteTeam(null)
+    setDeletingTeamId(team.id)
+    try {
+      await teamApi.delete(team.id)
+      const updated = localTeams.filter((t) => t.id !== team.id)
+      setLocalTeams(updated)
+      if (selectedTeam?.id === team.id) setSelectedTeam(updated[0] ?? null)
+      onTeamDeleted(team.id)
+    } catch (e: any) {
+      // ignore silently
+    } finally {
+      setDeletingTeamId(null)
+    }
+  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-foreground text-2xl font-bold">Teams & Members</h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-foreground text-2xl font-bold">Teams & Members</h1>
+          {canDeleteTeams && (
+            <button
+              onClick={() => {
+                setShowCreateForm((v) => !v)
+                setCreateError(null)
+              }}
+              className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+            >
+              <Plus className="h-4 w-4" />
+              Add Team
+            </button>
+          )}
+        </div>
         <p className="text-muted-foreground mt-1 text-sm">
-          {teams.length} team{teams.length !== 1 ? 's' : ''} in this department.
+          {localTeams.length} team{localTeams.length !== 1 ? 's' : ''} in this department.
         </p>
       </div>
 
-      {teams.length === 0 && (
+      {/* Create Team Form */}
+      {showCreateForm && (
+        <div className="bg-muted/20 space-y-3 rounded-xl border p-5">
+          <h3 className="text-foreground text-sm font-semibold">Create New Team</h3>
+          {createError && (
+            <div className="bg-destructive/10 text-destructive border-destructive/20 rounded-lg border px-3 py-2 text-xs">
+              {createError}
+            </div>
+          )}
+          <input
+            type="text"
+            value={newTeamName}
+            onChange={(e) => setNewTeamName(e.target.value)}
+            placeholder="Team name"
+            className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+          />
+          <textarea
+            value={newTeamDesc}
+            onChange={(e) => setNewTeamDesc(e.target.value)}
+            placeholder="Description (optional)"
+            rows={2}
+            className="border-border bg-background text-foreground focus:ring-primary w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+          />
+          <div className="flex justify-end gap-2">
+            <button
+              onClick={() => {
+                setShowCreateForm(false)
+                setNewTeamName('')
+                setNewTeamDesc('')
+                setCreateError(null)
+              }}
+              className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateTeam}
+              disabled={creating || !newTeamName.trim()}
+              className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {creating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {creating ? 'Creating…' : 'Create'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {localTeams.length === 0 && (
         <div className="rounded-xl border border-dashed py-12 text-center">
           <Layers className="text-muted-foreground mx-auto mb-2 h-8 w-8" />
           <p className="text-muted-foreground text-sm">No teams in this department yet.</p>
         </div>
       )}
 
-      {teams.length > 0 && (
+      {localTeams.length > 0 && (
         <div className="flex gap-4">
           {/* Team Picker */}
           <div className="w-44 flex-shrink-0 space-y-1">
-            {teams.map((t) => (
+            {localTeams.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setSelectedTeam(t)}
-                className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                className={`group flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
                   selectedTeam?.id === t.id
                     ? 'bg-primary/10 text-primary border-primary/20 border font-medium'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
@@ -373,7 +500,24 @@ function DeptTeamsSection({
                     </div>
                   )}
                 </div>
-                <span className="truncate">{t.name}</span>
+                <span className="min-w-0 flex-1 truncate">{t.name}</span>
+                {canDeleteTeams && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setConfirmDeleteTeam(t)
+                    }}
+                    disabled={deletingTeamId === t.id}
+                    className="text-muted-foreground hover:text-destructive ml-auto flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-50"
+                    title="Delete team"
+                  >
+                    {deletingTeamId === t.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                )}
               </button>
             ))}
           </div>
@@ -388,6 +532,33 @@ function DeptTeamsSection({
                 onMemberChange={(delta) => onMemberChange(selectedTeam.id, delta)}
               />
             )}
+          </div>
+        </div>
+      )}
+
+      {confirmDeleteTeam && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-background w-full max-w-sm rounded-xl border p-6 shadow-xl">
+            <h3 className="text-foreground mb-2 text-base font-semibold">Delete Team</h3>
+            <p className="text-muted-foreground mb-5 text-sm">
+              Are you sure you want to delete{' '}
+              <span className="text-foreground font-medium">{confirmDeleteTeam.name}</span>? This
+              action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDeleteTeam(null)}
+                className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteTeam(confirmDeleteTeam)}
+                className="bg-destructive text-destructive-foreground rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1243,6 +1414,8 @@ export default function DepartmentFeedPage() {
           onTeamUpdated={(updated) =>
             setTeams((prev) => prev.map((t) => (t.id === updated.id ? updated : t)))
           }
+          onTeamDeleted={(teamId) => setTeams((prev) => prev.filter((t) => t.id !== teamId))}
+          onTeamCreated={(team) => setTeams((prev) => [...prev, team])}
           onMemberChange={handleMemberChange}
         />
       )}
