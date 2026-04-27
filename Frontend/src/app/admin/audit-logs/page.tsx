@@ -42,7 +42,6 @@ import { ROLE } from '@/lib/types'
 // -- Action badge colour map ---------------------------------------------------
 
 const ACTION_COLORS: Record<string, string> = {
-  // User Service actions
   LOGIN_SUCCESS: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   LOGIN_FAILURE: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
   REGISTER_SUCCESS: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
@@ -63,26 +62,6 @@ const ACTION_COLORS: Record<string, string> = {
   USER_DEACTIVATED: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
   USER_ACTIVATED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   USER_DELETED: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  // Organization Service actions
-  DEPARTMENT_CREATED: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  DEPARTMENT_UPDATED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  DEPARTMENT_DELETED: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  DEPARTMENT_ACTIVATED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  DEPARTMENT_DEACTIVATED: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  DEPARTMENT_MANAGER_ASSIGNED:
-    'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-  DEPARTMENT_MANAGER_REMOVED:
-    'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-  TEAM_CREATED: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  TEAM_UPDATED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  TEAM_DELETED: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  TEAM_LEAD_ASSIGNED: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-  TEAM_LEAD_REMOVED: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-  TEAM_MEMBER_ADDED: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  TEAM_MEMBER_REMOVED: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  TEAM_MEMBER_ASSIGNED: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-  BANNER_UPDATE: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
-  BANNER_DELETE: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200',
 }
 
 const ALL_ACTIONS = Object.keys(ACTION_COLORS)
@@ -219,61 +198,19 @@ function AuditLogsPageContent() {
     setLoading(true)
     try {
       const params: Parameters<typeof auditApi.getLogs>[0] = {
-        page: 0, // Get all pages for merging
-        size: 1000, // Large size to get comprehensive data
+        page,
+        size: PAGE_SIZE,
       }
       if (userId) params.userId = userId
       if (action !== 'ALL') params.action = action
       if (successFilter !== 'ALL') params.success = successFilter === 'true'
 
-      // Fetch from both User Service and Organization Service
-      const [userLogsData, userStatsData, orgLogsData, orgStatsData] = await Promise.all([
-        auditApi.getLogs(params).catch(() => null),
-        auditApi.getStats().catch(() => null),
-        auditApi.getOrgLogs(params).catch(() => null),
-        auditApi.getOrgStats().catch(() => null),
+      const [logsData, statsData] = await Promise.all([
+        auditApi.getLogs(params),
+        auditApi.getStats(),
       ])
-
-      // Merge logs from both services
-      const allLogs: AuditLogResponse[] = []
-      if (userLogsData?.content) {
-        allLogs.push(...userLogsData.content)
-      }
-      if (orgLogsData?.content) {
-        allLogs.push(...orgLogsData.content)
-      }
-
-      // Sort by timestamp (descending)
-      allLogs.sort((a, b) => {
-        const dateA = new Date(a.createdAt).getTime()
-        const dateB = new Date(b.createdAt).getTime()
-        return dateB - dateA
-      })
-
-      // Implement client-side pagination
-      const start = page * PAGE_SIZE
-      const end = start + PAGE_SIZE
-      const paginatedLogs = allLogs.slice(start, end)
-      const totalElements = allLogs.length
-      const totalPages = Math.ceil(totalElements / PAGE_SIZE)
-
-      const mergedData: PageResponse<AuditLogResponse> = {
-        content: paginatedLogs,
-        totalElements,
-        totalPages,
-        number: page,
-        size: PAGE_SIZE,
-      }
-
-      // Merge stats from both services
-      const mergedStats: AuditLogStats = {
-        total: (userStatsData?.total ?? 0) + (orgStatsData?.total ?? 0),
-        success: (userStatsData?.success ?? 0) + (orgStatsData?.success ?? 0),
-        failure: (userStatsData?.failure ?? 0) + (orgStatsData?.failure ?? 0),
-      }
-
-      setData(mergedData)
-      setStats(mergedStats)
+      setData(logsData)
+      setStats(statsData)
     } catch (err) {
       console.error(err)
     } finally {
