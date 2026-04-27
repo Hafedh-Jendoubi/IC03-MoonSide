@@ -64,8 +64,8 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/organizations/departments/**")
                     .hasAnyRole("CEO", "DEPARTMENT_LEADER")
 
-                .requestMatchers(HttpMethod.POST,   "/organizations/teams").hasRole("CEO")
-                .requestMatchers(HttpMethod.DELETE, "/organizations/teams/**").hasRole("CEO")
+                .requestMatchers(HttpMethod.POST,   "/organizations/teams").hasAnyRole("CEO", "DEPARTMENT_LEADER")
+                .requestMatchers(HttpMethod.DELETE, "/organizations/teams/**").hasAnyRole("CEO", "DEPARTMENT_LEADER")
 
                 // Team updates
                 .requestMatchers(HttpMethod.PATCH, "/organizations/teams/**")

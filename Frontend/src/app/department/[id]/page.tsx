@@ -1230,7 +1230,9 @@ export default function DepartmentFeedPage() {
   if (!user) return null
 
   const showManageButton =
-    canEditDepartment(user, department) || teams.some((t) => canAssignToTeam(user, t, department))
+    hasRole(user, 'CEO') ||
+    hasRole(user, 'HUMAN_RESOURCES') ||
+    (hasRole(user, 'DEPARTMENT_LEADER') && department.managerId === user.id)
 
   return (
     <AuthLayout>

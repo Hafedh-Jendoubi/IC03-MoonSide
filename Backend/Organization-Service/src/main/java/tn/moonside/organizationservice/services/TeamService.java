@@ -64,9 +64,16 @@ public class TeamService {
         Team saved = teamRepository.save(team);
         TeamResponse response = toResponse(saved, null);
 
-        // Assign TEAM_LEADER role to the designated lead
+        // Assign TEAM_LEADER role to the designated lead and add them as a team member
         if (request.getLeadId() != null && !request.getLeadId().isBlank()) {
             userServiceClient.assignLeaderRole(request.getLeadId(), "TEAM_LEADER");
+            if (!userTeamRepository.existsByUserIdAndTeamId(request.getLeadId(), saved.getId())) {
+                userTeamRepository.save(UserTeam.builder()
+                        .userId(request.getLeadId())
+                        .teamId(saved.getId())
+                        .joinedAt(LocalDateTime.now())
+                        .build());
+            }
         }
 
         auditClient.log(
@@ -157,6 +164,14 @@ public class TeamService {
                     userServiceClient.revokeLeaderRole(previousLeadId, "TEAM_LEADER");
                 }
                 userServiceClient.assignLeaderRole(newLeadId, "TEAM_LEADER");
+                // Ensure new lead is a member of the team
+                if (!userTeamRepository.existsByUserIdAndTeamId(newLeadId, team.getId())) {
+                    userTeamRepository.save(UserTeam.builder()
+                            .userId(newLeadId)
+                            .teamId(team.getId())
+                            .joinedAt(LocalDateTime.now())
+                            .build());
+                }
             }
             team.setLeadId(newLeadId);
         }
@@ -218,6 +233,14 @@ public class TeamService {
                 userServiceClient.revokeLeaderRole(previousLeadId, "TEAM_LEADER");
             }
             userServiceClient.assignLeaderRole(request.getLeadId(), "TEAM_LEADER");
+            // Ensure the new lead is a member of the team
+            if (!userTeamRepository.existsByUserIdAndTeamId(request.getLeadId(), teamId)) {
+                userTeamRepository.save(UserTeam.builder()
+                        .userId(request.getLeadId())
+                        .teamId(teamId)
+                        .joinedAt(LocalDateTime.now())
+                        .build());
+            }
         }
 
         auditClient.log(

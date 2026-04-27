@@ -73,6 +73,7 @@ type ManageSection = 'general' | 'members' | 'settings'
 interface ManageTeamPanelProps {
   team: TeamResponse
   canKick: boolean
+  user: User
   onClose: () => void
   onSaved: (updated: TeamResponse) => void
   onMemberChange: (delta: number) => void
@@ -82,6 +83,7 @@ interface ManageTeamPanelProps {
 function ManageTeamPanel({
   team,
   canKick,
+  user,
   onClose,
   onSaved,
   onMemberChange,
@@ -152,7 +154,7 @@ function ManageTeamPanel({
       {/* Main Content */}
       <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-2xl px-8 py-8">
-          {section === 'general' && <GeneralSection team={team} onSaved={onSaved} />}
+          {section === 'general' && <GeneralSection team={team} user={user} onSaved={onSaved} />}
           {section === 'members' && (
             <MembersSection team={team} canKick={canKick} onMemberChange={onMemberChange} />
           )}
@@ -169,9 +171,11 @@ function ManageTeamPanel({
 
 function GeneralSection({
   team,
+  user,
   onSaved,
 }: {
   team: TeamResponse
+  user: User
   onSaved: (t: TeamResponse) => void
 }) {
   const [name, setName] = useState(team.name)
@@ -181,6 +185,25 @@ function GeneralSection({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedMsg, setSavedMsg] = useState(false)
+  const [assigningSelf, setAssigningSelf] = useState(false)
+
+  const isDeptLeader = hasRole(user, 'DEPARTMENT_LEADER')
+  const isAlreadyLead = team.leadId === user.id
+
+  const handleAssignSelfAsLeader = async () => {
+    setAssigningSelf(true)
+    setError(null)
+    try {
+      const updated = await teamApi.assignLead(team.id, user.id)
+      onSaved(updated)
+      setSavedMsg(true)
+      setTimeout(() => setSavedMsg(false), 3000)
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to assign team leader')
+    } finally {
+      setAssigningSelf(false)
+    }
+  }
 
   const displayAvatar = pendingAvatarUrl !== undefined ? pendingAvatarUrl : team.avatarUrl
   const displayBanner = pendingBannerUrl !== undefined ? pendingBannerUrl : team.bannerUrl
@@ -229,6 +252,39 @@ function GeneralSection({
         <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-4 py-3 text-sm text-green-600 dark:text-green-400">
           <CheckCircle2 className="h-4 w-4" />
           Changes saved successfully.
+        </div>
+      )}
+
+      {/* Self-assign as leader — Department Leader only */}
+      {isDeptLeader && !isAlreadyLead && (
+        <div className="bg-muted/30 flex items-center justify-between gap-4 rounded-xl border p-4">
+          <div className="min-w-0">
+            <p className="text-foreground text-sm font-medium">Take leadership of this team</p>
+            <p className="text-muted-foreground mt-0.5 text-xs">
+              Assign yourself as Team Leader. You will be added as a member automatically.
+            </p>
+          </div>
+          <button
+            onClick={handleAssignSelfAsLeader}
+            disabled={assigningSelf}
+            className="bg-primary text-primary-foreground flex flex-shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {assigningSelf ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Shield className="h-4 w-4" />
+            )}
+            {assigningSelf ? 'Assigning…' : 'Set as Leader'}
+          </button>
+        </div>
+      )}
+
+      {isDeptLeader && isAlreadyLead && (
+        <div className="flex items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3">
+          <Shield className="h-4 w-4 flex-shrink-0 text-green-600 dark:text-green-400" />
+          <p className="text-sm font-medium text-green-700 dark:text-green-300">
+            You are the Team Leader of this team.
+          </p>
         </div>
       )}
 
@@ -1148,6 +1204,7 @@ export default function TeamFeedPage() {
         <ManageTeamPanel
           team={team}
           canKick={canKick}
+          user={user}
           onClose={() => setManageOpen(false)}
           onSaved={(updated) => setTeam(updated)}
           onMemberChange={(delta) =>
