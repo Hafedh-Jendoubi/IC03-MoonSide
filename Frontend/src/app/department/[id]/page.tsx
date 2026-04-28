@@ -82,7 +82,6 @@ function canAssignToTeam(
 ): boolean {
   if (!user) return false
   if (hasRole(user, 'CEO')) return true
-  if (hasRole(user, 'HUMAN_RESOURCES')) return true
   if (hasRole(user, 'TEAM_LEADER') && team.leadId === user.id) return true
   if (hasRole(user, 'DEPARTMENT_LEADER') && department?.managerId === user.id) return true
   return false
@@ -688,7 +687,7 @@ function TeamMembersPanel({
     setConfirmAction(null)
     setPromotingId(member.userId)
     try {
-      await teamApi.update(team.id, { leadId: member.userId })
+      await teamApi.assignLead(team.id, member.userId)
       const updated = await teamApi.getMembers(team.id)
       setMembers(updated)
       // Note: The parent should refresh to see the updated lead
@@ -829,9 +828,12 @@ function TeamMembersPanel({
             return (
               <li
                 key={member.id}
-                className="bg-background hover:bg-muted/30 flex items-center justify-between px-4 py-3 transition-colors"
+                className="bg-background flex items-center justify-between px-4 py-3 transition-colors"
               >
-                <div className="flex min-w-0 items-center gap-3">
+                <Link
+                  href={`/profile/${member.userId}`}
+                  className="hover:bg-muted/30 flex min-w-0 flex-1 items-center gap-3 rounded-lg transition-colors"
+                >
                   <div className="bg-muted h-8 w-8 flex-shrink-0 overflow-hidden rounded-full border">
                     {u?.avatar ? (
                       <img
@@ -862,7 +864,7 @@ function TeamMembersPanel({
                       <p className="text-muted-foreground truncate text-xs">{u.jobTitle}</p>
                     )}
                   </div>
-                </div>
+                </Link>
                 {canKick && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -1106,9 +1108,13 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
                 return (
                   <li
                     key={member.id}
-                    className="hover:bg-muted/40 flex items-center justify-between rounded-lg px-3 py-2 transition-colors"
+                    className="flex items-center justify-between rounded-lg px-3 py-2"
                   >
-                    <div className="flex min-w-0 items-center gap-3">
+                    <Link
+                      href={`/profile/${member.userId}`}
+                      onClick={onClose}
+                      className="hover:bg-muted/40 flex min-w-0 flex-1 items-center gap-3 rounded-lg transition-colors"
+                    >
                       <div className="bg-muted h-9 w-9 flex-shrink-0 overflow-hidden rounded-full border">
                         {u?.avatar ? (
                           <img
@@ -1137,7 +1143,7 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
                           <p className="text-muted-foreground truncate text-xs">{u.jobTitle}</p>
                         )}
                       </div>
-                    </div>
+                    </Link>
                     {canKick && !isLead && (
                       <button
                         onClick={() => setConfirmKick(member)}
@@ -1327,9 +1333,7 @@ export default function DepartmentFeedPage() {
   if (!user) return null
 
   const showManageButton =
-    hasRole(user, 'CEO') ||
-    hasRole(user, 'HUMAN_RESOURCES') ||
-    (hasRole(user, 'DEPARTMENT_LEADER') && department.managerId === user.id)
+    hasRole(user, 'CEO') || (hasRole(user, 'DEPARTMENT_LEADER') && department.managerId === user.id)
 
   return (
     <AuthLayout>

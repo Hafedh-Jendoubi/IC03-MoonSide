@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   Loader2,
   Users,
@@ -70,7 +71,6 @@ function canAssignMember(
 ): boolean {
   if (!user || !team) return false
   if (hasRole(user, 'CEO')) return true
-  if (hasRole(user, 'HUMAN_RESOURCES')) return true
   if (hasRole(user, 'TEAM_LEADER') && team.leadId === user.id) return true
   if (hasRole(user, 'DEPARTMENT_LEADER') && userManagedDeptIds.includes(team.departmentId))
     return true
@@ -473,7 +473,7 @@ function MembersSection({
     setConfirmAction(null)
     setPromotingId(member.userId)
     try {
-      await teamApi.update(team.id, { leadId: member.userId })
+      await teamApi.assignLead(team.id, member.userId)
       const updated = await teamApi.getMembers(team.id)
       setMembers(updated)
     } catch (e: any) {
@@ -620,9 +620,12 @@ function MembersSection({
               return (
                 <li
                   key={member.id}
-                  className="bg-background hover:bg-muted/30 flex items-center justify-between px-4 py-3 transition-colors"
+                  className="bg-background flex items-center justify-between px-4 py-3 transition-colors"
                 >
-                  <div className="flex min-w-0 items-center gap-3">
+                  <Link
+                    href={`/profile/${member.userId}`}
+                    className="hover:bg-muted/30 flex min-w-0 flex-1 items-center gap-3 rounded-lg transition-colors"
+                  >
                     <div className="bg-muted h-9 w-9 flex-shrink-0 overflow-hidden rounded-full border">
                       {u?.avatar ? (
                         <img
@@ -653,7 +656,7 @@ function MembersSection({
                         <p className="text-muted-foreground truncate text-xs">{u.jobTitle}</p>
                       )}
                     </div>
-                  </div>
+                  </Link>
                   {canKick && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -1011,38 +1014,41 @@ function TeamMembersModal({ team, onClose }: TeamMembersModalProps) {
                 const u = member.user
                 const isLead = member.userId === team.leadId
                 return (
-                  <li
-                    key={member.id}
-                    className="hover:bg-muted/40 flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
-                  >
-                    <div className="bg-muted h-9 w-9 flex-shrink-0 overflow-hidden rounded-full border">
-                      {u?.avatar ? (
-                        <img
-                          src={u.avatar}
-                          alt={`${u.firstName} ${u.lastName}`}
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center">
-                          <span className="text-muted-foreground text-xs font-semibold">
-                            {u?.firstName?.[0]?.toUpperCase() ?? '?'}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-foreground text-sm leading-tight font-medium">
-                        {u ? `${u.firstName} ${u.lastName}` : 'Unknown User'}
-                        {isLead && (
-                          <span className="bg-primary/10 text-primary ml-2 rounded px-1.5 py-0.5 text-xs font-semibold">
-                            Leader
-                          </span>
+                  <li key={member.id}>
+                    <Link
+                      href={`/profile/${member.userId}`}
+                      onClick={onClose}
+                      className="hover:bg-muted/40 flex items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+                    >
+                      <div className="bg-muted h-9 w-9 flex-shrink-0 overflow-hidden rounded-full border">
+                        {u?.avatar ? (
+                          <img
+                            src={u.avatar}
+                            alt={`${u.firstName} ${u.lastName}`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <span className="text-muted-foreground text-xs font-semibold">
+                              {u?.firstName?.[0]?.toUpperCase() ?? '?'}
+                            </span>
+                          </div>
                         )}
-                      </p>
-                      {u?.jobTitle && (
-                        <p className="text-muted-foreground truncate text-xs">{u.jobTitle}</p>
-                      )}
-                    </div>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-foreground text-sm leading-tight font-medium">
+                          {u ? `${u.firstName} ${u.lastName}` : 'Unknown User'}
+                          {isLead && (
+                            <span className="bg-primary/10 text-primary ml-2 rounded px-1.5 py-0.5 text-xs font-semibold">
+                              Leader
+                            </span>
+                          )}
+                        </p>
+                        {u?.jobTitle && (
+                          <p className="text-muted-foreground truncate text-xs">{u.jobTitle}</p>
+                        )}
+                      </div>
+                    </Link>
                   </li>
                 )
               })}
