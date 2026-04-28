@@ -58,6 +58,7 @@ import {
   UserCog,
   ChevronDown,
   ChevronRight,
+  X,
 } from 'lucide-react'
 import {
   departmentApi,
@@ -66,11 +67,13 @@ import {
   DepartmentResponse,
   TeamResponse,
   UserResponse,
+  UserTeamResponse,
   DepartmentRequest,
   TeamRequest,
   VisibilityType,
 } from '@/lib/api'
 import { tokenStorage } from '@/lib/api'
+import { UserPicker } from '@/components/user-picker'
 
 // --- Small helpers -------------------------------------------------------------
 
@@ -138,19 +141,12 @@ function DepartmentForm({ initial, users, onSave, onCancel, loading }: DeptFormP
         />
       </div>
       <div>
-        <label className="text-foreground text-sm font-medium">Manager (optional)</label>
-        <select
-          value={managerId}
-          onChange={(e) => setManagerId(e.target.value)}
-          className="border-input bg-background focus-visible:ring-ring mt-1 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-        >
-          <option value="">— None —</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.firstName} {u.lastName} ({u.email})
-            </option>
-          ))}
-        </select>
+        <UserPicker
+          selectedUserId={managerId || undefined}
+          onSelect={(user) => setManagerId(user?.id ?? '')}
+          label="Manager (optional)"
+          placeholder="Search for a manager..."
+        />
       </div>
       <div className="flex justify-end gap-2 pt-2">
         <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
@@ -257,19 +253,12 @@ function TeamForm({
         </div>
       </div>
       <div>
-        <label className="text-foreground text-sm font-medium">Team Lead (optional)</label>
-        <select
-          value={leadId}
-          onChange={(e) => setLeadId(e.target.value)}
-          className="border-input bg-background focus-visible:ring-ring mt-1 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-        >
-          <option value="">— None —</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.firstName} {u.lastName} ({u.email})
-            </option>
-          ))}
-        </select>
+        <UserPicker
+          selectedUserId={leadId || undefined}
+          onSelect={(user) => setLeadId(user?.id ?? '')}
+          label="Team Lead (optional)"
+          placeholder="Search for a team lead..."
+        />
       </div>
       <div>
         <label className="text-foreground text-sm font-medium">Team Avatar URL (optional)</label>
@@ -290,6 +279,116 @@ function TeamForm({
         </Button>
       </div>
     </form>
+  )
+}
+
+// --- Members Modal -----------------------------------------------------------
+
+interface MembersModalProps {
+  teamId: string
+  teamName: string
+  onClose: () => void
+}
+
+function MembersModal({ teamId, teamName, onClose }: MembersModalProps) {
+  const router = useRouter()
+  const [members, setMembers] = useState<UserTeamResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    setLoading(true)
+    teamApi
+      .getMembers(teamId)
+      .then(setMembers)
+      .catch((e: any) => setError(e.message ?? 'Failed to load members'))
+      .finally(() => setLoading(false))
+  }, [teamId])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-background w-full max-w-md rounded-xl shadow-xl">
+        <div className="flex items-center justify-between border-b px-6 py-4">
+          <div className="flex items-center gap-2">
+            <Users className="text-muted-foreground h-5 w-5" />
+            <h2 className="text-foreground text-lg font-semibold">
+              {teamName}{' '}
+              <span className="text-muted-foreground text-base font-normal">
+                · {members.length} member{members.length !== 1 ? 's' : ''}
+              </span>
+            </h2>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-muted-foreground hover:text-foreground rounded-full p-1 transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+          {loading && (
+            <div className="flex justify-center py-8">
+              <Loader2 className="text-primary h-8 w-8 animate-spin" />
+            </div>
+          )}
+          {error && (
+            <div className="bg-destructive/10 text-destructive rounded-lg px-4 py-3 text-sm">
+              {error}
+            </div>
+          )}
+          {!loading && !error && members.length === 0 && (
+            <p className="text-muted-foreground py-8 text-center text-sm">No members yet.</p>
+          )}
+          {!loading && members.length > 0 && (
+            <ul className="space-y-1">
+              {members.map((member) => {
+                const u = member.user
+                return (
+                  <li
+                    key={member.id}
+                    className="hover:bg-muted/40 flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-colors"
+                    onClick={() => u && router.push(`/profile/${u.id}`)}
+                  >
+                    <div className="bg-muted h-9 w-9 flex-shrink-0 overflow-hidden rounded-full border">
+                      {u?.avatar ? (
+                        <img
+                          src={u.avatar}
+                          alt={`${u.firstName} ${u.lastName}`}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <span className="text-muted-foreground text-xs font-semibold">
+                            {u?.firstName?.[0]?.toUpperCase() ?? '?'}
+                            {u?.lastName?.[0]?.toUpperCase() ?? ''}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-primary text-sm leading-tight font-medium hover:underline">
+                        {u ? `${u.firstName} ${u.lastName}` : 'Unknown User'}
+                      </p>
+                      {u?.jobTitle && (
+                        <p className="text-muted-foreground truncate text-xs">{u.jobTitle}</p>
+                      )}
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+        </div>
+        <div className="flex justify-end border-t px-6 py-4">
+          <button
+            onClick={onClose}
+            className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -326,6 +425,11 @@ export default function AdminOrganizationsPage() {
     type: 'dept' | 'team'
     id: string
     name: string
+  } | null>(null)
+  const [membersModal, setMembersModal] = useState<{
+    open: boolean
+    teamId: string
+    teamName: string
   } | null>(null)
 
   // -- Data loading ---------------------------------------------------------
@@ -705,9 +809,18 @@ export default function AdminOrganizationsPage() {
                                     )}
                                     <div>
                                       <p className="text-sm font-medium">{team.name}</p>
-                                      <p className="text-muted-foreground text-xs">
+                                      <button
+                                        onClick={() =>
+                                          setMembersModal({
+                                            open: true,
+                                            teamId: team.id,
+                                            teamName: team.name,
+                                          })
+                                        }
+                                        className="text-primary cursor-pointer text-xs hover:underline"
+                                      >
                                         {team.memberCount} members
-                                      </p>
+                                      </button>
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-2">
@@ -842,7 +955,18 @@ export default function AdminOrganizationsPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm font-medium">{team.memberCount}</span>
+                      <button
+                        onClick={() =>
+                          setMembersModal({
+                            open: true,
+                            teamId: team.id,
+                            teamName: team.name,
+                          })
+                        }
+                        className="text-primary cursor-pointer text-sm font-medium hover:underline"
+                      >
+                        {team.memberCount}
+                      </button>
                     </TableCell>
                     <TableCell>
                       <Badge variant={team.teamVisibility === 'PUBLIC' ? 'secondary' : 'outline'}>
@@ -867,6 +991,18 @@ export default function AdminOrganizationsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() =>
+                              setMembersModal({
+                                open: true,
+                                teamId: team.id,
+                                teamName: team.name,
+                              })
+                            }
+                          >
+                            <Users className="mr-2 h-4 w-4" /> View Members
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => setTeamDialog({ open: true, editing: team })}
                           >
@@ -974,6 +1110,15 @@ export default function AdminOrganizationsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* -- Members Modal ---------------------------------------------------- */}
+      {membersModal && (
+        <MembersModal
+          teamId={membersModal.teamId}
+          teamName={membersModal.teamName}
+          onClose={() => setMembersModal(null)}
+        />
+      )}
     </div>
   )
 }

@@ -24,7 +24,19 @@ import {
   Layers,
   Trash2,
   Plus,
+  MoreVertical,
+  Crown,
+  LogOut,
+  ArrowUpRight,
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Button } from '@/components/ui/button'
 import {
   departmentApi,
   teamApi,
@@ -587,6 +599,12 @@ function TeamMembersPanel({
   const [membersError, setMembersError] = useState<string | null>(null)
   const [kickingId, setKickingId] = useState<string | null>(null)
   const [confirmKick, setConfirmKick] = useState<UserTeamResponse | null>(null)
+  const [promotingId, setPromotingId] = useState<string | null>(null)
+  const [confirmAction, setConfirmAction] = useState<{
+    type: 'promote' | 'kick' | 'move'
+    member: UserTeamResponse
+    targetTeamId?: string
+  } | null>(null)
 
   const [query, setQuery] = useState('')
   const [searchResults, setSearchResults] = useState<UserResponse[]>([])
@@ -653,6 +671,7 @@ function TeamMembersPanel({
 
   const handleKick = async (member: UserTeamResponse) => {
     setConfirmKick(null)
+    setConfirmAction(null)
     setKickingId(member.userId)
     try {
       await teamApi.removeMember(team.id, member.userId)
@@ -662,6 +681,21 @@ function TeamMembersPanel({
       setMembersError(e.message ?? 'Failed to remove member')
     } finally {
       setKickingId(null)
+    }
+  }
+
+  const handlePromoteAsLeader = async (member: UserTeamResponse) => {
+    setConfirmAction(null)
+    setPromotingId(member.userId)
+    try {
+      await teamApi.update(team.id, { leadId: member.userId })
+      const updated = await teamApi.getMembers(team.id)
+      setMembers(updated)
+      // Note: The parent should refresh to see the updated lead
+    } catch (e: any) {
+      setMembersError(e.message ?? 'Failed to promote member')
+    } finally {
+      setPromotingId(null)
     }
   }
 
@@ -829,19 +863,51 @@ function TeamMembersPanel({
                     )}
                   </div>
                 </div>
-                {canKick && !isLead && (
-                  <button
-                    onClick={() => setConfirmKick(member)}
-                    disabled={isKicking}
-                    title="Remove from team"
-                    className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 ml-2 flex-shrink-0 rounded-lg p-1.5 transition-colors disabled:opacity-50"
-                  >
-                    {isKicking ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <UserMinus className="h-4 w-4" />
-                    )}
-                  </button>
+                {canKick && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        disabled={isKicking || promotingId === member.userId}
+                      >
+                        {isKicking || promotingId === member.userId ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <MoreVertical className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      {!isLead && (
+                        <>
+                          <DropdownMenuItem
+                            onClick={() =>
+                              setConfirmAction({
+                                type: 'promote',
+                                member,
+                              })
+                            }
+                          >
+                            <Crown className="mr-2 h-4 w-4" /> Promote as Leader
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                        </>
+                      )}
+                      <DropdownMenuItem
+                        onClick={() =>
+                          setConfirmAction({
+                            type: 'kick',
+                            member,
+                          })
+                        }
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <LogOut className="mr-2 h-4 w-4" /> Remove from Team
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </li>
             )
@@ -849,31 +915,62 @@ function TeamMembersPanel({
         </ul>
       )}
 
-      {confirmKick && (
+      {confirmAction && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4">
           <div className="bg-background w-full max-w-sm rounded-xl border p-6 shadow-xl">
-            <h3 className="text-foreground mb-2 text-base font-semibold">Remove Member</h3>
-            <p className="text-muted-foreground mb-5 text-sm">
-              Are you sure you want to remove{' '}
-              <span className="text-foreground font-medium">
-                {confirmKick.user
-                  ? `${confirmKick.user.firstName} ${confirmKick.user.lastName}`
-                  : 'this member'}
-              </span>{' '}
-              from <span className="text-foreground font-medium">{team.name}</span>?
-            </p>
+            {confirmAction.type === 'promote' && (
+              <>
+                <h3 className="text-foreground mb-2 text-base font-semibold">
+                  Promote to Team Leader
+                </h3>
+                <p className="text-muted-foreground mb-5 text-sm">
+                  Promote{' '}
+                  <span className="text-foreground font-medium">
+                    {confirmAction.member.user
+                      ? `${confirmAction.member.user.firstName} ${confirmAction.member.user.lastName}`
+                      : 'this member'}
+                  </span>{' '}
+                  to be the leader of{' '}
+                  <span className="text-foreground font-medium">{team.name}</span>?
+                </p>
+              </>
+            )}
+            {confirmAction.type === 'kick' && (
+              <>
+                <h3 className="text-foreground mb-2 text-base font-semibold">Remove Member</h3>
+                <p className="text-muted-foreground mb-5 text-sm">
+                  Are you sure you want to remove{' '}
+                  <span className="text-foreground font-medium">
+                    {confirmAction.member.user
+                      ? `${confirmAction.member.user.firstName} ${confirmAction.member.user.lastName}`
+                      : 'this member'}
+                  </span>{' '}
+                  from <span className="text-foreground font-medium">{team.name}</span>?
+                </p>
+              </>
+            )}
             <div className="flex justify-end gap-3">
               <button
-                onClick={() => setConfirmKick(null)}
+                onClick={() => setConfirmAction(null)}
                 className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium"
               >
                 Cancel
               </button>
               <button
-                onClick={() => handleKick(confirmKick)}
-                className="bg-destructive text-destructive-foreground rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+                onClick={() => {
+                  if (confirmAction.type === 'promote') {
+                    handlePromoteAsLeader(confirmAction.member)
+                  } else if (confirmAction.type === 'kick') {
+                    handleKick(confirmAction.member)
+                  }
+                }}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-opacity ${
+                  confirmAction.type === 'kick'
+                    ? 'bg-destructive text-destructive-foreground hover:opacity-90'
+                    : 'bg-primary text-primary-foreground hover:opacity-90'
+                }`}
               >
-                Remove
+                {confirmAction.type === 'promote' ? 'Promote' : 'Remove'}
               </button>
             </div>
           </div>
