@@ -1232,10 +1232,10 @@ export default function DepartmentFeedPage() {
         setLoading(true)
         const [dept, allTeams] = await Promise.all([
           departmentApi.getById(deptId),
-          teamApi.getPublic(),
+          teamApi.getByDepartment(deptId),
         ])
         setDepartment(dept)
-        setTeams(allTeams.filter((t) => t.departmentId === deptId))
+        setTeams(allTeams)
         const stored = localStorage.getItem(`dept_posts_${deptId}`)
         if (stored) {
           try {

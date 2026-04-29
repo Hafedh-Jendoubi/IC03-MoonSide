@@ -101,11 +101,54 @@ public class TeamService {
                 .collect(Collectors.toList());
     }
 
-    public List<TeamResponse> getTeamsByDepartment(String departmentId, String requestingUserId) {
+    public List<TeamResponse> getTeamsByDepartment(String departmentId, String requestingUserId, List<String> roles) {
+        boolean isCeo = roles != null && roles.contains("CEO");
+
+        java.util.Set<String> accessiblePrivateTeamIds = new java.util.HashSet<>();
+        if (requestingUserId != null && !requestingUserId.isBlank()) {
+            if (isCeo) {
+                teamRepository.findByDepartmentId(departmentId)
+                        .stream()
+                        .filter(t -> t.getTeamVisibility() == VisibilityType.PRIVATE)
+                        .forEach(t -> accessiblePrivateTeamIds.add(t.getId()));
+            } else {
+                // Member of the team
+                userTeamRepository.findByUserId(requestingUserId)
+                        .forEach(ut -> accessiblePrivateTeamIds.add(ut.getTeamId()));
+                // Lead of the team
+                teamRepository.findByLeadId(requestingUserId)
+                        .stream()
+                        .filter(t -> t.getTeamVisibility() == VisibilityType.PRIVATE
+                                && departmentId.equals(t.getDepartmentId()))
+                        .forEach(t -> accessiblePrivateTeamIds.add(t.getId()));
+                // Manager of this department
+                if (roles != null && roles.contains("DEPARTMENT_LEADER")) {
+                    departmentRepository.findByManagerId(requestingUserId)
+                            .stream()
+                            .filter(d -> d.getId().equals(departmentId))
+                            .findFirst()
+                            .ifPresent(d ->
+                                teamRepository.findByDepartmentId(departmentId)
+                                        .stream()
+                                        .filter(t -> t.getTeamVisibility() == VisibilityType.PRIVATE)
+                                        .forEach(t -> accessiblePrivateTeamIds.add(t.getId()))
+                            );
+                }
+            }
+        }
+
         return teamRepository.findByDepartmentId(departmentId)
                 .stream()
+                .filter(t -> t.getTeamVisibility() == VisibilityType.PUBLIC
+                        || accessiblePrivateTeamIds.contains(t.getId()))
                 .map(t -> toResponse(t, requestingUserId))
                 .collect(Collectors.toList());
+    }
+
+    /** @deprecated Use {@link #getTeamsByDepartment(String, String, List)} instead */
+    @Deprecated
+    public List<TeamResponse> getTeamsByDepartment(String departmentId, String requestingUserId) {
+        return getTeamsByDepartment(departmentId, requestingUserId, null);
     }
 
     public List<TeamResponse> getPublicTeams(String requestingUserId) {
@@ -115,12 +158,96 @@ public class TeamService {
                 .collect(Collectors.toList());
     }
 
-    public List<TeamResponse> searchTeams(String query, String requestingUserId) {
-        return teamRepository.findByNameContainingIgnoreCase(query)
+    /**
+     * Returns all teams visible to the requesting user:
+     *  - All PUBLIC teams (visible to everyone)
+     *  - PRIVATE teams where the user is: a member, the team leader,
+     *    the department leader of the team's department, or a CEO.
+     *
+     * This is the endpoint the front-office "Discover" tab should use.
+     */
+    public List<TeamResponse> getVisibleTeams(String requestingUserId, List<String> roles) {
+        boolean isCeo = roles != null && roles.contains("CEO");
+
+        // Collect team IDs of private teams the user has access to
+        java.util.Set<String> accessiblePrivateTeamIds = new java.util.HashSet<>();
+
+        if (requestingUserId != null && !requestingUserId.isBlank()) {
+            if (isCeo) {
+                // CEO sees everything — collect all private team IDs
+                teamRepository.findByTeamVisibility(VisibilityType.PRIVATE)
+                        .forEach(t -> accessiblePrivateTeamIds.add(t.getId()));
+            } else {
+                // Teams where the user is a member
+                userTeamRepository.findByUserId(requestingUserId)
+                        .forEach(ut -> accessiblePrivateTeamIds.add(ut.getTeamId()));
+
+                // Teams where the user is the team leader
+                teamRepository.findByLeadId(requestingUserId)
+                        .stream()
+                        .filter(t -> t.getTeamVisibility() == VisibilityType.PRIVATE)
+                        .forEach(t -> accessiblePrivateTeamIds.add(t.getId()));
+
+                // Teams whose department the user manages (DEPARTMENT_LEADER)
+                if (roles != null && roles.contains("DEPARTMENT_LEADER")) {
+                    departmentRepository.findByManagerId(requestingUserId)
+                            .forEach(dept ->
+                                teamRepository.findByDepartmentId(dept.getId())
+                                        .stream()
+                                        .filter(t -> t.getTeamVisibility() == VisibilityType.PRIVATE)
+                                        .forEach(t -> accessiblePrivateTeamIds.add(t.getId()))
+                            );
+                }
+            }
+        }
+
+        return teamRepository.findAll()
                 .stream()
-                .filter(t -> t.getTeamVisibility() == VisibilityType.PUBLIC)
+                .filter(t -> t.getTeamVisibility() == VisibilityType.PUBLIC
+                        || accessiblePrivateTeamIds.contains(t.getId()))
                 .map(t -> toResponse(t, requestingUserId))
                 .collect(Collectors.toList());
+    }
+
+    public List<TeamResponse> searchTeams(String query, String requestingUserId, List<String> roles) {
+        boolean isCeo = roles != null && roles.contains("CEO");
+
+        java.util.Set<String> accessiblePrivateTeamIds = new java.util.HashSet<>();
+        if (requestingUserId != null && !requestingUserId.isBlank()) {
+            if (isCeo) {
+                teamRepository.findByTeamVisibility(VisibilityType.PRIVATE)
+                        .forEach(t -> accessiblePrivateTeamIds.add(t.getId()));
+            } else {
+                userTeamRepository.findByUserId(requestingUserId)
+                        .forEach(ut -> accessiblePrivateTeamIds.add(ut.getTeamId()));
+                teamRepository.findByLeadId(requestingUserId)
+                        .stream()
+                        .filter(t -> t.getTeamVisibility() == VisibilityType.PRIVATE)
+                        .forEach(t -> accessiblePrivateTeamIds.add(t.getId()));
+                if (roles != null && roles.contains("DEPARTMENT_LEADER")) {
+                    departmentRepository.findByManagerId(requestingUserId)
+                            .forEach(dept ->
+                                teamRepository.findByDepartmentId(dept.getId())
+                                        .stream()
+                                        .filter(t -> t.getTeamVisibility() == VisibilityType.PRIVATE)
+                                        .forEach(t -> accessiblePrivateTeamIds.add(t.getId()))
+                            );
+                }
+            }
+        }
+
+        return teamRepository.findByNameContainingIgnoreCase(query)
+                .stream()
+                .filter(t -> t.getTeamVisibility() == VisibilityType.PUBLIC
+                        || accessiblePrivateTeamIds.contains(t.getId()))
+                .map(t -> toResponse(t, requestingUserId))
+                .collect(Collectors.toList());
+    }
+
+    /** @deprecated Use {@link #searchTeams(String, String, List)} instead */
+    @Deprecated
+    public List<TeamResponse> searchTeams(String query, String requestingUserId) {
+        return searchTeams(query, requestingUserId, null);
     }
 
     /**

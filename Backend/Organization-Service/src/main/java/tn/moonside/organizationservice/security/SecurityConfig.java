@@ -33,6 +33,7 @@ public class SecurityConfig {
                 // ── Public discovery (GET only) ───────────────────────────────
                 .requestMatchers(HttpMethod.GET, "/organizations/departments/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/public").authenticated()
+                .requestMatchers(HttpMethod.GET, "/organizations/teams/visible").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/search").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/{teamId}").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/{teamId}/members").authenticated()

@@ -614,6 +614,9 @@ export const teamApi = {
 
   getPublic: () => apiFetch<TeamResponse[]>('/organizations/teams/public'),
 
+  /** Returns PUBLIC teams + PRIVATE teams the current user is allowed to see */
+  getVisible: () => apiFetch<TeamResponse[]>('/organizations/teams/visible'),
+
   search: (q: string) =>
     apiFetch<TeamResponse[]>(`/organizations/teams/search?q=${encodeURIComponent(q)}`),
 
