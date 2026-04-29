@@ -94,6 +94,10 @@ public class DataSeeder implements CommandLineRunner {
             new PermissionDef(AppPermission.TEAM_MANAGE_MEMBERS,       TypeScope.TEAM,   "Add/remove members from own team"),
             new PermissionDef(AppPermission.TEAM_MANAGE_LEAD,          TypeScope.TEAM,   "Assign/change team lead within own team"),
 
+            new PermissionDef(AppPermission.USER_WRITE, TypeScope.OWN,        "Write/update own user data"),
+            new PermissionDef(AppPermission.USER_WRITE, TypeScope.TEAM,       "Write/update user data within team"),
+            new PermissionDef(AppPermission.USER_WRITE, TypeScope.DEPARTMENT, "Write/update user data within department"),
+
             // ── Department management (DEPARTMENT_LEADER) ─────────────────────
             new PermissionDef(AppPermission.DEPT_MANAGE,               TypeScope.DEPARTMENT, "Manage own department details"),
             new PermissionDef(AppPermission.DEPT_MANAGE_TEAMS,         TypeScope.DEPARTMENT, "Create/manage teams within own department"),
@@ -159,43 +163,57 @@ public class DataSeeder implements CommandLineRunner {
             AppPermission.USER_UPDATE_OWN_AVATAR,
             AppPermission.USER_DELETE_OWN_AVATAR,
             AppPermission.USER_READ,
+            AppPermission.USER_READ_ALL,
             AppPermission.USER_READ_ROLES,
+            AppPermission.USER_WRITE,
             AppPermission.FOLLOW_DEPARTMENT,
             AppPermission.FOLLOW_TEAM
         );
 
-        // ── TEAM_MEMBER — assigned automatically when added to a team ──────────
+        // ── TEAM_MEMBER ────────────────────────────────────────────────────────
         List<String> teamMemberPerms = List.of(
+            AppPermission.USER_WRITE,
             AppPermission.FOLLOW_DEPARTMENT,
             AppPermission.FOLLOW_TEAM
         );
 
-        // ── TEAM_LEADER — team-scoped management only (no overlap with EMPLOYEE) ─
+        // ── TEAM_LEADER ────────────────────────────────────────────────────────
         List<String> teamLeaderPerms = List.of(
+            AppPermission.USER_READ_OWN,
+            AppPermission.USER_UPDATE_OWN_AVATAR,
+            AppPermission.USER_DELETE_OWN_AVATAR,
+            AppPermission.USER_READ_ALL,
+            AppPermission.USER_READ_ROLES,
+            AppPermission.ROLE_READ_ALL,
+            AppPermission.ROLE_READ,
             AppPermission.TEAM_MANAGE,
             AppPermission.TEAM_MANAGE_MEMBERS,
             AppPermission.TEAM_MANAGE_LEAD,
             AppPermission.TEAM_ASSIGN_MEMBER
         );
 
-        // ── DEPARTMENT_LEADER — dept-scoped management (no overlap with TEAM_LEADER) ─
+        // ── DEPARTMENT_LEADER ─────────────────────────────────────────────────
         List<String> departmentLeaderPerms = List.of(
+            AppPermission.USER_READ,
+            AppPermission.USER_WRITE,
             AppPermission.DEPT_MANAGE,
             AppPermission.DEPT_MANAGE_TEAMS,
             AppPermission.DEPT_MANAGE_MANAGER,
             AppPermission.TEAM_ASSIGN_MEMBER
         );
 
-        // ── HUMAN_RESOURCES — limited back-office (no overlap with above roles) ─
+        // ── HUMAN_RESOURCES ───────────────────────────────────────────────────
         List<String> hrPerms = List.of(
             AppPermission.BACKOFFICE_DASHBOARD_READ,
             AppPermission.USER_READ_ALL,
+            AppPermission.USER_READ_ROLES,
             AppPermission.USER_INVITE,
+            AppPermission.ROLE_READ_ALL,
             AppPermission.ORG_READ,
             AppPermission.TEAM_ASSIGN_MEMBER
         );
 
-        // ── CEO — single ANYTHING wildcard (everything else is a subset) ────────
+        // ── CEO ───────────────────────────────────────────────────────────────
         List<String> ceoPerms = List.of(
             AppPermission.ANYTHING
         );

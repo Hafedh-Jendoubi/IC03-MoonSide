@@ -111,7 +111,7 @@ function ManageTeamPanel({
   return (
     <div className="bg-background fixed inset-0 z-50 flex">
       {/* Left Sidebar */}
-      <aside className="bg-muted/30 flex w-60 flex-shrink-0 flex-col border-r">
+      <aside className="bg-muted/30 flex w-72 flex-shrink-0 flex-col border-r">
         {/* Header */}
         <div className="flex items-center gap-3 border-b px-5 py-4">
           <div className="bg-muted flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border">
@@ -268,34 +268,52 @@ function GeneralSection({
 
       {/* Self-assign as leader — Department Leader only */}
       {isDeptLeader && !isAlreadyLead && (
-        <div className="bg-muted/30 flex items-center justify-between gap-4 rounded-xl border p-4">
-          <div className="min-w-0">
-            <p className="text-foreground text-sm font-medium">Take leadership of this team</p>
-            <p className="text-muted-foreground mt-0.5 text-xs">
-              Assign yourself as Team Leader. You will be added as a member automatically.
-            </p>
+        <div className="from-primary/5 to-primary/10 border-primary/20 relative overflow-hidden rounded-xl border bg-gradient-to-br p-5">
+          <div className="bg-primary/10 absolute -top-12 -right-12 h-32 w-32 rounded-full blur-2xl" />
+          <div className="relative flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="mb-1 flex items-center gap-2">
+                <div className="bg-primary/20 flex h-6 w-6 items-center justify-center rounded-full">
+                  <Shield className="text-primary h-3.5 w-3.5" />
+                </div>
+                <p className="text-foreground text-sm font-semibold">Take the Lead</p>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                Become Team Leader and unlock full team management capabilities.
+              </p>
+            </div>
+            <button
+              onClick={handleAssignSelfAsLeader}
+              disabled={assigningSelf}
+              className="bg-primary text-primary-foreground flex flex-shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium shadow-sm transition-all hover:opacity-90 hover:shadow-md disabled:opacity-50"
+            >
+              {assigningSelf ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Crown className="h-4 w-4" />
+              )}
+              {assigningSelf ? 'Assigning…' : 'Become Leader'}
+            </button>
           </div>
-          <button
-            onClick={handleAssignSelfAsLeader}
-            disabled={assigningSelf}
-            className="bg-primary text-primary-foreground flex flex-shrink-0 items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {assigningSelf ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Shield className="h-4 w-4" />
-            )}
-            {assigningSelf ? 'Assigning…' : 'Set as Leader'}
-          </button>
         </div>
       )}
 
       {isDeptLeader && isAlreadyLead && (
-        <div className="flex items-center gap-3 rounded-xl border border-green-500/30 bg-green-500/10 px-4 py-3">
-          <Shield className="h-4 w-4 flex-shrink-0 text-green-600 dark:text-green-400" />
-          <p className="text-sm font-medium text-green-700 dark:text-green-300">
-            You are the Team Leader of this team.
-          </p>
+        <div className="relative overflow-hidden rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-emerald-50/50 p-5 dark:border-emerald-900 dark:from-emerald-950/30 dark:to-emerald-900/20">
+          <div className="absolute -top-8 -right-8 h-24 w-24 rounded-full bg-emerald-200/20 blur-xl dark:bg-emerald-800/20" />
+          <div className="relative flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/50">
+              <Crown className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                You're the Team Leader
+              </p>
+              <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70">
+                Full management access enabled
+              </p>
+            </div>
+          </div>
         </div>
       )}
 

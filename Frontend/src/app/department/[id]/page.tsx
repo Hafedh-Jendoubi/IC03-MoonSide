@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
+import Link from 'next/link'
 import {
   Loader2,
   Building2,
@@ -52,7 +53,6 @@ import { PostCard } from '@/components/post-card'
 import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
 import { Post, User, hasRole } from '@/lib/types'
-import Link from 'next/link'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -85,6 +85,57 @@ function canAssignToTeam(
   if (hasRole(user, 'TEAM_LEADER') && team.leadId === user.id) return true
   if (hasRole(user, 'DEPARTMENT_LEADER') && department?.managerId === user.id) return true
   return false
+}
+
+// ── Team Sidebar Card Component ───────────────────────────────────────────────
+
+interface TeamSidebarCardProps {
+  team: TeamResponse
+  setMembersTeam: (team: TeamResponse) => void
+}
+
+function TeamSidebarCard({ team, setMembersTeam }: TeamSidebarCardProps) {
+  return (
+    <div className="group relative">
+      <Link href={`/team/${team.id}`}>
+        <div
+          className="hover:bg-muted border-border/50 block rounded-lg border p-3 transition-colors"
+          title={team.name}
+        >
+          <div className="flex items-center gap-2">
+            <div className="bg-muted h-8 w-8 flex-shrink-0 overflow-hidden rounded-full border">
+              {team.avatarUrl ? (
+                <img src={team.avatarUrl} alt={team.name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center">
+                  <span className="text-muted-foreground text-xs font-semibold">
+                    {team.name[0]?.toUpperCase()}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="text-foreground line-clamp-1 text-sm font-medium" title={team.name}>
+                {team.name}
+              </h4>
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setMembersTeam(team)
+                }}
+                className="text-muted-foreground hover:text-primary mt-0.5 flex items-center gap-1 text-xs transition-colors hover:underline"
+                title="View members"
+              >
+                <Users className="h-3 w-3" />
+                {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Link>
+    </div>
+  )
 }
 
 // ── Manage Department Panel ───────────────────────────────────────────────────
@@ -334,6 +385,98 @@ function DeptGeneralSection({
   )
 }
 
+// ── Team Visibility Section ───────────────────────────────────────────────────
+
+interface TeamVisibilitySectionProps {
+  teams: TeamResponse[]
+  label: string
+  icon: string
+  selectedTeam: TeamResponse | null
+  onSelectTeam: (team: TeamResponse) => void
+  onDelete: (team: TeamResponse) => void
+  deletingTeamId: string | null
+  canDelete: boolean
+}
+
+function TeamVisibilitySection({
+  teams,
+  label,
+  icon,
+  selectedTeam,
+  onSelectTeam,
+  onDelete,
+  deletingTeamId,
+  canDelete,
+}: TeamVisibilitySectionProps) {
+  const [expanded, setExpanded] = useState(true)
+
+  if (teams.length === 0) return null
+
+  return (
+    <div className="space-y-2">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="text-muted-foreground hover:text-foreground flex w-full items-center gap-2 px-2 py-1.5 text-xs font-semibold tracking-wider uppercase transition-colors"
+      >
+        <span>{icon}</span>
+        <span>{label}</span>
+        <span className="text-muted-foreground/60 ml-auto text-[11px]">({teams.length})</span>
+        <ChevronRight
+          className={`text-muted-foreground/60 h-3 w-3 transition-transform ${
+            expanded ? 'rotate-90' : ''
+          }`}
+        />
+      </button>
+
+      {expanded && (
+        <div className="space-y-1">
+          {teams.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => onSelectTeam(t)}
+              className={`group flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
+                selectedTeam?.id === t.id
+                  ? 'bg-primary/10 text-primary border-primary/20 border font-medium'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+              }`}
+            >
+              <div className="bg-muted h-6 w-6 flex-shrink-0 overflow-hidden rounded-full border">
+                {t.avatarUrl ? (
+                  <img src={t.avatarUrl} alt={t.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <span className="text-muted-foreground text-[10px] font-bold">
+                      {t.name[0]?.toUpperCase()}
+                    </span>
+                  </div>
+                )}
+              </div>
+              <span className="min-w-0 flex-1 truncate">{t.name}</span>
+              {canDelete && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    onDelete(t)
+                  }}
+                  disabled={deletingTeamId === t.id}
+                  className="text-muted-foreground hover:text-destructive ml-auto flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-50"
+                  title="Delete team"
+                >
+                  {deletingTeamId === t.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Dept Teams & Members Section ──────────────────────────────────────────────
 
 function DeptTeamsSection({
@@ -489,48 +632,30 @@ function DeptTeamsSection({
       {localTeams.length > 0 && (
         <div className="flex gap-4">
           {/* Team Picker */}
-          <div className="w-44 flex-shrink-0 space-y-1">
-            {localTeams.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setSelectedTeam(t)}
-                className={`group flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors ${
-                  selectedTeam?.id === t.id
-                    ? 'bg-primary/10 text-primary border-primary/20 border font-medium'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                }`}
-              >
-                <div className="bg-muted h-6 w-6 flex-shrink-0 overflow-hidden rounded-full border">
-                  {t.avatarUrl ? (
-                    <img src={t.avatarUrl} alt={t.name} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <span className="text-muted-foreground text-[10px] font-bold">
-                        {t.name[0]?.toUpperCase()}
-                      </span>
-                    </div>
-                  )}
-                </div>
-                <span className="min-w-0 flex-1 truncate">{t.name}</span>
-                {canDeleteTeams && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setConfirmDeleteTeam(t)
-                    }}
-                    disabled={deletingTeamId === t.id}
-                    className="text-muted-foreground hover:text-destructive ml-auto flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-50"
-                    title="Delete team"
-                  >
-                    {deletingTeamId === t.id ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                )}
-              </button>
-            ))}
+          <div className="w-56 flex-shrink-0 space-y-4">
+            {/* Public Teams Section */}
+            <TeamVisibilitySection
+              teams={localTeams.filter((t) => t.teamVisibility === 'PUBLIC')}
+              label="Public Teams"
+              icon="🔓"
+              selectedTeam={selectedTeam}
+              onSelectTeam={setSelectedTeam}
+              onDelete={setConfirmDeleteTeam}
+              deletingTeamId={deletingTeamId}
+              canDelete={canDeleteTeams}
+            />
+
+            {/* Private Teams Section */}
+            <TeamVisibilitySection
+              teams={localTeams.filter((t) => t.teamVisibility === 'PRIVATE')}
+              label="Private Teams"
+              icon="🔒"
+              selectedTeam={selectedTeam}
+              onSelectTeam={setSelectedTeam}
+              onDelete={setConfirmDeleteTeam}
+              deletingTeamId={deletingTeamId}
+              canDelete={canDeleteTeams}
+            />
           </div>
 
           {/* Team Members Panel */}
@@ -1208,7 +1333,7 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
   )
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+// ── Page ───────────────────────────────────────────��──────────────────────────
 
 export default function DepartmentFeedPage() {
   const params = useParams()
@@ -1426,52 +1551,46 @@ export default function DepartmentFeedPage() {
             <div className="lg:col-span-1">
               <div className="border-border bg-background sticky top-4 rounded-lg border p-4">
                 <h3 className="text-foreground mb-4 text-lg font-semibold">Teams</h3>
-                <div className="space-y-2">
-                  {teams.map((team) => {
-                    return (
-                      <div key={team.id} className="group relative">
-                        <Link href={`/team/${team.id}`}>
-                          <div className="hover:bg-muted border-border/50 block rounded-lg border p-3 transition-colors">
-                            <div className="flex items-center gap-2">
-                              <div className="bg-muted h-8 w-8 flex-shrink-0 overflow-hidden rounded-full border">
-                                {team.avatarUrl ? (
-                                  <img
-                                    src={team.avatarUrl}
-                                    alt={team.name}
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  <div className="flex h-full w-full items-center justify-center">
-                                    <span className="text-muted-foreground text-xs font-semibold">
-                                      {team.name[0]?.toUpperCase()}
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <h4 className="text-foreground line-clamp-1 text-sm font-medium">
-                                  {team.name}
-                                </h4>
-                                <button
-                                  onClick={(e) => {
-                                    e.preventDefault()
-                                    e.stopPropagation()
-                                    setMembersTeam(team)
-                                  }}
-                                  className="text-muted-foreground hover:text-primary mt-0.5 flex items-center gap-1 text-xs transition-colors hover:underline"
-                                  title="View members"
-                                >
-                                  <Users className="h-3 w-3" />
-                                  {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </Link>
-                      </div>
-                    )
-                  })}
-                </div>
+
+                {/* Public Teams Section */}
+                {teams.filter((t) => t.teamVisibility === 'PUBLIC').length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wider uppercase">
+                      🔓 Public Teams
+                    </h4>
+                    <div className="space-y-2">
+                      {teams
+                        .filter((t) => t.teamVisibility === 'PUBLIC')
+                        .map((team) => (
+                          <TeamSidebarCard
+                            key={team.id}
+                            team={team}
+                            setMembersTeam={setMembersTeam}
+                          />
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Private Teams Section */}
+                {teams.filter((t) => t.teamVisibility === 'PRIVATE').length > 0 && (
+                  <div>
+                    <h4 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wider uppercase">
+                      🔒 Private Teams
+                    </h4>
+                    <div className="space-y-2">
+                      {teams
+                        .filter((t) => t.teamVisibility === 'PRIVATE')
+                        .map((team) => (
+                          <TeamSidebarCard
+                            key={team.id}
+                            team={team}
+                            setMembersTeam={setMembersTeam}
+                          />
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

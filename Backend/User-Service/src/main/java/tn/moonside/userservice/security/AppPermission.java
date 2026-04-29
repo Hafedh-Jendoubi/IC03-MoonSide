@@ -41,6 +41,8 @@ public final class AppPermission {
     public static final String USER_READ                 = "USER_READ";
     /** GET /users/{id}/roles — view a user's roles */
     public static final String USER_READ_ROLES           = "USER_READ_ROLES";
+    /** Write/update user data within a scope (OWN, TEAM, DEPARTMENT) */
+    public static final String USER_WRITE                = "USER_WRITE";
 
     // ─── Team membership assignment (TEAM_LEADER, DEPARTMENT_LEADER, HUMAN_RESOURCES) ──
     /** POST /organizations/teams/{id}/assign/{userId} — assign a user as member to a team */

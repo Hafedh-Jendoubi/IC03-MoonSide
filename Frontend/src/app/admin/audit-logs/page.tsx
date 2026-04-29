@@ -101,7 +101,7 @@ function DetailDialog({ log, onClose }: { log: AuditLogResponse | null; onClose:
   ]
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="flex max-h-[90vh] max-w-4xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Eye size={18} />
@@ -109,7 +109,7 @@ function DetailDialog({ log, onClose }: { log: AuditLogResponse | null; onClose:
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="flex-1 space-y-4 overflow-y-auto pr-4">
           {/* Status */}
           <div className="flex items-center gap-2">
             {log.success ? (
@@ -148,7 +148,7 @@ function DetailDialog({ log, onClose }: { log: AuditLogResponse | null; onClose:
                   <p className="text-muted-foreground mb-1 text-xs font-semibold tracking-wider uppercase">
                     {label}
                   </p>
-                  <pre className="bg-muted max-h-48 overflow-auto rounded-md p-3 text-xs break-all whitespace-pre-wrap">
+                  <pre className="bg-muted max-h-64 overflow-auto rounded-md p-3 text-xs break-all whitespace-pre-wrap">
                     {val
                       ? (() => {
                           try {
