@@ -22,4 +22,10 @@ public class DepartmentRequest {
 
     /** URL to the department banner — optional. */
     private String bannerUrl;
+
+    /**
+     * When true, any user may see the members of teams under this department.
+     * Defaults to true (backwards-compatible).
+     */
+    private Boolean membersPublic;
 }

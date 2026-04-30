@@ -125,6 +125,9 @@ public class DepartmentService {
         if (request.getBannerUrl() != null) {
             dept.setBannerUrl(request.getBannerUrl().isBlank() ? null : request.getBannerUrl());
         }
+        if (request.getMembersPublic() != null) {
+            dept.setMembersPublic(request.getMembersPublic());
+        }
         dept.setUpdatedAt(LocalDateTime.now());
         Department saved = departmentRepository.save(dept);
 
@@ -393,6 +396,7 @@ public class DepartmentService {
                 .avatarUrl(dept.getAvatarUrl())
                 .bannerUrl(dept.getBannerUrl())
                 .isActive(dept.isActive())
+                .membersPublic(dept.isMembersPublic())
                 .teamCount(teamCount)
                 .isFollowing(isFollowing)
                 .followerCount(followerCount)

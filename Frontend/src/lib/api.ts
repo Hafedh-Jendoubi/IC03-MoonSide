@@ -490,6 +490,7 @@ export interface DepartmentResponse {
   avatarUrl: string | null
   bannerUrl: string | null
   isActive: boolean
+  membersPublic: boolean
   teamCount: number
   isFollowing: boolean
   followerCount: number
@@ -503,6 +504,7 @@ export interface DepartmentRequest {
   managerId?: string
   avatarUrl?: string
   bannerUrl?: string
+  membersPublic?: boolean
 }
 
 // -- Team ----------------------------------------------------------------------

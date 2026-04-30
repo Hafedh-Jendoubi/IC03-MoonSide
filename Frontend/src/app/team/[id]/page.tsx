@@ -38,6 +38,7 @@ import {
   teamApi,
   departmentApi,
   TeamResponse,
+  DepartmentResponse,
   UserTeamResponse,
   UserResponse,
   userApi,
@@ -982,6 +983,7 @@ function TeamMembersModal({ team, onClose }: TeamMembersModalProps) {
   const [members, setMembers] = useState<UserTeamResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     setLoading(true)
@@ -991,6 +993,21 @@ function TeamMembersModal({ team, onClose }: TeamMembersModalProps) {
       .catch((e: any) => setError(e.message ?? 'Failed to load members'))
       .finally(() => setLoading(false))
   }, [team.id])
+
+  const filteredMembers = searchQuery.trim()
+    ? members.filter((m) => {
+        const u = m.user
+        if (!u) return false
+        const q = searchQuery.toLowerCase()
+        return (
+          u.firstName.toLowerCase().includes(q) ||
+          u.lastName.toLowerCase().includes(q) ||
+          `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
+          (u.jobTitle ?? '').toLowerCase().includes(q) ||
+          (u.email ?? '').toLowerCase().includes(q)
+        )
+      })
+    : members
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -1012,7 +1029,32 @@ function TeamMembersModal({ team, onClose }: TeamMembersModalProps) {
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+
+        {/* Search bar */}
+        {!loading && members.length > 0 && (
+          <div className="border-b px-6 py-3">
+            <div className="relative">
+              <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search members by name, role…"
+                className="bg-muted/40 focus:ring-primary w-full rounded-lg border py-2 pr-4 pl-9 text-sm focus:ring-2 focus:outline-none"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="max-h-[55vh] overflow-y-auto px-6 py-4">
           {loading && (
             <div className="flex justify-center py-8">
               <Loader2 className="text-primary h-8 w-8 animate-spin" />
@@ -1026,9 +1068,14 @@ function TeamMembersModal({ team, onClose }: TeamMembersModalProps) {
           {!loading && !error && members.length === 0 && (
             <p className="text-muted-foreground py-8 text-center text-sm">No members yet.</p>
           )}
-          {!loading && members.length > 0 && (
+          {!loading && members.length > 0 && filteredMembers.length === 0 && (
+            <p className="text-muted-foreground py-8 text-center text-sm">
+              No members match &quot;{searchQuery}&quot;
+            </p>
+          )}
+          {!loading && filteredMembers.length > 0 && (
             <ul className="space-y-1">
-              {members.map((member) => {
+              {filteredMembers.map((member) => {
                 const u = member.user
                 const isLead = member.userId === team.leadId
                 return (
@@ -1103,6 +1150,7 @@ export default function TeamFeedPage() {
   const [manageOpen, setManageOpen] = useState(false)
   const [membersOpen, setMembersOpen] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
+  const [teamDepartment, setTeamDepartment] = useState<DepartmentResponse | null>(null)
 
   useEffect(() => {
     if (!teamId) return
@@ -1111,6 +1159,13 @@ export default function TeamFeedPage() {
         setLoading(true)
         const teamData = await teamApi.getById(teamId)
         setTeam(teamData)
+        // fetch the parent department to read membersPublic setting
+        if (teamData.departmentId) {
+          departmentApi
+            .getById(teamData.departmentId)
+            .then(setTeamDepartment)
+            .catch(() => {})
+        }
         const stored = localStorage.getItem(`team_posts_${teamId}`)
         if (stored) {
           try {
@@ -1245,12 +1300,45 @@ export default function TeamFeedPage() {
                 </p>
               )}
               <button
-                onClick={() => setMembersOpen(true)}
-                className="text-muted-foreground hover:text-primary mt-1 flex items-center gap-1.5 text-xs transition-colors hover:underline"
-                title="View members"
+                onClick={() => {
+                  const pub = teamDepartment?.membersPublic ?? true
+                  const isLead = user?.id === team.leadId
+                  const isDeptLeader =
+                    hasRole(user, 'DEPARTMENT_LEADER') &&
+                    userManagedDeptIds.includes(team.departmentId)
+                  const isCEO = hasRole(user, 'CEO')
+                  if (pub || isLead || isDeptLeader || isCEO) {
+                    setMembersOpen(true)
+                  }
+                }}
+                className={`mt-1 flex items-center gap-1.5 text-xs transition-colors ${
+                  (teamDepartment?.membersPublic ?? true) ||
+                  user?.id === team.leadId ||
+                  hasRole(user, 'CEO') ||
+                  (hasRole(user, 'DEPARTMENT_LEADER') &&
+                    userManagedDeptIds.includes(team.departmentId))
+                    ? 'text-muted-foreground hover:text-primary hover:underline'
+                    : 'text-muted-foreground/50 cursor-not-allowed'
+                }`}
+                title={
+                  (teamDepartment?.membersPublic ?? true) ||
+                  user?.id === team.leadId ||
+                  hasRole(user, 'CEO') ||
+                  (hasRole(user, 'DEPARTMENT_LEADER') &&
+                    userManagedDeptIds.includes(team.departmentId))
+                    ? 'View members'
+                    : 'Member list is restricted to department members'
+                }
               >
                 <Users className="h-3.5 w-3.5" />
                 {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
+                {!(teamDepartment?.membersPublic ?? true) &&
+                  !hasRole(user, 'CEO') &&
+                  user?.id !== team.leadId &&
+                  !(
+                    hasRole(user, 'DEPARTMENT_LEADER') &&
+                    userManagedDeptIds.includes(team.departmentId)
+                  ) && <Shield className="ml-0.5 h-3 w-3 opacity-60" />}
               </button>
             </div>
 

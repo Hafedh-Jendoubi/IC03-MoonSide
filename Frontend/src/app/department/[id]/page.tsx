@@ -75,6 +75,27 @@ function canManageTeam(
   return false
 }
 
+/**
+ * Returns true when the current user is allowed to view the member list of a team.
+ * - If the department has membersPublic=true (or undefined/null), everyone can.
+ * - If membersPublic=false: only CEO, the Department Leader, a Team Leader of
+ *   that specific team, or a member of that team can see the list.
+ */
+function canViewTeamMembers(
+  user: User | null,
+  team: TeamResponse,
+  department: DepartmentResponse | null,
+  userTeamIds: string[]
+): boolean {
+  if (!department || department.membersPublic !== false) return true
+  if (!user) return false
+  if (hasRole(user, 'CEO')) return true
+  if (hasRole(user, 'DEPARTMENT_LEADER') && department.managerId === user.id) return true
+  if (hasRole(user, 'TEAM_LEADER') && team.leadId === user.id) return true
+  if (userTeamIds.includes(team.id)) return true
+  return false
+}
+
 function canAssignToTeam(
   user: User | null,
   team: TeamResponse,
@@ -91,10 +112,20 @@ function canAssignToTeam(
 
 interface TeamSidebarCardProps {
   team: TeamResponse
+  department: DepartmentResponse | null
+  user: User | null
+  userTeamIds: string[]
   setMembersTeam: (team: TeamResponse) => void
 }
 
-function TeamSidebarCard({ team, setMembersTeam }: TeamSidebarCardProps) {
+function TeamSidebarCard({
+  team,
+  department,
+  user,
+  userTeamIds,
+  setMembersTeam,
+}: TeamSidebarCardProps) {
+  const canView = canViewTeamMembers(user, team, department, userTeamIds)
   return (
     <div className="group relative">
       <Link href={`/team/${team.id}`}>
@@ -122,13 +153,18 @@ function TeamSidebarCard({ team, setMembersTeam }: TeamSidebarCardProps) {
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
-                  setMembersTeam(team)
+                  if (canView) setMembersTeam(team)
                 }}
-                className="text-muted-foreground hover:text-primary mt-0.5 flex items-center gap-1 text-xs transition-colors hover:underline"
-                title="View members"
+                className={`mt-0.5 flex items-center gap-1 text-xs transition-colors ${
+                  canView
+                    ? 'text-muted-foreground hover:text-primary hover:underline'
+                    : 'text-muted-foreground/50 cursor-not-allowed'
+                }`}
+                title={canView ? 'View members' : 'Member list is restricted to department members'}
               >
                 <Users className="h-3 w-3" />
                 {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
+                {!canView && <Shield className="ml-0.5 h-3 w-3 opacity-60" />}
               </button>
             </div>
           </div>
@@ -1110,6 +1146,31 @@ function TeamMembersPanel({
 // ── Dept Settings Section ─────────────────────────────────────────────────────
 
 function DeptSettingsSection({ department }: { department: DepartmentResponse }) {
+  const [membersPublic, setMembersPublic] = useState(department.membersPublic ?? true)
+  const [saving, setSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+
+  const isDirty = membersPublic !== (department.membersPublic ?? true)
+
+  const handleSave = async () => {
+    setSaving(true)
+    setSaveSuccess(false)
+    setSaveError(null)
+    try {
+      await departmentApi.update(department.id, {
+        name: department.name,
+        membersPublic,
+      })
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (e: any) {
+      setSaveError(e.message ?? 'Failed to save setting')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div>
@@ -1117,6 +1178,7 @@ function DeptSettingsSection({ department }: { department: DepartmentResponse })
         <p className="text-muted-foreground mt-1 text-sm">Department configuration and info.</p>
       </div>
       <div className="divide-y rounded-xl border">
+        {/* Status */}
         <div className="space-y-2 p-5">
           <div className="flex items-center gap-2">
             <Eye className="text-muted-foreground h-4 w-4" />
@@ -1136,6 +1198,72 @@ function DeptSettingsSection({ department }: { department: DepartmentResponse })
             </span>
           </div>
         </div>
+
+        {/* Member Visibility */}
+        <div className="space-y-3 p-5">
+          <div className="flex items-center gap-2">
+            <Users className="text-muted-foreground h-4 w-4" />
+            <h2 className="text-foreground text-sm font-semibold">Member Visibility</h2>
+          </div>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            Control who can see the member lists of teams under this department.
+          </p>
+          <label className="hover:bg-muted/30 flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors">
+            <div className="relative mt-0.5 flex-shrink-0">
+              <input
+                type="checkbox"
+                checked={membersPublic}
+                onChange={(e) => setMembersPublic(e.target.checked)}
+                className="peer sr-only"
+              />
+              <div
+                className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${membersPublic ? 'border-primary bg-primary' : 'border-muted-foreground bg-background'}`}
+              >
+                {membersPublic && (
+                  <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none">
+                    <path
+                      d="M2 6l3 3 5-5"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+              </div>
+            </div>
+            <div className="min-w-0">
+              <p className="text-foreground text-sm font-medium">
+                Allow all users to view team members
+              </p>
+              <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
+                {membersPublic
+                  ? 'Any authenticated user can open a team member list in this department.'
+                  : 'Only department members, Team Leaders, and the Department Leader can view team member lists.'}
+              </p>
+            </div>
+          </label>
+
+          {saveError && <p className="text-destructive text-xs">{saveError}</p>}
+          {saveSuccess && (
+            <p className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+              <CheckCircle2 className="h-3.5 w-3.5" /> Setting saved successfully.
+            </p>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleSave}
+              disabled={!isDirty || saving}
+              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+
+        {/* Stats */}
         <div className="space-y-1 p-5">
           <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Teams</p>
           <p className="text-foreground text-2xl font-bold">{department.teamCount}</p>
@@ -1166,6 +1294,7 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
   const [error, setError] = useState<string | null>(null)
   const [kickingId, setKickingId] = useState<string | null>(null)
   const [confirmKick, setConfirmKick] = useState<UserTeamResponse | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
     setLoading(true)
@@ -1190,6 +1319,21 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
     }
   }
 
+  const filteredMembers = searchQuery.trim()
+    ? members.filter((m) => {
+        const u = m.user
+        if (!u) return false
+        const q = searchQuery.toLowerCase()
+        return (
+          u.firstName.toLowerCase().includes(q) ||
+          u.lastName.toLowerCase().includes(q) ||
+          `${u.firstName} ${u.lastName}`.toLowerCase().includes(q) ||
+          (u.jobTitle ?? '').toLowerCase().includes(q) ||
+          (u.email ?? '').toLowerCase().includes(q)
+        )
+      })
+    : members
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="bg-background w-full max-w-md rounded-xl shadow-xl">
@@ -1210,7 +1354,32 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
             <X className="h-5 w-5" />
           </button>
         </div>
-        <div className="max-h-[60vh] overflow-y-auto px-6 py-4">
+
+        {/* Search bar */}
+        {!loading && members.length > 0 && (
+          <div className="border-b px-6 py-3">
+            <div className="relative">
+              <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search members by name, role…"
+                className="bg-muted/40 focus:ring-primary w-full rounded-lg border py-2 pr-4 pl-9 text-sm focus:ring-2 focus:outline-none"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="max-h-[55vh] overflow-y-auto px-6 py-4">
           {loading && (
             <div className="flex justify-center py-8">
               <Loader2 className="text-primary h-8 w-8 animate-spin" />
@@ -1224,9 +1393,14 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
           {!loading && !error && members.length === 0 && (
             <p className="text-muted-foreground py-8 text-center text-sm">No members yet.</p>
           )}
-          {!loading && members.length > 0 && (
+          {!loading && members.length > 0 && filteredMembers.length === 0 && (
+            <p className="text-muted-foreground py-8 text-center text-sm">
+              No members match &quot;{searchQuery}&quot;
+            </p>
+          )}
+          {!loading && filteredMembers.length > 0 && (
             <ul className="space-y-1">
-              {members.map((member) => {
+              {filteredMembers.map((member) => {
                 const u = member.user
                 const isLead = member.userId === team.leadId
                 const isKicking = kickingId === member.userId
@@ -1349,6 +1523,7 @@ export default function DepartmentFeedPage() {
   const [manageOpen, setManageOpen] = useState(false)
   const [membersTeam, setMembersTeam] = useState<TeamResponse | null>(null)
   const [followLoading, setFollowLoading] = useState(false)
+  const [userTeamIds, setUserTeamIds] = useState<string[]>([])
 
   useEffect(() => {
     if (!deptId) return
@@ -1361,6 +1536,18 @@ export default function DepartmentFeedPage() {
         ])
         setDepartment(dept)
         setTeams(allTeams)
+        // derive which teams the current user is a member of (lead counts too)
+        if (user) {
+          setUserTeamIds(
+            allTeams
+              .filter(
+                (t) =>
+                  t.leadId === user.id ||
+                  (t.members ?? []).some((m: any) => m === user.id || m?.userId === user.id)
+              )
+              .map((t) => t.id)
+          )
+        }
         const stored = localStorage.getItem(`dept_posts_${deptId}`)
         if (stored) {
           try {
@@ -1565,6 +1752,9 @@ export default function DepartmentFeedPage() {
                           <TeamSidebarCard
                             key={team.id}
                             team={team}
+                            department={department}
+                            user={user}
+                            userTeamIds={userTeamIds}
                             setMembersTeam={setMembersTeam}
                           />
                         ))}
@@ -1585,6 +1775,9 @@ export default function DepartmentFeedPage() {
                           <TeamSidebarCard
                             key={team.id}
                             team={team}
+                            department={department}
+                            user={user}
+                            userTeamIds={userTeamIds}
                             setMembersTeam={setMembersTeam}
                           />
                         ))}

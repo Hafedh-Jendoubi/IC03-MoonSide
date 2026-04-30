@@ -17,6 +17,7 @@ public class DepartmentResponse {
     private String avatarUrl;
     private String bannerUrl;
     private boolean isActive;
+    private boolean membersPublic;
     private long teamCount;
     /** True if the requesting user is following this department. */
     private boolean isFollowing;
