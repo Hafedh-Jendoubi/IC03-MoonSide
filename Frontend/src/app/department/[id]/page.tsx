@@ -1538,15 +1538,7 @@ export default function DepartmentFeedPage() {
         setTeams(allTeams)
         // derive which teams the current user is a member of (lead counts too)
         if (user) {
-          setUserTeamIds(
-            allTeams
-              .filter(
-                (t) =>
-                  t.leadId === user.id ||
-                  (t.members ?? []).some((m: any) => m === user.id || m?.userId === user.id)
-              )
-              .map((t) => t.id)
-          )
+          setUserTeamIds(allTeams.filter((t) => t.leadId === user.id).map((t) => t.id))
         }
         const stored = localStorage.getItem(`dept_posts_${deptId}`)
         if (stored) {
