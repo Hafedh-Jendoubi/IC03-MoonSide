@@ -76,12 +76,16 @@ public class TeamService {
             }
         }
 
+        String deptName = departmentRepository.findById(saved.getDepartmentId())
+                .map(Department::getName)
+                .orElse(saved.getDepartmentId());
+
         auditClient.log(
                 null,                            // actor resolved by controller layer; null = system/admin
                 saved.getId(),
                 "TEAM",
                 OrgAuditAction.TEAM_CREATED,
-                "Team '" + saved.getName() + "' created in department " + saved.getDepartmentId(),
+                "Team '" + saved.getName() + "' created in department '" + deptName + "'",
                 true,
                 null,
                 toJson(saved));
@@ -313,12 +317,16 @@ public class TeamService {
 
         Team saved = teamRepository.save(team);
 
+        String updaterLabel = userServiceClient.findById(requestingUserId)
+                .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                .orElse(requestingUserId);
+
         auditClient.log(
                 requestingUserId,
                 saved.getId(),
                 "TEAM",
                 OrgAuditAction.TEAM_UPDATED,
-                "Team '" + saved.getName() + "' updated by user " + requestingUserId,
+                "Team '" + saved.getName() + "' updated by user " + updaterLabel,
                 true,
                 oldSnapshot,
                 toJson(saved));
@@ -473,12 +481,16 @@ public class TeamService {
                 .build();
         userTeamRepository.save(membership);
 
+        String joinerLabel = userServiceClient.findById(userId)
+                .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                .orElse(userId);
+
         auditClient.log(
                 userId,
                 teamId,
                 "TEAM",
                 OrgAuditAction.TEAM_JOINED,
-                "User " + userId + " joined team '" + team.getName() + "'",
+                "User " + joinerLabel + " joined team '" + team.getName() + "'",
                 true,
                 null,
                 null);
@@ -493,12 +505,16 @@ public class TeamService {
         }
         userTeamRepository.deleteByUserIdAndTeamId(userId, teamId);
 
+        String leaverLabel = userServiceClient.findById(userId)
+                .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                .orElse(userId);
+
         auditClient.log(
                 userId,
                 teamId,
                 "TEAM",
                 OrgAuditAction.TEAM_LEFT,
-                "User " + userId + " left team '" + team.getName() + "'",
+                "User " + leaverLabel + " left team '" + team.getName() + "'",
                 true,
                 null,
                 null);
@@ -539,12 +555,16 @@ public class TeamService {
         }
         userTeamRepository.deleteByUserIdAndTeamId(userId, teamId);
 
+        String removedUserLabel = userServiceClient.findById(userId)
+                .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                .orElse(userId);
+
         auditClient.log(
                 null,
                 teamId,
                 "TEAM",
                 OrgAuditAction.TEAM_MEMBER_REMOVED,
-                "User " + userId + " removed from team '" + team.getName() + "'",
+                "User " + removedUserLabel + " removed from team '" + team.getName() + "'",
                 true,
                 userId,
                 null);
@@ -562,12 +582,16 @@ public class TeamService {
                 .build();
         userTeamRepository.save(membership);
 
+        String addedUserLabel = userServiceClient.findById(userId)
+                .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                .orElse(userId);
+
         auditClient.log(
                 null,
                 teamId,
                 "TEAM",
                 OrgAuditAction.TEAM_MEMBER_ADDED,
-                "User " + userId + " added to team '" + team.getName() + "'",
+                "User " + addedUserLabel + " added to team '" + team.getName() + "'",
                 true,
                 null,
                 userId);
@@ -594,13 +618,20 @@ public class TeamService {
         // Auto-grant TEAM_MEMBER role to the assigned user
         userServiceClient.assignLeaderRole(userId, "TEAM_MEMBER");
 
+        String assignedUserLabel = userServiceClient.findById(userId)
+                .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                .orElse(userId);
+        String assignerLabel = userServiceClient.findById(requestingUserId)
+                .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                .orElse(requestingUserId);
+
         auditClient.log(
                 requestingUserId,
                 teamId,
                 "TEAM",
                 OrgAuditAction.TEAM_MEMBER_ASSIGNED,
-                "User " + userId + " assigned to team '" + team.getName()
-                        + "' by " + requestingUserId,
+                "User " + assignedUserLabel + " assigned to team '" + team.getName()
+                        + "' by " + assignerLabel,
                 true,
                 null,
                 userId);
@@ -619,12 +650,16 @@ public class TeamService {
                     .targetType(FollowTargetType.TEAM)
                     .build());
 
+            String followerLabel = userServiceClient.findById(userId)
+                    .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                    .orElse(userId);
+
             auditClient.log(
                     userId,
                     teamId,
                     "TEAM",
                     OrgAuditAction.TEAM_FOLLOWED,
-                    "User " + userId + " followed team '" + team.getName() + "'",
+                    "User " + followerLabel + " followed team '" + team.getName() + "'",
                     true,
                     null,
                     null);
@@ -636,12 +671,16 @@ public class TeamService {
         Team team = findById(teamId);
         followRepository.deleteByUserIdAndTargetIdAndTargetType(userId, teamId, FollowTargetType.TEAM);
 
+        String unfollowerLabel = userServiceClient.findById(userId)
+                .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                .orElse(userId);
+
         auditClient.log(
                 userId,
                 teamId,
                 "TEAM",
                 OrgAuditAction.TEAM_UNFOLLOWED,
-                "User " + userId + " unfollowed team '" + team.getName() + "'",
+                "User " + unfollowerLabel + " unfollowed team '" + team.getName() + "'",
                 true,
                 null,
                 null);

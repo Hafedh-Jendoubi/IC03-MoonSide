@@ -131,12 +131,16 @@ public class DepartmentService {
         dept.setUpdatedAt(LocalDateTime.now());
         Department saved = departmentRepository.save(dept);
 
+        String updaterLabel = userServiceClient.findById(requestingUserId)
+                .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                .orElse(requestingUserId);
+
         auditClient.log(
                 requestingUserId,
                 saved.getId(),
                 "DEPARTMENT",
                 OrgAuditAction.DEPARTMENT_UPDATED,
-                "Department '" + saved.getName() + "' updated by user " + requestingUserId,
+                "Department '" + saved.getName() + "' updated by user " + updaterLabel,
                 true,
                 oldSnapshot,
                 toJson(saved));
@@ -311,12 +315,16 @@ public class DepartmentService {
                     .targetType(FollowTargetType.DEPARTMENT)
                     .build());
 
+            String followerLabel = userServiceClient.findById(userId)
+                    .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                    .orElse(userId);
+
             auditClient.log(
                     userId,
                     departmentId,
                     "DEPARTMENT",
                     OrgAuditAction.DEPARTMENT_FOLLOWED,
-                    "User " + userId + " followed department '" + dept.getName() + "'",
+                    "User " + followerLabel + " followed department '" + dept.getName() + "'",
                     true,
                     null,
                     null);
@@ -329,12 +337,16 @@ public class DepartmentService {
         followRepository.deleteByUserIdAndTargetIdAndTargetType(
                 userId, departmentId, FollowTargetType.DEPARTMENT);
 
+        String unfollowerLabel = userServiceClient.findById(userId)
+                .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                .orElse(userId);
+
         auditClient.log(
                 userId,
                 departmentId,
                 "DEPARTMENT",
                 OrgAuditAction.DEPARTMENT_UNFOLLOWED,
-                "User " + userId + " unfollowed department '" + dept.getName() + "'",
+                "User " + unfollowerLabel + " unfollowed department '" + dept.getName() + "'",
                 true,
                 null,
                 null);
