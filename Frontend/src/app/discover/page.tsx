@@ -28,6 +28,7 @@ import {
   UserResponse,
 } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
+import { useAuth } from '@/lib/auth-context'
 import Link from 'next/link'
 
 // --- Department Card ----------------------------------------------------------
@@ -108,7 +109,7 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining }: TeamCardPro
 
   return (
     <div className="bg-background border-border flex h-full flex-col space-y-4 rounded-lg border p-5 transition-shadow duration-200 hover:shadow-md">
-      {/* Team Header */}
+      {/* Team Header with Lead + Members Count */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-foreground truncate font-semibold">{team.name}</h3>
@@ -119,6 +120,35 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining }: TeamCardPro
             </div>
           )}
         </div>
+
+        {/* Right side: Lead name + Member count */}
+        <div className="flex flex-col items-end gap-2.5 text-right">
+          {team.lead && (
+            <div className="bg-primary/10 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5">
+              <div className="from-primary/40 to-primary/20 flex h-6 w-6 flex-shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br">
+                {team.lead.avatar ? (
+                  <img
+                    src={team.lead.avatar}
+                    alt={team.lead.firstName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-primary text-[10px] font-bold">
+                    {team.lead.firstName?.[0]}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="text-primary truncate text-xs font-semibold">{team.lead.firstName}</p>
+                <p className="text-primary/70 text-[10px]">Lead</p>
+              </div>
+            </div>
+          )}
+          <div className="text-muted-foreground flex items-center gap-1 text-xs">
+            <Users className="h-3.5 w-3.5" />
+            <span>{team.memberCount}</span>
+          </div>
+        </div>
       </div>
 
       {/* Description */}
@@ -126,24 +156,14 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining }: TeamCardPro
         <p className="text-muted-foreground line-clamp-2 flex-grow text-sm">{team.description}</p>
       )}
 
-      {/* Team Lead */}
-      {team.lead && (
-        <div className="text-muted-foreground border-border space-y-1 border-t py-2 text-xs">
-          <p className="text-foreground font-medium">Team Lead</p>
-          <p>
-            {team.lead.firstName} {team.lead.lastName}
-          </p>
-        </div>
-      )}
-
       {/* Footer */}
-      <div className="border-border mt-auto flex items-center justify-between gap-2 border-t pt-3">
+      <div className="border-border mt-auto flex items-center justify-end gap-2 border-t pt-3">
         <button
           onClick={() => onViewMembers(team)}
-          className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
+          className="text-muted-foreground hover:text-foreground text-xs transition-colors"
+          title="View all members"
         >
-          <Users className="h-4 w-4" />
-          <span>{team.memberCount} members</span>
+          All Members
         </button>
 
         {team.isMember ? (
@@ -219,6 +239,7 @@ const DEPARTMENTS_PER_PAGE = 6
 type DeptSortType = 'name' | 'teams' | 'followers'
 
 export default function DiscoverPage() {
+  const { user: currentUser } = useAuth()
   const [departments, setDepartments] = useState<DepartmentResponse[]>([])
   const [teams, setTeams] = useState<TeamResponse[]>([])
   const [myTeams, setMyTeams] = useState<TeamResponse[]>([])
@@ -275,7 +296,7 @@ export default function DiscoverPage() {
       setDepartments(depts)
       setTeams(merged)
       setMyTeams(mine)
-      setUsers(allUsers)
+      setUsers(allUsers.filter((u) => u.id !== currentUser?.id))
     } catch (e: any) {
       setError(e.message ?? 'Failed to load data')
     } finally {

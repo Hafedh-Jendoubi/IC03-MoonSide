@@ -220,13 +220,13 @@ export default function OrganizationsPage() {
     setLoading(true)
     setError(null)
     try {
-      const [depts, publicTeams, mine] = await Promise.all([
+      const [depts, visibleTeams, mine] = await Promise.all([
         departmentApi.getActive(),
-        teamApi.getPublic(),
+        teamApi.getVisible(),
         teamApi.getMy(),
       ])
       setDepartments(depts)
-      setTeams(publicTeams)
+      setTeams(visibleTeams)
       setMyTeams(mine)
     } catch (e: any) {
       setError(e.message ?? 'Failed to load')
@@ -369,7 +369,7 @@ export default function OrganizationsPage() {
                 <Globe className="h-5 w-5 text-violet-500" />
                 <div>
                   <p className="text-xl font-bold">{teams.length}</p>
-                  <p className="text-muted-foreground text-xs">Public Teams</p>
+                  <p className="text-muted-foreground text-xs">Teams</p>
                 </div>
               </div>
             </CardContent>

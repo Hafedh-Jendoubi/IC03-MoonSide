@@ -490,6 +490,7 @@ export interface DepartmentResponse {
   avatarUrl: string | null
   bannerUrl: string | null
   isActive: boolean
+  membersPublic: boolean
   teamCount: number
   isFollowing: boolean
   followerCount: number
@@ -503,6 +504,7 @@ export interface DepartmentRequest {
   managerId?: string
   avatarUrl?: string
   bannerUrl?: string
+  membersPublic?: boolean
 }
 
 // -- Team ----------------------------------------------------------------------
@@ -613,6 +615,9 @@ export const teamApi = {
   getAll: () => apiFetch<TeamResponse[]>('/organizations/teams'),
 
   getPublic: () => apiFetch<TeamResponse[]>('/organizations/teams/public'),
+
+  /** Returns PUBLIC teams + PRIVATE teams the current user is allowed to see */
+  getVisible: () => apiFetch<TeamResponse[]>('/organizations/teams/visible'),
 
   search: (q: string) =>
     apiFetch<TeamResponse[]>(`/organizations/teams/search?q=${encodeURIComponent(q)}`),

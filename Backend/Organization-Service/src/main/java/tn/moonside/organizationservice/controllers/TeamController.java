@@ -40,11 +40,32 @@ public class TeamController {
         return ResponseEntity.ok(ApiResponse.success(teamService.getPublicTeams(userId)));
     }
 
+    /**
+     * GET /organizations/teams/visible
+     * Returns all teams the authenticated user is allowed to see:
+     *  - All PUBLIC teams
+     *  - PRIVATE teams where they are a member, team leader, department leader, or CEO
+     * This is the correct endpoint for the front-office "Discover" tab.
+     */
+    @GetMapping("/visible")
+    public ResponseEntity<ApiResponse<List<TeamResponse>>> getVisibleTeams(
+            @AuthenticationPrincipal String userId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(teamService.getVisibleTeams(userId, roles)));
+    }
+
     @GetMapping("/search")
     public ResponseEntity<ApiResponse<List<TeamResponse>>> searchTeams(
             @RequestParam String q,
             @AuthenticationPrincipal String userId) {
-        return ResponseEntity.ok(ApiResponse.success(teamService.searchTeams(q, userId)));
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(teamService.searchTeams(q, userId, roles)));
     }
 
     @GetMapping("/my")
@@ -57,8 +78,12 @@ public class TeamController {
     public ResponseEntity<ApiResponse<List<TeamResponse>>> getByDepartment(
             @PathVariable String departmentId,
             @AuthenticationPrincipal String userId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .collect(Collectors.toList());
         return ResponseEntity.ok(ApiResponse.success(
-                teamService.getTeamsByDepartment(departmentId, userId)));
+                teamService.getTeamsByDepartment(departmentId, userId, roles)));
     }
 
     @GetMapping("/{teamId}")

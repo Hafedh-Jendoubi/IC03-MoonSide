@@ -31,6 +31,13 @@ public class Department {
     @Builder.Default
     private boolean isActive = true;
 
+    /**
+     * When true, any authenticated user can view the members of teams in this department.
+     * When false, only members of the department and Team / Department Leaders can see members.
+     */
+    @Builder.Default
+    private boolean membersPublic = true;
+
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
 

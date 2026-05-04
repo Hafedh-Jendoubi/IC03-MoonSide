@@ -16,6 +16,9 @@ public interface AuditLogService {
     Page<AuditLogResponse> findByAction(String action, Pageable pageable);
     Page<AuditLogResponse> findBySuccess(boolean success, Pageable pageable);
 
+    /** Filter by entity type (e.g. "TEAM", "DEPARTMENT", "USER") */
+    Page<AuditLogResponse> findByEntityType(String entityType, Pageable pageable);
+
     /** Summary counts for dashboard widgets */
     long countTotal();
     long countSuccess();

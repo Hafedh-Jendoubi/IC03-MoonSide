@@ -3,6 +3,8 @@ package tn.moonside.organizationservice.services;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import tn.moonside.organizationservice.audit.AuditClient;
+import tn.moonside.organizationservice.audit.OrgAuditAction;
 import tn.moonside.organizationservice.config.UserServiceClient;
 import tn.moonside.organizationservice.dtos.requests.AssignManagerRequest;
 import tn.moonside.organizationservice.dtos.requests.DepartmentRequest;
@@ -27,9 +29,10 @@ import java.util.stream.Collectors;
 public class DepartmentService {
 
     private final DepartmentRepository departmentRepository;
-    private final TeamRepository teamRepository;
-    private final UserServiceClient userServiceClient;
-    private final FollowRepository followRepository;
+    private final TeamRepository       teamRepository;
+    private final UserServiceClient    userServiceClient;
+    private final FollowRepository     followRepository;
+    private final AuditClient          auditClient;          // ← NEW
 
     // ── CRUD ─────────────────────────────────────────────────────────────────
 
@@ -44,14 +47,23 @@ public class DepartmentService {
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
-        DepartmentResponse response = toResponse(departmentRepository.save(dept));
+        Department saved = departmentRepository.save(dept);
 
-        // Assign DEPARTMENT_LEADER role to the designated manager
         if (request.getManagerId() != null && !request.getManagerId().isBlank()) {
             userServiceClient.assignLeaderRole(request.getManagerId(), "DEPARTMENT_LEADER");
         }
 
-        return response;
+        auditClient.log(
+                null,
+                saved.getId(),
+                "DEPARTMENT",
+                OrgAuditAction.DEPARTMENT_CREATED,
+                "Department '" + saved.getName() + "' created",
+                true,
+                null,
+                toJson(saved));
+
+        return toResponse(saved);
     }
 
     public List<DepartmentResponse> getAllDepartments() {
@@ -83,14 +95,14 @@ public class DepartmentService {
     public DepartmentResponse updateDepartment(String id, DepartmentRequest request,
                                                String requestingUserId, List<String> roles) {
         Department dept = findById(id);
+        String oldSnapshot = toJson(dept);
 
-        boolean isAdmin = roles.contains("CEO");
+        boolean isAdmin      = roles.contains("CEO");
         boolean isDeptManager = roles.contains("DEPARTMENT_LEADER")
                 && requestingUserId.equals(dept.getManagerId());
 
         if (!isAdmin && !isDeptManager) {
-            throw new AccessDeniedException(
-                    "You are not authorized to modify this department.");
+            throw new AccessDeniedException("You are not authorized to modify this department.");
         }
 
         dept.setName(request.getName());
@@ -107,34 +119,87 @@ public class DepartmentService {
             }
             dept.setManagerId(newManagerId);
         }
-        // Update image URLs if provided (null = keep existing, explicit value = update)
         if (request.getAvatarUrl() != null) {
             dept.setAvatarUrl(request.getAvatarUrl().isBlank() ? null : request.getAvatarUrl());
         }
         if (request.getBannerUrl() != null) {
             dept.setBannerUrl(request.getBannerUrl().isBlank() ? null : request.getBannerUrl());
         }
+        if (request.getMembersPublic() != null) {
+            dept.setMembersPublic(request.getMembersPublic());
+        }
         dept.setUpdatedAt(LocalDateTime.now());
-        return toResponse(departmentRepository.save(dept));
+        Department saved = departmentRepository.save(dept);
+
+        String updaterLabel = userServiceClient.findById(requestingUserId)
+                .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                .orElse(requestingUserId);
+
+        auditClient.log(
+                requestingUserId,
+                saved.getId(),
+                "DEPARTMENT",
+                OrgAuditAction.DEPARTMENT_UPDATED,
+                "Department '" + saved.getName() + "' updated by user " + updaterLabel,
+                true,
+                oldSnapshot,
+                toJson(saved));
+
+        return toResponse(saved);
     }
 
     public void deleteDepartment(String id) {
         Department dept = findById(id);
+        String snapshot = toJson(dept);
         departmentRepository.delete(dept);
+
+        auditClient.log(
+                null,
+                id,
+                "DEPARTMENT",
+                OrgAuditAction.DEPARTMENT_DELETED,
+                "Department '" + dept.getName() + "' deleted",
+                true,
+                snapshot,
+                null);
     }
 
     public DepartmentResponse deactivateDepartment(String id) {
         Department dept = findById(id);
         dept.setActive(false);
         dept.setUpdatedAt(LocalDateTime.now());
-        return toResponse(departmentRepository.save(dept));
+        Department saved = departmentRepository.save(dept);
+
+        auditClient.log(
+                null,
+                id,
+                "DEPARTMENT",
+                OrgAuditAction.DEPARTMENT_DEACTIVATED,
+                "Department '" + dept.getName() + "' deactivated",
+                true,
+                null,
+                null);
+
+        return toResponse(saved);
     }
 
     public DepartmentResponse activateDepartment(String id) {
         Department dept = findById(id);
         dept.setActive(true);
         dept.setUpdatedAt(LocalDateTime.now());
-        return toResponse(departmentRepository.save(dept));
+        Department saved = departmentRepository.save(dept);
+
+        auditClient.log(
+                null,
+                id,
+                "DEPARTMENT",
+                OrgAuditAction.DEPARTMENT_ACTIVATED,
+                "Department '" + dept.getName() + "' activated",
+                true,
+                null,
+                null);
+
+        return toResponse(saved);
     }
 
     // ── Manager assignment ────────────────────────────────────────────────────
@@ -146,13 +211,23 @@ public class DepartmentService {
         dept.setUpdatedAt(LocalDateTime.now());
         DepartmentResponse response = toResponse(departmentRepository.save(dept));
 
-        // Revoke role from old manager (if changed) and assign to new one
         if (request.getManagerId() != null && !request.getManagerId().isBlank()) {
             if (previousManagerId != null && !previousManagerId.equals(request.getManagerId())) {
                 userServiceClient.revokeLeaderRole(previousManagerId, "DEPARTMENT_LEADER");
             }
             userServiceClient.assignLeaderRole(request.getManagerId(), "DEPARTMENT_LEADER");
         }
+
+        auditClient.log(
+                null,
+                departmentId,
+                "DEPARTMENT",
+                OrgAuditAction.DEPARTMENT_MANAGER_ASSIGNED,
+                "Manager of department '" + dept.getName() + "' assigned to user "
+                        + request.getManagerId() + " (was: " + previousManagerId + ")",
+                true,
+                previousManagerId,
+                request.getManagerId());
 
         return response;
     }
@@ -164,40 +239,68 @@ public class DepartmentService {
         dept.setUpdatedAt(LocalDateTime.now());
         DepartmentResponse response = toResponse(departmentRepository.save(dept));
 
-        // Revoke DEPARTMENT_LEADER role from former manager
         if (previousManagerId != null && !previousManagerId.isBlank()) {
             userServiceClient.revokeLeaderRole(previousManagerId, "DEPARTMENT_LEADER");
         }
+
+        auditClient.log(
+                null,
+                departmentId,
+                "DEPARTMENT",
+                OrgAuditAction.DEPARTMENT_MANAGER_REMOVED,
+                "Manager removed from department '" + dept.getName()
+                        + "' (was: " + previousManagerId + ")",
+                true,
+                previousManagerId,
+                null);
 
         return response;
     }
 
     // ── Image management ──────────────────────────────────────────────────────
 
-    /**
-     * Update or remove the department avatar.
-     * Access: ADMIN or the department manager.
-     */
     public DepartmentResponse updateAvatar(String id, String avatarUrl,
                                            String requestingUserId, List<String> roles) {
         Department dept = findById(id);
         assertCanEdit(dept, requestingUserId, roles);
+        String old = dept.getAvatarUrl();
         dept.setAvatarUrl(avatarUrl);
         dept.setUpdatedAt(LocalDateTime.now());
-        return toResponse(departmentRepository.save(dept));
+        Department saved = departmentRepository.save(dept);
+
+        auditClient.log(
+                requestingUserId,
+                id,
+                "DEPARTMENT",
+                OrgAuditAction.DEPARTMENT_AVATAR_UPDATED,
+                "Avatar updated for department '" + dept.getName() + "'",
+                true,
+                old,
+                avatarUrl);
+
+        return toResponse(saved);
     }
 
-    /**
-     * Update or remove the department banner.
-     * Access: ADMIN or the department manager.
-     */
     public DepartmentResponse updateBanner(String id, String bannerUrl,
                                            String requestingUserId, List<String> roles) {
         Department dept = findById(id);
         assertCanEdit(dept, requestingUserId, roles);
+        String old = dept.getBannerUrl();
         dept.setBannerUrl(bannerUrl);
         dept.setUpdatedAt(LocalDateTime.now());
-        return toResponse(departmentRepository.save(dept));
+        Department saved = departmentRepository.save(dept);
+
+        auditClient.log(
+                requestingUserId,
+                id,
+                "DEPARTMENT",
+                OrgAuditAction.DEPARTMENT_BANNER_UPDATED,
+                "Banner updated for department '" + dept.getName() + "'",
+                true,
+                old,
+                bannerUrl);
+
+        return toResponse(saved);
     }
 
     // ── Follow / Unfollow ─────────────────────────────────────────────────────
@@ -211,6 +314,20 @@ public class DepartmentService {
                     .targetId(departmentId)
                     .targetType(FollowTargetType.DEPARTMENT)
                     .build());
+
+            String followerLabel = userServiceClient.findById(userId)
+                    .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                    .orElse(userId);
+
+            auditClient.log(
+                    userId,
+                    departmentId,
+                    "DEPARTMENT",
+                    OrgAuditAction.DEPARTMENT_FOLLOWED,
+                    "User " + followerLabel + " followed department '" + dept.getName() + "'",
+                    true,
+                    null,
+                    null);
         }
         return toResponse(dept, userId);
     }
@@ -219,13 +336,28 @@ public class DepartmentService {
         Department dept = findById(departmentId);
         followRepository.deleteByUserIdAndTargetIdAndTargetType(
                 userId, departmentId, FollowTargetType.DEPARTMENT);
+
+        String unfollowerLabel = userServiceClient.findById(userId)
+                .map(u -> u.getFirstName() + " " + u.getLastName() + " (" + u.getEmail() + ")")
+                .orElse(userId);
+
+        auditClient.log(
+                userId,
+                departmentId,
+                "DEPARTMENT",
+                OrgAuditAction.DEPARTMENT_UNFOLLOWED,
+                "User " + unfollowerLabel + " unfollowed department '" + dept.getName() + "'",
+                true,
+                null,
+                null);
+
         return toResponse(dept, userId);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void assertCanEdit(Department dept, String requestingUserId, List<String> roles) {
-        boolean isAdmin = roles.contains("CEO");
+        boolean isAdmin      = roles.contains("CEO");
         boolean isDeptManager = roles.contains("DEPARTMENT_LEADER")
                 && requestingUserId.equals(dept.getManagerId());
         if (!isAdmin && !isDeptManager) {
@@ -237,6 +369,17 @@ public class DepartmentService {
         return departmentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Department not found: " + id));
     }
+
+    /** Minimal JSON snapshot for audit old/newValue fields. */
+    private String toJson(Department d) {
+        return "{\"id\":\"" + d.getId() + "\""
+                + ",\"name\":\"" + esc(d.getName()) + "\""
+                + ",\"managerId\":" + (d.getManagerId() == null ? "null" : "\"" + d.getManagerId() + "\"")
+                + ",\"active\":" + d.isActive()
+                + "}";
+    }
+
+    private String esc(String s) { return s == null ? "" : s.replace("\"", "\\\""); }
 
     public DepartmentResponse toResponse(Department dept) {
         return toResponse(dept, null);
@@ -265,6 +408,7 @@ public class DepartmentService {
                 .avatarUrl(dept.getAvatarUrl())
                 .bannerUrl(dept.getBannerUrl())
                 .isActive(dept.isActive())
+                .membersPublic(dept.isMembersPublic())
                 .teamCount(teamCount)
                 .isFollowing(isFollowing)
                 .followerCount(followerCount)

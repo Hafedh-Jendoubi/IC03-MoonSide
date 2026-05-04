@@ -1,5 +1,6 @@
 package tn.moonside.organizationservice.dtos.responses;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
 import tn.moonside.organizationservice.enums.VisibilityType;
@@ -22,8 +23,10 @@ public class TeamResponse {
     private VisibilityType teamVisibility;
     private long memberCount;
     /** True if the requesting user is already a member. */
+    @JsonProperty("isMember")
     private boolean isMember;
     /** True if the requesting user is following this team. */
+    @JsonProperty("isFollowing")
     private boolean isFollowing;
     /** Total number of followers. */
     private long followerCount;

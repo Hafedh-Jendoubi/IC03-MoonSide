@@ -21,6 +21,9 @@ public interface AuditLogRepository extends MongoRepository<AuditLog, String> {
 
     Page<AuditLog> findByCreatedAtBetween(LocalDateTime from, LocalDateTime to, Pageable pageable);
 
+    /** Filter by entity type — e.g. "TEAM", "DEPARTMENT", "USER" */
+    Page<AuditLog> findByEntityType(String entityType, Pageable pageable);
+
     long countBySuccess(boolean success);
 
     long countByAction(String action);
