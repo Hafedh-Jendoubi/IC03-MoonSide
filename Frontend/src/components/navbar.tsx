@@ -4,10 +4,10 @@ import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '@/lib/auth-context'
-import { getFullName } from '@/lib/types'
+import { canAccessBackOffice, getFullName } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Heart, Mail, Bell, Search, LogOut, Settings, User, Shield } from 'lucide-react'
+import { Heart, Mail, Bell, Search, LogOut, Settings, User, Shield, Compass } from 'lucide-react'
 import { Notification } from '@/lib/types'
 
 export function Navbar() {
@@ -53,6 +53,7 @@ export function Navbar() {
   const navLinks = [
     { href: '/feed', label: 'Feed', icon: Heart },
     { href: '/messages', label: 'Messages', icon: Mail },
+    { href: '/discover', label: 'Discover', icon: Compass },
   ]
 
   const displayName = user ? getFullName(user) : ''
@@ -211,14 +212,14 @@ export function Navbar() {
                           Settings
                         </button>
                       </Link>
-                      {user.roles.some((r) => r.toLowerCase() === 'admin') && (
+                      {canAccessBackOffice(user) && (
                         <Link href="/admin/dashboard">
                           <button
                             onClick={() => setIsDropdownOpen(false)}
                             className="text-foreground hover:bg-muted flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors"
                           >
                             <Shield size={16} />
-                            Admin Panel
+                            Back Office
                           </button>
                         </Link>
                       )}

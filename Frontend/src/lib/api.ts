@@ -1,6 +1,6 @@
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
-// ─── Types matching backend DTOs ─────────────────────────────────────────────
+// --- Types matching backend DTOs ---------------------------------------------
 
 export interface AuthResponse {
   accessToken: string
@@ -15,6 +15,8 @@ export interface AuthResponse {
 export interface UserResponse {
   id: string
   roles: string[]
+  /** Flat list of all permission action strings across all the user's roles. */
+  permissions: string[]
   email: string
   firstName: string
   lastName: string
@@ -24,6 +26,7 @@ export interface UserResponse {
   bio: string | null
   avatar: string | null
   active: boolean
+  mustChangePassword: boolean
   lastLogin: string | null
   createdAt: string
   updatedAt: string
@@ -52,6 +55,25 @@ export interface RegisterRequest {
   avatar?: string
 }
 
+export interface InviteUserRequest {
+  email: string
+}
+
+export interface BulkInviteRowResult {
+  rowNumber: number
+  email: string
+  status: 'SUCCESS' | 'SKIPPED' | 'FAILED'
+  message: string
+}
+
+export interface BulkInviteResult {
+  total: number
+  succeeded: number
+  skipped: number
+  failed: number
+  rows: BulkInviteRowResult[]
+}
+
 export interface UpdateUserRequest {
   firstName?: string
   lastName?: string
@@ -62,14 +84,14 @@ export interface UpdateUserRequest {
   avatar?: string
 }
 
-// ── Email Verification DTOs ───────────────────────────────────────────────────
+// -- Email Verification DTOs ---------------------------------------------------
 
 export interface VerifyEmailRequest {
   email: string
   otp: string
 }
 
-// ── Password Reset DTOs ───────────────────────────────────────────────────────
+// -- Password Reset DTOs -------------------------------------------------------
 
 export interface ForgotPasswordRequest {
   email: string
@@ -86,7 +108,7 @@ export interface ResetPasswordRequest {
   newPassword: string
 }
 
-// ── 2FA DTOs ─────────────────────────────────────────────────────────────────
+// -- 2FA DTOs -----------------------------------------------------------------
 
 export interface TwoFactorVerifyRequest {
   email: string
@@ -103,7 +125,7 @@ export interface TwoFactorStatusResponse {
   twoFactorEnabled: boolean
 }
 
-// ─── Token storage helpers ────────────────────────────────────────────────────
+// --- Token storage helpers ----------------------------------------------------
 
 export const tokenStorage = {
   getAccessToken: () => localStorage.getItem('accessToken'),
@@ -118,15 +140,18 @@ export const tokenStorage = {
   },
 }
 
-// ─── Core fetch wrapper ───────────────────────────────────────────────────────
+// --- Core fetch wrapper -------------------------------------------------------
 
 async function apiFetch<T>(
   path: string,
   options: RequestInit = {},
   authenticated = true
 ): Promise<T> {
+  // Do NOT set Content-Type for FormData — the browser must set it automatically
+  // so it includes the multipart boundary. For everything else default to JSON.
+  const isFormData = options.body instanceof FormData
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers as Record<string, string>),
   }
 
@@ -179,7 +204,7 @@ async function apiFetch<T>(
   return body.data
 }
 
-// ─── Auth endpoints ───────────────────────────────────────────────────────────
+// --- Auth endpoints -----------------------------------------------------------
 
 export const authApi = {
   login: (data: LoginRequest) =>
@@ -205,7 +230,7 @@ export const authApi = {
       false
     ),
 
-  // ── Password Reset ──────────────────────────────────────────────────────────
+  // -- Password Reset ----------------------------------------------------------
 
   forgotPassword: (data: ForgotPasswordRequest) =>
     apiFetch<null>('/auth/forgot-password', { method: 'POST', body: JSON.stringify(data) }, false),
@@ -216,7 +241,7 @@ export const authApi = {
   resetPassword: (data: ResetPasswordRequest) =>
     apiFetch<null>('/auth/reset-password', { method: 'POST', body: JSON.stringify(data) }, false),
 
-  // ── 2FA ─────────────────────────────────────────────────────────────────────
+  // -- 2FA ---------------------------------------------------------------------
 
   verify2FALogin: (data: TwoFactorVerifyRequest) =>
     apiFetch<AuthResponse>(
@@ -236,12 +261,14 @@ export const authApi = {
   get2FAStatus: () => apiFetch<TwoFactorStatusResponse>('/auth/2fa/status'),
 }
 
-// ─── User endpoints ───────────────────────────────────────────────────────────
+// --- User endpoints -----------------------------------------------------------
 
 export const userApi = {
   getAll: () => apiFetch<UserResponse[]>('/users'),
   getById: (id: string) => apiFetch<UserResponse>(`/users/${id}`),
   getMe: () => apiFetch<UserResponse>('/users/me'),
+  updateMe: (data: UpdateUserRequest) =>
+    apiFetch<UserResponse>('/users/me', { method: 'PUT', body: JSON.stringify(data) }),
   update: (id: string, data: UpdateUserRequest) =>
     apiFetch<UserResponse>(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateAvatar: (avatarUrl: string) =>
@@ -254,6 +281,13 @@ export const userApi = {
       method: 'DELETE',
     }),
   delete: (id: string) => apiFetch<void>(`/users/${id}`, { method: 'DELETE' }),
+  bulkInvite: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return apiFetch<BulkInviteResult>('/users/invite/bulk', { method: 'POST', body: form })
+  },
+  invite: (data: InviteUserRequest) =>
+    apiFetch<UserResponse>('/users/invite', { method: 'POST', body: JSON.stringify(data) }),
   deactivate: (id: string) => apiFetch<void>(`/users/${id}/deactivate`, { method: 'PATCH' }),
   activate: (id: string) => apiFetch<void>(`/users/${id}/activate`, { method: 'PATCH' }),
   assignRole: (userId: string, data: { roleId: string; scopeType?: string; scopeId?: string }) =>
@@ -265,7 +299,7 @@ export const userApi = {
     apiFetch<void>(`/users/${userId}/roles/${roleId}`, { method: 'DELETE' }),
 }
 
-// ─── Role & Permission types ───────────────────────────────────────────────────
+// --- Role & Permission types ---------------------------------------------------
 
 export interface PermissionResponse {
   id: string
@@ -294,7 +328,7 @@ export interface PermissionRequest {
   description?: string
 }
 
-// ─── Role endpoints ────────────────────────────────────────────────────────────
+// --- Role endpoints ------------------------------------------------------------
 
 export const roleApi = {
   getAll: () => apiFetch<RoleResponse[]>('/roles'),
@@ -310,7 +344,7 @@ export const roleApi = {
     apiFetch<void>(`/roles/${roleId}/permissions/${permissionId}`, { method: 'DELETE' }),
 }
 
-// ─── Media types & endpoints ───────────────────────────────────────────────────
+// --- Media types & endpoints ---------------------------------------------------
 
 export interface MediaResponse {
   id: string
@@ -364,7 +398,7 @@ export const mediaApi = {
   getById: (id: string) => apiFetch<MediaResponse>(`/media/${id}`),
 }
 
-// ─── Permission endpoints ──────────────────────────────────────────────────────
+// --- Permission endpoints ------------------------------------------------------
 
 export const permissionApi = {
   getAll: () => apiFetch<PermissionResponse[]>('/permissions'),
@@ -377,4 +411,284 @@ export const permissionApi = {
       body: JSON.stringify(data),
     }),
   delete: (id: string) => apiFetch<void>(`/permissions/${id}`, { method: 'DELETE' }),
+}
+
+// --- Audit Log types & endpoints ----------------------------------------------
+
+export interface AuditLogResponse {
+  id: string
+  userId: string | null
+  entityId: string | null
+  entityType: string | null
+  action: string
+  description: string
+  success: boolean
+  oldValue: string | null
+  newValue: string | null
+  ipAddress: string | null
+  createdAt: string
+}
+
+export interface PageResponse<T> {
+  content: T[]
+  totalElements: number
+  totalPages: number
+  number: number // current page (0-based)
+  size: number
+}
+
+export interface AuditLogStats {
+  total: number
+  success: number
+  failure: number
+}
+
+export const auditApi = {
+  getLogs: (params?: {
+    page?: number
+    size?: number
+    userId?: string
+    action?: string
+    success?: boolean
+  }) => {
+    const query = new URLSearchParams()
+    if (params?.page != null) query.set('page', String(params.page))
+    if (params?.size != null) query.set('size', String(params.size))
+    if (params?.userId) query.set('userId', params.userId)
+    if (params?.action) query.set('action', params.action)
+    if (params?.success != null) query.set('success', String(params.success))
+    return apiFetch<PageResponse<AuditLogResponse>>(`/audit-logs?${query.toString()}`)
+  },
+
+  getStats: () => apiFetch<AuditLogStats>('/audit-logs/stats'),
+}
+
+// -----------------------------------------------------------------------------
+// ORGANIZATION SERVICE  –  Types & API
+// Append this block to src/lib/api.ts
+// -----------------------------------------------------------------------------
+
+export type VisibilityType = 'PUBLIC' | 'PRIVATE'
+
+export interface UserSummary {
+  id: string
+  firstName: string
+  lastName: string
+  email: string
+  avatar: string | null
+  jobTitle: string | null
+}
+
+// -- Department ----------------------------------------------------------------
+
+export interface DepartmentResponse {
+  id: string
+  managerId: string | null
+  manager: UserSummary | null
+  name: string
+  description: string | null
+  avatarUrl: string | null
+  bannerUrl: string | null
+  isActive: boolean
+  membersPublic: boolean
+  teamCount: number
+  isFollowing: boolean
+  followerCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DepartmentRequest {
+  name: string
+  description?: string
+  managerId?: string
+  avatarUrl?: string
+  bannerUrl?: string
+  membersPublic?: boolean
+}
+
+// -- Team ----------------------------------------------------------------------
+
+export interface TeamResponse {
+  id: string
+  departmentId: string
+  departmentName: string | null
+  leadId: string | null
+  lead: UserSummary | null
+  name: string
+  description: string | null
+  avatarUrl: string | null
+  bannerUrl: string | null
+  teamVisibility: VisibilityType
+  memberCount: number
+  isMember: boolean
+  isFollowing: boolean
+  followerCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TeamRequest {
+  name: string
+  description?: string
+  departmentId: string
+  leadId?: string
+  avatarUrl?: string
+  bannerUrl?: string
+  teamVisibility: VisibilityType
+}
+
+export interface UserTeamResponse {
+  id: string
+  userId: string
+  teamId: string
+  user: UserSummary | null
+  joinedAt: string
+}
+
+// -- Department API ------------------------------------------------------------
+
+export const departmentApi = {
+  getAll: () => apiFetch<DepartmentResponse[]>('/organizations/departments'),
+
+  getActive: () => apiFetch<DepartmentResponse[]>('/organizations/departments/active'),
+
+  getById: (id: string) => apiFetch<DepartmentResponse>(`/organizations/departments/${id}`),
+
+  create: (data: DepartmentRequest) =>
+    apiFetch<DepartmentResponse>('/organizations/departments', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: DepartmentRequest) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) => apiFetch<void>(`/organizations/departments/${id}`, { method: 'DELETE' }),
+
+  activate: (id: string) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/activate`, {
+      method: 'PATCH',
+    }),
+
+  deactivate: (id: string) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/deactivate`, {
+      method: 'PATCH',
+    }),
+
+  assignManager: (id: string, managerId: string) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/manager`, {
+      method: 'PATCH',
+      body: JSON.stringify({ managerId }),
+    }),
+
+  removeManager: (id: string) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/manager`, {
+      method: 'DELETE',
+    }),
+
+  updateAvatar: (id: string, url: string | null) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/avatar`, {
+      method: 'PATCH',
+      body: JSON.stringify({ url }),
+    }),
+
+  updateBanner: (id: string, url: string | null) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/banner`, {
+      method: 'PATCH',
+      body: JSON.stringify({ url }),
+    }),
+
+  follow: (id: string) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/follow`, { method: 'POST' }),
+
+  unfollow: (id: string) =>
+    apiFetch<DepartmentResponse>(`/organizations/departments/${id}/follow`, { method: 'DELETE' }),
+}
+
+// -- Team API ------------------------------------------------------------------
+
+export const teamApi = {
+  getAll: () => apiFetch<TeamResponse[]>('/organizations/teams'),
+
+  getPublic: () => apiFetch<TeamResponse[]>('/organizations/teams/public'),
+
+  /** Returns PUBLIC teams + PRIVATE teams the current user is allowed to see */
+  getVisible: () => apiFetch<TeamResponse[]>('/organizations/teams/visible'),
+
+  search: (q: string) =>
+    apiFetch<TeamResponse[]>(`/organizations/teams/search?q=${encodeURIComponent(q)}`),
+
+  getMy: () => apiFetch<TeamResponse[]>('/organizations/teams/my'),
+
+  getByDepartment: (departmentId: string) =>
+    apiFetch<TeamResponse[]>(`/organizations/teams/department/${departmentId}`),
+
+  getById: (id: string) => apiFetch<TeamResponse>(`/organizations/teams/${id}`),
+
+  getMembers: (id: string) => apiFetch<UserTeamResponse[]>(`/organizations/teams/${id}/members`),
+
+  create: (data: TeamRequest) =>
+    apiFetch<TeamResponse>('/organizations/teams', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: TeamRequest) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  delete: (id: string) => apiFetch<void>(`/organizations/teams/${id}`, { method: 'DELETE' }),
+
+  assignLead: (id: string, leadId: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/lead`, {
+      method: 'PATCH',
+      body: JSON.stringify({ leadId }),
+    }),
+
+  removeLead: (id: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/lead`, { method: 'DELETE' }),
+
+  join: (id: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/join`, { method: 'POST' }),
+
+  leave: (id: string) => apiFetch<void>(`/organizations/teams/${id}/leave`, { method: 'DELETE' }),
+
+  addMember: (teamId: string, userId: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${teamId}/members/${userId}`, {
+      method: 'POST',
+    }),
+
+  assignMember: (teamId: string, userId: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${teamId}/assign/${userId}`, {
+      method: 'POST',
+    }),
+
+  removeMember: (teamId: string, userId: string) =>
+    apiFetch<void>(`/organizations/teams/${teamId}/members/${userId}`, {
+      method: 'DELETE',
+    }),
+
+  updateAvatar: (id: string, url: string | null) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/avatar`, {
+      method: 'PATCH',
+      body: JSON.stringify({ url }),
+    }),
+
+  updateBanner: (id: string, url: string | null) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/banner`, {
+      method: 'PATCH',
+      body: JSON.stringify({ url }),
+    }),
+
+  follow: (id: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/follow`, { method: 'POST' }),
+
+  unfollow: (id: string) =>
+    apiFetch<TeamResponse>(`/organizations/teams/${id}/follow`, { method: 'DELETE' }),
 }

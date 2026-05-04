@@ -112,6 +112,29 @@ services:
     networks:
       - moonside-network
 
+  organization-service:
+    build: ./Organization-Service
+    container_name: organization-service
+    ports:
+      - "8084:8084"
+    environment:
+      - MONGODB_HOST=mongodb
+      - MONGO_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+      - MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+      - MONGO_ORG_DATABASE=org_db
+      - EUREKA_URI=http://eureka:8761/eureka/
+      - JWT_SECRET=${JWT_SECRET}
+      - USER_SERVICE_URL=http://user-service:8081
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    networks:
+      - moonside-network
+
   # API Gateway
   gateway:
     build: ./Gateway

@@ -13,4 +13,7 @@ public interface PermissionRepository extends MongoRepository<Permission, String
     Optional<Permission> findByActionAndScopeType(String action, TypeScope scopeType);
     List<Permission> findByScopeType(TypeScope scopeType);
     boolean existsByActionAndScopeType(String action, TypeScope scopeType);
+
+    /** Returns all permissions with the given action name (across all scope types). */
+    List<Permission> findByAction(String action);
 }

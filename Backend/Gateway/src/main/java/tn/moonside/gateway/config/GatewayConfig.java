@@ -12,9 +12,9 @@ public class GatewayConfig {
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
 
-                // User Service: User, UserRole, UserTeam, Role, Permission, PermissionRole
+                // User Service: User, UserRole, UserTeam, Role, Permission, PermissionRole, AuditLog
                 .route("user-service", r -> r
-                        .path("/users/**", "/auth/**", "/roles/**", "/permissions/**")
+                        .path("/users/**", "/auth/**", "/roles/**", "/permissions/**", "/audit-logs/**")
                         .uri("lb://USER-SERVICE"))
 
                 // Organization Service: Department, Team

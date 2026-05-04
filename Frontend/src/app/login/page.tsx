@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card'
 import { ArrowLeft, Mail, Lock, ShieldCheck } from 'lucide-react'
 import { authApi } from '@/lib/api'
 
-// ── Step types ────────────────────────────────────────────────────────────────
+// -- Step types ----------------------------------------------------------------
 type Step =
   | 'login' // email + password
   | '2fa' // TOTP code after successful password auth
@@ -50,15 +50,17 @@ function LoginForm() {
     setSuccessMsg('')
   }
 
-  // ── Step: Login ────────────────────────────────────────────────────────────
+  // -- Step: Login ------------------------------------------------------------
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     clearMessages()
     setIsLoading(true)
     try {
-      const { twoFactorRequired } = await login(email, password)
+      const { twoFactorRequired, mustChangePassword } = await login(email, password)
       if (twoFactorRequired) {
         setStep('2fa')
+      } else if (mustChangePassword) {
+        router.push('/settings?mustChangePassword=true')
       } else {
         router.push('/feed')
       }
@@ -69,7 +71,7 @@ function LoginForm() {
     }
   }
 
-  // ── Step: 2FA verify ───────────────────────────────────────────────────────
+  // -- Step: 2FA verify -------------------------------------------------------
   const handle2FA = async (e: React.FormEvent) => {
     e.preventDefault()
     clearMessages()
@@ -84,7 +86,7 @@ function LoginForm() {
     }
   }
 
-  // ── Step: Forgot — send OTP ────────────────────────────────────────────────
+  // -- Step: Forgot — send OTP ------------------------------------------------
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault()
     clearMessages()
@@ -100,7 +102,7 @@ function LoginForm() {
     }
   }
 
-  // ── Step: Verify OTP ───────────────────────────────────────────────────────
+  // -- Step: Verify OTP -------------------------------------------------------
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault()
     clearMessages()
@@ -116,7 +118,7 @@ function LoginForm() {
     }
   }
 
-  // ── Step: Reset Password ───────────────────────────────────────────────────
+  // -- Step: Reset Password ---------------------------------------------------
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault()
     clearMessages()
@@ -453,7 +455,7 @@ function LoginForm() {
   )
 }
 
-// ── Root Export Wrapped in Suspense ──────────────────────────────────────────
+// -- Root Export Wrapped in Suspense ------------------------------------------
 export default function LoginPage() {
   return (
     <Suspense

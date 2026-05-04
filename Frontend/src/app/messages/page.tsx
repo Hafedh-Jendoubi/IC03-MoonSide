@@ -29,18 +29,6 @@ export default function MessagesPage() {
   return (
     <AuthLayout>
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Page Header */}
-        <div className="animate-fade-in mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-foreground mb-2 text-3xl font-bold">Messages</h1>
-            <p className="text-muted-foreground">Stay in touch with your team</p>
-          </div>
-          <Button className="bg-primary hover:bg-primary/90 gap-2 text-white">
-            <Plus size={18} />
-            New Message
-          </Button>
-        </div>
-
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
           {/* Conversation List */}
           <Card className="animate-slide-up p-4 lg:col-span-1">

@@ -25,7 +25,7 @@ export function AvatarUpload() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // ── Client-side validation ────────────────────────────────────────────────
+    // -- Client-side validation ------------------------------------------------
     if (!ALLOWED_TYPES.includes(file.type)) {
       setStatus('error')
       setMessage('Only JPEG, PNG, GIF and WebP images are allowed.')

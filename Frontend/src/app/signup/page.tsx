@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { CheckCircle2, Circle, Eye, EyeOff, Mail, ArrowLeft, RefreshCw } from 'lucide-react'
 
-// ─── Password rules ──────────────────────────────────────────────────────────
+// --- Password rules ----------------------------------------------------------
 
 const PASSWORD_RULES = [
   { id: 'length', label: 'At least 8 characters', test: (p: string) => p.length >= 8 },
@@ -90,7 +90,7 @@ function PasswordStrengthIndicator({ password }: { password: string }) {
   )
 }
 
-// ─── Email Verification Modal ─────────────────────────────────────────────────
+// --- Email Verification Modal -------------------------------------------------
 
 function EmailVerificationModal({
   email,
@@ -235,7 +235,7 @@ function EmailVerificationModal({
   )
 }
 
-// ─── Signup Page ──────────────────────────────────────────────────────────────
+// --- Signup Page --------------------------------------------------------------
 
 export default function SignupPage() {
   const [firstName, setFirstName] = useState('')
@@ -259,7 +259,7 @@ export default function SignupPage() {
 
   const allRulesPassed = PASSWORD_RULES.every((r) => r.test(password))
 
-  // ─── Max birthdate = 13 years ago ─────────────────────────────────────────
+  // --- Max birthdate = 13 years ago -----------------------------------------
   const maxBirthDate = (() => {
     const d = new Date()
     d.setFullYear(d.getFullYear() - 13)

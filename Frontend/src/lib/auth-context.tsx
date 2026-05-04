@@ -7,7 +7,10 @@ import { authApi, userApi, tokenStorage, RegisterRequest } from './api'
 interface AuthContextType {
   user: User | null
   isLoading: boolean
-  login: (email: string, password: string) => Promise<{ twoFactorRequired: boolean }>
+  login: (
+    email: string,
+    password: string
+  ) => Promise<{ twoFactorRequired: boolean; mustChangePassword: boolean }>
   complete2FALogin: (email: string, code: string) => Promise<void>
   signup: (data: SignupData) => Promise<{ emailVerificationRequired: boolean }>
   verifyEmail: (email: string, otp: string) => Promise<void>
@@ -62,23 +65,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initSession()
   }, [])
 
-  const login = async (email: string, password: string) => {
+  const login = async (
+    email: string,
+    password: string
+  ): Promise<{ twoFactorRequired: boolean; mustChangePassword: boolean }> => {
     setIsLoading(true)
     try {
       const response = await authApi.login({ email, password })
       if (response.twoFactorRequired) {
         setUser(response.user)
-        return { twoFactorRequired: true }
+        // Return default mustChangePassword value when 2FA is required
+        return { twoFactorRequired: true, mustChangePassword: false }
       }
       tokenStorage.setTokens(response.accessToken, response.refreshToken)
       setUser(response.user)
-      return { twoFactorRequired: false }
+      // Return the actual mustChangePassword value from the response
+      return {
+        twoFactorRequired: false,
+        mustChangePassword: response.user?.mustChangePassword ?? false,
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
-  const complete2FALogin = async (email: string, code: string) => {
+  const complete2FALogin = async (email: string, code: string): Promise<void> => {
     setIsLoading(true)
     try {
       const response = await authApi.verify2FALogin({ email, code })
@@ -89,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const signup = async (data: SignupData) => {
+  const signup = async (data: SignupData): Promise<{ emailVerificationRequired: boolean }> => {
     setIsLoading(true)
     try {
       const payload: RegisterRequest = {
@@ -109,7 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const verifyEmail = async (email: string, otp: string) => {
+  const verifyEmail = async (email: string, otp: string): Promise<void> => {
     setIsLoading(true)
     try {
       await authApi.verifyEmail({ email, otp })
@@ -120,16 +131,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const resendVerification = async (email: string) => {
+  const resendVerification = async (email: string): Promise<void> => {
     await authApi.resendVerification(email)
   }
 
-  const refreshUser = async () => {
+  const refreshUser = async (): Promise<void> => {
     const me = await userApi.getMe()
     setUser(me)
   }
 
-  const logout = () => {
+  const logout = (): void => {
     setUser(null)
     tokenStorage.clear()
   }
