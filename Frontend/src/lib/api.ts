@@ -692,3 +692,191 @@ export const teamApi = {
   unfollow: (id: string) =>
     apiFetch<TeamResponse>(`/organizations/teams/${id}/follow`, { method: 'DELETE' }),
 }
+
+// =============================================================================
+// POST SERVICE – Types & API
+// =============================================================================
+
+// ── Enums (mirror backend) ────────────────────────────────────────────────────
+
+export type PostType =
+  | 'ANNOUNCEMENT'
+  | 'UPDATE'
+  | 'QUESTION'
+  | 'DISCUSSION'
+  | 'EVENT'
+  | 'ACHIEVEMENT'
+
+export type PostVisibility = 'PUBLIC' | 'TEAM_ONLY' | 'DEPARTMENT_ONLY' | 'PRIVATE' | 'DRAFT'
+
+// ── DTOs ─────────────────────────────────────────────────────────────────────
+
+export interface AttachmentResponse {
+  id: string
+  url: string
+  fileName: string
+  fileType: string
+  fileSize: number
+}
+
+export interface PostResponse {
+  id: string
+  authorId: string
+  teamId: string | null
+  departmentId: string | null
+  updatedBy: string | null
+  content: string
+  postType: PostType
+  postVisibility: PostVisibility
+  isPinned: boolean
+  isAIGenerated: boolean
+  viewCount: number
+  commentCount: number
+  reactionCount: number
+  attachments: AttachmentResponse[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PostRequest {
+  content: string
+  postType?: PostType
+  postVisibility?: PostVisibility
+  teamId?: string
+  departmentId?: string
+  isPinned?: boolean
+  isAIGenerated?: boolean
+}
+
+export interface CommentResponse {
+  id: string
+  authorId: string
+  postId: string
+  content: string
+  postVisibility: PostVisibility
+  isPinned: boolean
+  isEdited: boolean
+  parentId: string | null
+  reactionCount: number
+  replyCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CommentRequest {
+  content: string
+  postVisibility?: PostVisibility
+  parentId?: string
+}
+
+export interface ReactionTypeResponse {
+  id: string
+  code: string
+  label: string
+  emoji: string
+}
+
+export interface ReactionResponse {
+  id: string
+  userId: string
+  reactionTypeId: string
+  reactionTypeCode: string
+  reactionTypeEmoji: string
+  reactableType: string
+  reactableId: string
+  createdAt: string
+}
+
+export interface ReactionSummaryResponse {
+  total: number
+  byEmoji: Record<string, number>
+  userReaction: ReactionResponse | null
+}
+
+export interface ReactionRequest {
+  reactionTypeCode: string
+}
+
+// ── Post API ──────────────────────────────────────────────────────────────────
+
+export const postApi = {
+  /** Public / global feed */
+  getFeed: (page = 0, size = 20) =>
+    apiFetch<PageResponse<PostResponse>>(`/posts/feed?page=${page}&size=${size}`),
+
+  /** Posts by a specific author */
+  getByAuthor: (authorId: string, page = 0, size = 20) =>
+    apiFetch<PageResponse<PostResponse>>(`/posts/author/${authorId}?page=${page}&size=${size}`),
+
+  /** Posts belonging to a team */
+  getByTeam: (teamId: string, page = 0, size = 20) =>
+    apiFetch<PageResponse<PostResponse>>(`/posts/team/${teamId}?page=${page}&size=${size}`),
+
+  /** Posts belonging to a department */
+  getByDepartment: (departmentId: string, page = 0, size = 20) =>
+    apiFetch<PageResponse<PostResponse>>(
+      `/posts/department/${departmentId}?page=${page}&size=${size}`
+    ),
+
+  /** Single post */
+  getById: (postId: string) => apiFetch<PostResponse>(`/posts/${postId}`),
+
+  /** Create a post */
+  create: (data: PostRequest) =>
+    apiFetch<PostResponse>('/posts', { method: 'POST', body: JSON.stringify(data) }),
+
+  /** Edit a post */
+  update: (postId: string, data: PostRequest) =>
+    apiFetch<PostResponse>(`/posts/${postId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  /** Delete a post */
+  delete: (postId: string) => apiFetch<void>(`/posts/${postId}`, { method: 'DELETE' }),
+}
+
+// ── Comment API ───────────────────────────────────────────────────────────────
+
+export const commentApi = {
+  getComments: (postId: string, page = 0, size = 20) =>
+    apiFetch<PageResponse<CommentResponse>>(`/posts/${postId}/comments?page=${page}&size=${size}`),
+
+  addComment: (postId: string, data: CommentRequest) =>
+    apiFetch<CommentResponse>(`/posts/${postId}/comments`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  updateComment: (postId: string, commentId: string, data: CommentRequest) =>
+    apiFetch<CommentResponse>(`/posts/${postId}/comments/${commentId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  deleteComment: (postId: string, commentId: string) =>
+    apiFetch<void>(`/posts/${postId}/comments/${commentId}`, { method: 'DELETE' }),
+}
+
+// ── Reaction API ──────────────────────────────────────────────────────────────
+
+export const reactionApi = {
+  /** Toggle a reaction on a post (null response = reaction was removed) */
+  reactToPost: (postId: string, data: ReactionRequest) =>
+    apiFetch<ReactionResponse | null>(`/posts/${postId}/reactions`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getPostReactions: (postId: string) =>
+    apiFetch<ReactionSummaryResponse>(`/posts/${postId}/reactions`),
+
+  reactToComment: (postId: string, commentId: string, data: ReactionRequest) =>
+    apiFetch<ReactionResponse | null>(`/posts/${postId}/comments/${commentId}/reactions`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getCommentReactions: (postId: string, commentId: string) =>
+    apiFetch<ReactionSummaryResponse>(`/posts/${postId}/comments/${commentId}/reactions`),
+}

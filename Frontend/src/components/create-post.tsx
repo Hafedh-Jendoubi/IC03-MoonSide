@@ -1,30 +1,120 @@
 'use client'
 
 import { useState } from 'react'
-import { User, getFullName } from '@/lib/types'
+import { User, getFullName, PostType, PostVisibility } from '@/lib/types'
+import { PostRequest, PostResponse } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Smile, Image, FileText } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { Globe, Lock, Users, Building2, ChevronDown, ChevronUp } from 'lucide-react'
+
+// ── Type label helpers ────────────────────────────────────────────────────────
+
+const POST_TYPE_LABELS: Record<PostType, { label: string; color: string }> = {
+  DISCUSSION: {
+    label: 'Discussion',
+    color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+  },
+  ANNOUNCEMENT: {
+    label: 'Announcement',
+    color: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+  },
+  UPDATE: {
+    label: 'Update',
+    color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  },
+  QUESTION: {
+    label: 'Question',
+    color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+  },
+  EVENT: {
+    label: 'Event',
+    color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
+  },
+  ACHIEVEMENT: {
+    label: 'Achievement',
+    color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
+  },
+}
+
+const VISIBILITY_OPTIONS: { value: PostVisibility; label: string; icon: React.ReactNode }[] = [
+  { value: 'PUBLIC', label: 'Public', icon: <Globe size={14} /> },
+  { value: 'TEAM_ONLY', label: 'Team only', icon: <Users size={14} /> },
+  { value: 'DEPARTMENT_ONLY', label: 'Department only', icon: <Building2 size={14} /> },
+  { value: 'PRIVATE', label: 'Private', icon: <Lock size={14} /> },
+]
+
+// ── Props ─────────────────────────────────────────────────────────────────────
 
 interface CreatePostProps {
   user: User
-  onPostCreate: (content: string) => void
+  /** Called with the freshly-created post so the parent can prepend it. */
+  onPostCreate: (post: PostResponse) => void
+  /** When rendering inside a team page, pass the team id so it is sent with the post. */
+  teamId?: string
+  /** When rendering inside a department page, pass the department id. */
+  departmentId?: string
+  /** Controls which visibility options are shown (defaults to all). */
+  defaultVisibility?: PostVisibility
 }
 
-export function CreatePost({ user, onPostCreate }: CreatePostProps) {
+// ── Component ─────────────────────────────────────────────────────────────────
+
+export function CreatePost({
+  user,
+  onPostCreate,
+  teamId,
+  departmentId,
+  defaultVisibility,
+}: CreatePostProps) {
   const [content, setContent] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
+  const [postType, setPostType] = useState<PostType>('DISCUSSION')
+  const [visibility, setVisibility] = useState<PostVisibility>(
+    defaultVisibility ?? (teamId ? 'TEAM_ONLY' : departmentId ? 'DEPARTMENT_ONLY' : 'PUBLIC')
+  )
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const firstName = user.firstName || getFullName(user).split(' ')[0]
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (content.trim()) {
-      onPostCreate(content)
+    if (!content.trim() || isSubmitting) return
+
+    setIsSubmitting(true)
+    setError(null)
+
+    try {
+      const { postApi } = await import('@/lib/api')
+      const req: PostRequest = {
+        content: content.trim(),
+        postType,
+        postVisibility: visibility,
+        ...(teamId ? { teamId } : {}),
+        ...(departmentId ? { departmentId } : {}),
+      }
+      const created = await postApi.create(req)
+      onPostCreate(created)
       setContent('')
       setIsExpanded(false)
+      setPostType('DISCUSSION')
+    } catch (err) {
+      console.error('Failed to create post:', err)
+      setError('Failed to publish post. Please try again.')
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
-  const firstName = user.firstName || getFullName(user).split(' ')[0]
+  const selectedVisibility = VISIBILITY_OPTIONS.find((o) => o.value === visibility)
 
   return (
     <Card className="animate-fade-in mb-6 p-6">
@@ -54,42 +144,64 @@ export function CreatePost({ user, onPostCreate }: CreatePostProps) {
               onChange={(e) => setContent(e.target.value)}
               placeholder={`What's on your mind, ${firstName}?`}
               className="text-foreground placeholder-muted-foreground w-full resize-none bg-transparent focus:outline-none"
-              rows={isExpanded ? 3 : 1}
+              rows={isExpanded ? 4 : 1}
+              maxLength={5000}
             />
           </div>
 
           {isExpanded && (
-            <div className="animate-slide-up mt-4">
-              <div className="mb-4 flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground gap-2"
+            <div className="animate-slide-up mt-4 space-y-4">
+              {/* Post type + visibility row */}
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Post type selector */}
+                <Select value={postType} onValueChange={(v) => setPostType(v as PostType)}>
+                  <SelectTrigger className="h-8 w-40 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(POST_TYPE_LABELS) as PostType[]).map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {POST_TYPE_LABELS[t].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Visibility selector */}
+                <Select
+                  value={visibility}
+                  onValueChange={(v) => setVisibility(v as PostVisibility)}
                 >
-                  <Image size={18} />
-                  Photo
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground gap-2"
-                >
-                  <FileText size={18} />
-                  Document
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground gap-2"
-                >
-                  <Smile size={18} />
-                  Emoji
-                </Button>
+                  <SelectTrigger className="h-8 w-44 text-sm">
+                    <span className="flex items-center gap-1.5">
+                      {selectedVisibility?.icon}
+                      {selectedVisibility?.label}
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VISIBILITY_OPTIONS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        <span className="flex items-center gap-2">
+                          {o.icon}
+                          {o.label}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {/* Live preview badge */}
+                <Badge className={POST_TYPE_LABELS[postType].color + ' border-0'}>
+                  {POST_TYPE_LABELS[postType].label}
+                </Badge>
+
+                {/* Character counter */}
+                <span className="text-muted-foreground ml-auto text-xs">{content.length}/5000</span>
               </div>
 
+              {error && <p className="text-destructive text-sm">{error}</p>}
+
+              {/* Action buttons */}
               <div className="flex items-center justify-end gap-2">
                 <Button
                   type="button"
@@ -97,16 +209,17 @@ export function CreatePost({ user, onPostCreate }: CreatePostProps) {
                   onClick={() => {
                     setIsExpanded(false)
                     setContent('')
+                    setError(null)
                   }}
                 >
                   Cancel
                 </Button>
                 <Button
                   type="submit"
-                  disabled={!content.trim()}
+                  disabled={!content.trim() || isSubmitting}
                   className="bg-primary hover:bg-primary/90 text-white"
                 >
-                  Post
+                  {isSubmitting ? 'Posting…' : 'Post'}
                 </Button>
               </div>
             </div>
