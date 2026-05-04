@@ -41,10 +41,12 @@ import { Button } from '@/components/ui/button'
 import {
   departmentApi,
   teamApi,
+  postApi,
   DepartmentResponse,
   TeamResponse,
   UserTeamResponse,
   UserResponse,
+  PostResponse,
   userApi,
 } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
@@ -52,7 +54,7 @@ import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
 import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
-import { Post, User, hasRole } from '@/lib/types'
+import { User, hasRole } from '@/lib/types'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -1516,8 +1518,8 @@ export default function DepartmentFeedPage() {
 
   const [department, setDepartment] = useState<DepartmentResponse | null>(null)
   const [teams, setTeams] = useState<TeamResponse[]>([])
-  const [posts, setPosts] = useState<Post[]>([])
-  const [usersMap] = useState<Record<string, User>>({})
+  const [posts, setPosts] = useState<PostResponse[]>([])
+  const [usersMap, setUsersMap] = useState<Record<string, User>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [manageOpen, setManageOpen] = useState(false)
@@ -1530,23 +1532,53 @@ export default function DepartmentFeedPage() {
     const loadData = async () => {
       try {
         setLoading(true)
-        const [dept, allTeams] = await Promise.all([
+        const [dept, allTeams, postsPage] = await Promise.all([
           departmentApi.getById(deptId),
           teamApi.getByDepartment(deptId),
+          postApi.getByDepartment(deptId, 0, 50),
         ])
         setDepartment(dept)
         setTeams(allTeams)
+        setPosts(postsPage.content || [])
+
+        // Fetch user data for all post authors
+        const authorIds = new Set(postsPage.content?.map((p) => p.authorId) || [])
+        const users: Record<string, User> = {}
+
+        // Fetch each user
+        const userPromises = Array.from(authorIds).map((id) =>
+          userApi
+            .getById(id)
+            .then((userData) => {
+              users[id] = {
+                id: userData.id,
+                roles: userData.roles,
+                permissions: userData.permissions,
+                email: userData.email,
+                firstName: userData.firstName,
+                lastName: userData.lastName,
+                birthDate: userData.birthDate,
+                phoneNumber: userData.phoneNumber,
+                jobTitle: userData.jobTitle,
+                bio: userData.bio,
+                avatar: userData.avatar,
+                active: userData.active,
+                mustChangePassword: userData.mustChangePassword,
+                lastLogin: userData.lastLogin,
+                createdAt: userData.createdAt,
+                updatedAt: userData.updatedAt,
+              }
+            })
+            .catch(() => {
+              /* silently ignore */
+            })
+        )
+        await Promise.all(userPromises)
+        setUsersMap(users)
+
         // derive which teams the current user is a member of (lead counts too)
         if (user) {
           setUserTeamIds(allTeams.filter((t) => t.leadId === user.id).map((t) => t.id))
-        }
-        const stored = localStorage.getItem(`dept_posts_${deptId}`)
-        if (stored) {
-          try {
-            setPosts(JSON.parse(stored))
-          } catch {
-            /* ignore */
-          }
         }
       } catch (e: any) {
         setError(e.message ?? 'Failed to load department')
@@ -1555,35 +1587,18 @@ export default function DepartmentFeedPage() {
       }
     }
     loadData()
-  }, [deptId])
+  }, [deptId, user])
 
   const handlePostCreate = (content: string) => {
     if (!user) return
-    const newPost: Post = {
-      id: Date.now().toString(),
-      authorId: user.id,
-      content,
-      timestamp: new Date(),
-      likes: [],
-      comments: [],
-    }
-    const updated = [newPost, ...posts]
-    setPosts(updated)
-    localStorage.setItem(`dept_posts_${deptId}`, JSON.stringify(updated))
+    // Refresh posts after creating a new one by fetching from the API
+    postApi.getByDepartment(deptId, 0, 50).then((postsPage) => {
+      setPosts(postsPage.content || [])
+    })
   }
 
-  const handleLike = (postId: string) => {
-    if (!user) return
-    const updated = posts.map((post) => {
-      if (post.id !== postId) return post
-      const hasLiked = post.likes.includes(user.id)
-      return {
-        ...post,
-        likes: hasLiked ? post.likes.filter((id) => id !== user.id) : [...post.likes, user.id],
-      }
-    })
-    setPosts(updated)
-    localStorage.setItem(`dept_posts_${deptId}`, JSON.stringify(updated))
+  const handleLike = () => {
+    // Like functionality is handled by PostCard component via API calls
   }
 
   const handleMemberKicked = (teamId: string) => {
@@ -1797,12 +1812,7 @@ export default function DepartmentFeedPage() {
                     key={post.id}
                     style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
                   >
-                    <PostCard
-                      post={post}
-                      currentUserId={user.id}
-                      onLike={handleLike}
-                      usersMap={usersMap}
-                    />
+                    <PostCard post={post} currentUserId={user.id} usersMap={usersMap} />
                   </div>
                 ))
               )}
