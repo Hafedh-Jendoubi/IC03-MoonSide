@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { PostResponse, CommentResponse, commentApi, reactionApi } from '@/lib/api'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { PostResponse, CommentResponse, commentApi, reactionApi, userApi } from '@/lib/api'
 import { User, getFullName, PostType } from '@/lib/types'
 import {
   Heart,
@@ -9,7 +9,6 @@ import {
   Share2,
   MoreHorizontal,
   Trash2,
-  Edit2,
   Pin,
   ChevronDown,
   ChevronUp,
@@ -24,6 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useAuth } from '@/lib/auth-context'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -54,22 +54,39 @@ const POST_TYPE_STYLES: Record<PostType, { label: string; color: string }> = {
   },
 }
 
-function formatTime(dateStr: string) {
-  const d = new Date(dateStr)
+function formatTime(dateStr: string): string {
+  // The backend sends LocalDateTime without a timezone suffix.
+  // Appending "Z" tells the browser to treat it as UTC, which matches
+  // how the server stores it, avoiding a systematic offset of several hours.
+  const normalized = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z'
+  const d = new Date(normalized)
+  if (isNaN(d.getTime())) return dateStr // fallback: show raw string
+
   const now = new Date()
-  const diffMs = now.getTime() - d.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-  const diffHours = Math.floor(diffMs / 3600000)
-  const diffDays = Math.floor(diffMs / 86400000)
+  const diffMs = Math.max(0, now.getTime() - d.getTime())
+  const diffMins = Math.floor(diffMs / 60_000)
+  const diffHours = Math.floor(diffMs / 3_600_000)
+  const diffDays = Math.floor(diffMs / 86_400_000)
+  const diffMonths = Math.floor(diffDays / 30.44)
+  const diffYears = Math.floor(diffDays / 365.25)
+
   if (diffMins < 1) return 'just now'
   if (diffMins < 60) return `${diffMins}m ago`
   if (diffHours < 24) return `${diffHours}h ago`
-  return `${diffDays}d ago`
+  if (diffDays < 30) return `${diffDays}d ago`
+
+  if (diffYears < 1) {
+    return `${diffMonths}mo ago`
+  }
+
+  const remainingMonths = diffMonths - diffYears * 12
+  if (remainingMonths === 0) return `${diffYears}y ago`
+  return `${diffYears}y ${remainingMonths}mo ago`
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ── UserAvatar ────────────────────────────────────────────────────────────────
 
-function UserAvatar({ user, size = 'md' }: { user: User | null; size?: 'sm' | 'md' }) {
+function UserAvatar({ user, size = 'md' }: { user: User | null | undefined; size?: 'sm' | 'md' }) {
   const sizeClass = size === 'sm' ? 'h-8 w-8 text-xs' : 'h-12 w-12 text-sm'
   if (!user) {
     return (
@@ -95,7 +112,55 @@ function UserAvatar({ user, size = 'md' }: { user: User | null; size?: 'sm' | 'm
   )
 }
 
-// ── Comment row ───────────────────────────────────────────────────────────────
+// ── useCommentAuthors ─────────────────────────────────────────────────────────
+/**
+ * Maintains a local users map for comment authors.
+ * Starts pre-seeded with the parent's usersMap (post authors + current user)
+ * and fetches any missing author ids on demand.
+ */
+function useCommentAuthors(seedMap: Record<string, User>) {
+  // Keep a merged map: seed values + anything we fetch ourselves
+  const [localMap, setLocalMap] = useState<Record<string, User>>(seedMap)
+  const fetchedIds = useRef<Set<string>>(new Set(Object.keys(seedMap)))
+
+  // When the parent map gains new entries (e.g. current user seeded late),
+  // merge them in without overwriting locally fetched data.
+  useEffect(() => {
+    setLocalMap((prev) => {
+      const merged = { ...prev }
+      let changed = false
+      for (const [id, u] of Object.entries(seedMap)) {
+        if (!merged[id]) {
+          merged[id] = u
+          fetchedIds.current.add(id)
+          changed = true
+        }
+      }
+      return changed ? merged : prev
+    })
+  }, [seedMap])
+
+  const resolveAuthors = useCallback(async (authorIds: string[]) => {
+    const missing = [...new Set(authorIds)].filter((id) => !fetchedIds.current.has(id))
+    if (missing.length === 0) return
+
+    // Mark as in-flight immediately to prevent duplicate requests
+    missing.forEach((id) => fetchedIds.current.add(id))
+
+    const results = await Promise.allSettled(missing.map((id) => userApi.getById(id)))
+    const updates: Record<string, User> = {}
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') updates[missing[i]] = r.value as User
+    })
+    if (Object.keys(updates).length > 0) {
+      setLocalMap((prev) => ({ ...prev, ...updates }))
+    }
+  }, [])
+
+  return { localMap, resolveAuthors }
+}
+
+// ── CommentRow ────────────────────────────────────────────────────────────────
 
 function CommentRow({
   comment,
@@ -196,6 +261,8 @@ interface PostCardProps {
 }
 
 export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardProps) {
+  const { user: currentUser } = useAuth()
+
   const [reactionCount, setReactionCount] = useState(post.reactionCount)
   const [hasLiked, setHasLiked] = useState(false)
   const [commentCount, setCommentCount] = useState(post.commentCount)
@@ -205,7 +272,12 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
   const [newComment, setNewComment] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
 
-  const author = usersMap[post.authorId]
+  // ── Author map: merges parent map + current user + comment authors ──────────
+  const seedMap = currentUser ? { ...usersMap, [currentUser.id]: currentUser } : usersMap
+
+  const { localMap: commentUsersMap, resolveAuthors } = useCommentAuthors(seedMap)
+
+  const author = commentUsersMap[post.authorId]
   const isOwn = post.authorId === currentUserId
 
   // Fetch initial reaction state
@@ -225,12 +297,14 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
     try {
       const page = await commentApi.getComments(post.id)
       setComments(page.content)
+      // Resolve all comment authors in one shot
+      await resolveAuthors(page.content.map((c) => c.authorId))
     } catch (e) {
       console.error('Failed to load comments:', e)
     } finally {
       setLoadingComments(false)
     }
-  }, [post.id, loadingComments])
+  }, [post.id, loadingComments, resolveAuthors])
 
   const toggleComments = () => {
     if (!showComments && comments.length === 0) loadComments()
@@ -271,6 +345,8 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
       setComments((prev) => [...prev, comment])
       setCommentCount((c) => c + 1)
       setNewComment('')
+      // Resolve the new comment's author (will be a no-op if current user already seeded)
+      await resolveAuthors([comment.authorId])
     } catch (e) {
       console.error('Failed to add comment:', e)
     } finally {
@@ -381,9 +457,9 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
       {/* Comment section */}
       {showComments && (
         <div className="border-border mt-2 border-t pt-4 dark:border-slate-700">
-          {/* Add comment */}
+          {/* Add comment — always shows current user's avatar correctly */}
           <form onSubmit={handleAddComment} className="mb-4 flex items-center gap-3">
-            <UserAvatar user={usersMap[currentUserId]} size="sm" />
+            <UserAvatar user={commentUsersMap[currentUserId]} size="sm" />
             <div className="flex flex-1 items-center gap-2">
               <input
                 value={newComment}
@@ -421,7 +497,7 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
                 <CommentRow
                   key={c.id}
                   comment={c}
-                  usersMap={usersMap}
+                  usersMap={commentUsersMap}
                   currentUserId={currentUserId}
                   postId={post.id}
                   onDeleted={handleCommentDeleted}
