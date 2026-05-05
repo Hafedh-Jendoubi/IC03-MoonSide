@@ -41,6 +41,7 @@ import {
   DepartmentResponse,
   UserTeamResponse,
   UserResponse,
+  PostResponse,
   userApi,
 } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
@@ -48,7 +49,7 @@ import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
 import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
-import { Post, User, hasRole } from '@/lib/types'
+import { User, hasRole } from '@/lib/types'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -1142,7 +1143,7 @@ export default function TeamFeedPage() {
   const teamId = params?.id as string
 
   const [team, setTeam] = useState<TeamResponse | null>(null)
-  const [posts, setPosts] = useState<Post[]>([])
+  const [posts, setPosts] = useState<PostResponse[]>([])
   const [usersMap] = useState<Record<string, User>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1193,31 +1194,9 @@ export default function TeamFeedPage() {
       .catch(() => {})
   }, [user])
 
-  const handlePostCreate = (content: string) => {
+  const handlePostCreate = (post: PostResponse) => {
     if (!user) return
-    const newPost: Post = {
-      id: Date.now().toString(),
-      authorId: user.id,
-      content,
-      timestamp: new Date(),
-      likes: [],
-      comments: [],
-    }
-    const updated = [newPost, ...posts]
-    setPosts(updated)
-    localStorage.setItem(`team_posts_${teamId}`, JSON.stringify(updated))
-  }
-
-  const handleLike = (postId: string) => {
-    if (!user) return
-    const updated = posts.map((post) => {
-      if (post.id !== postId) return post
-      const hasLiked = post.likes.includes(user.id)
-      return {
-        ...post,
-        likes: hasLiked ? post.likes.filter((id) => id !== user.id) : [...post.likes, user.id],
-      }
-    })
+    const updated = [post, ...posts]
     setPosts(updated)
     localStorage.setItem(`team_posts_${teamId}`, JSON.stringify(updated))
   }
@@ -1393,12 +1372,7 @@ export default function TeamFeedPage() {
             ) : (
               posts.map((post, index) => (
                 <div key={post.id} style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}>
-                  <PostCard
-                    post={post}
-                    currentUserId={user.id}
-                    onLike={handleLike}
-                    usersMap={usersMap}
-                  />
+                  <PostCard post={post} currentUserId={user.id} usersMap={usersMap} />
                 </div>
               ))
             )}

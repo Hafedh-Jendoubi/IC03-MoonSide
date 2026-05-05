@@ -1589,12 +1589,10 @@ export default function DepartmentFeedPage() {
     loadData()
   }, [deptId, user])
 
-  const handlePostCreate = (content: string) => {
+  const handlePostCreate = (post: PostResponse) => {
     if (!user) return
-    // Refresh posts after creating a new one by fetching from the API
-    postApi.getByDepartment(deptId, 0, 50).then((postsPage) => {
-      setPosts(postsPage.content || [])
-    })
+    const updated = [post, ...posts]
+    setPosts(updated)
   }
 
   const handleLike = () => {
