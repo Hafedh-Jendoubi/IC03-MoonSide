@@ -1591,8 +1591,11 @@ export default function DepartmentFeedPage() {
 
   const handlePostCreate = (post: PostResponse) => {
     if (!user) return
-    const updated = [post, ...posts]
-    setPosts(updated)
+    setPosts((prev) => [post, ...prev])
+    // Ensure the author (current user) is in the map so the post card renders the name immediately
+    if (!usersMap[user.id]) {
+      setUsersMap((prev) => ({ ...prev, [user.id]: user }))
+    }
   }
 
   const handleLike = () => {
@@ -1794,7 +1797,7 @@ export default function DepartmentFeedPage() {
           )}
 
           <div className={`space-y-6 ${teams.length > 0 ? 'lg:col-span-3' : 'lg:col-span-4'}`}>
-            <CreatePost user={user} onPostCreate={handlePostCreate} />
+            <CreatePost user={user} onPostCreate={handlePostCreate} departmentId={deptId} />
             <div className="space-y-6">
               {posts.length === 0 ? (
                 <div className="py-12 text-center">

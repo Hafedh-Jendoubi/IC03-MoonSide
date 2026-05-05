@@ -49,6 +49,7 @@ import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
 import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
+import { usePostFeed } from '@/hooks/use-post-feed'
 import { User, hasRole } from '@/lib/types'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -1143,8 +1144,6 @@ export default function TeamFeedPage() {
   const teamId = params?.id as string
 
   const [team, setTeam] = useState<TeamResponse | null>(null)
-  const [posts, setPosts] = useState<PostResponse[]>([])
-  const [usersMap] = useState<Record<string, User>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [userManagedDeptIds, setUserManagedDeptIds] = useState<string[]>([])
@@ -1153,6 +1152,12 @@ export default function TeamFeedPage() {
   const [followLoading, setFollowLoading] = useState(false)
   const [teamDepartment, setTeamDepartment] = useState<DepartmentResponse | null>(null)
 
+  // ── Post feed: fetches from API, resolves authors ─────────────────────────
+  const { posts, usersMap, prependPost } = usePostFeed({
+    scope: { type: 'team', teamId },
+    currentUser: user,
+  })
+
   useEffect(() => {
     if (!teamId) return
     const loadData = async () => {
@@ -1160,20 +1165,11 @@ export default function TeamFeedPage() {
         setLoading(true)
         const teamData = await teamApi.getById(teamId)
         setTeam(teamData)
-        // fetch the parent department to read membersPublic setting
         if (teamData.departmentId) {
           departmentApi
             .getById(teamData.departmentId)
             .then(setTeamDepartment)
             .catch(() => {})
-        }
-        const stored = localStorage.getItem(`team_posts_${teamId}`)
-        if (stored) {
-          try {
-            setPosts(JSON.parse(stored))
-          } catch {
-            /* ignore */
-          }
         }
       } catch (e: any) {
         setError(e.message ?? 'Failed to load team')
@@ -1195,10 +1191,7 @@ export default function TeamFeedPage() {
   }, [user])
 
   const handlePostCreate = (post: PostResponse) => {
-    if (!user) return
-    const updated = [post, ...posts]
-    setPosts(updated)
-    localStorage.setItem(`team_posts_${teamId}`, JSON.stringify(updated))
+    prependPost(post)
   }
 
   if (loading) {
@@ -1359,7 +1352,7 @@ export default function TeamFeedPage() {
 
         {/* Posts Feed */}
         <div className="space-y-6">
-          <CreatePost user={user} onPostCreate={handlePostCreate} />
+          <CreatePost user={user} onPostCreate={handlePostCreate} teamId={teamId} />
           <div className="space-y-6">
             {posts.length === 0 ? (
               <div className="py-12 text-center">
