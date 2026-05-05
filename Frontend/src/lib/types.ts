@@ -99,7 +99,15 @@ export type PostType =
   | 'EVENT'
   | 'ACHIEVEMENT'
 
-export type PostVisibility = 'PUBLIC' | 'TEAM_ONLY' | 'DEPARTMENT_ONLY' | 'PRIVATE' | 'DRAFT'
+/**
+ * Visibility values that can appear on a PostResponse from the server.
+ * TEAM_ONLY and DEPARTMENT_ONLY are set automatically by the server when a
+ * post is created inside a team / department feed — clients never submit them.
+ */
+export type PostVisibility = 'PUBLIC' | 'PRIVATE' | 'TEAM_ONLY' | 'DEPARTMENT_ONLY' | 'DRAFT'
+
+/** The subset of PostVisibility values a client may submit when creating / editing a post. */
+export type ClientPostVisibility = 'PUBLIC' | 'PRIVATE'
 
 export interface Post {
   id: string

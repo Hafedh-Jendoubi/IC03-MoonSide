@@ -28,13 +28,24 @@ public class PostService {
     /* ── Create ───────────────────────────────────────────────────────────── */
 
     public PostResponse createPost(PostRequest req, String authorId) {
+        /*
+         * Visibility derivation rules:
+         *  - If the post is created inside a team feed  → TEAM_ONLY
+         *  - If the post is created inside a department feed → DEPARTMENT_ONLY
+         *  - Otherwise the client-supplied value (PUBLIC or PRIVATE) is used.
+         *
+         * This means clients only ever submit PUBLIC or PRIVATE; the server
+         * automatically upgrades the visibility when a context id is present.
+         */
+        VisibilityType resolvedVisibility = resolveVisibility(req);
+
         Post post = Post.builder()
                 .authorId(authorId)
                 .teamId(req.getTeamId())
                 .departmentId(req.getDepartmentId())
                 .content(req.getContent())
                 .postType(req.getPostType())
-                .postVisibility(req.getPostVisibility())
+                .postVisibility(resolvedVisibility)
                 .isPinned(req.isPinned())
                 .isAIGenerated(req.isAIGenerated())
                 .build();
@@ -62,6 +73,10 @@ public class PostService {
         return postRepository.findByAuthorId(authorId, pageable).map(this::toResponse);
     }
 
+    /**
+     * Returns all posts for a team: both TEAM_ONLY posts and PUBLIC posts
+     * that were linked to this team.
+     */
     public Page<PostResponse> getByTeam(String teamId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return postRepository
@@ -70,6 +85,10 @@ public class PostService {
                 .map(this::toResponse);
     }
 
+    /**
+     * Returns all posts for a department: both DEPARTMENT_ONLY posts and PUBLIC
+     * posts that were linked to this department.
+     */
     public Page<PostResponse> getByDepartment(String departmentId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return postRepository
@@ -86,7 +105,9 @@ public class PostService {
 
         post.setContent(req.getContent());
         post.setPostType(req.getPostType());
-        post.setPostVisibility(req.getPostVisibility());
+        // Re-derive visibility on update as well (context ids on the existing post are preserved)
+        PostRequest contextualReq = buildContextualRequest(req, post);
+        post.setPostVisibility(resolveVisibility(contextualReq));
         post.setPinned(req.isPinned());
         post.setUpdatedBy(requesterId);
         post.setUpdatedAt(LocalDateTime.now());
@@ -104,6 +125,37 @@ public class PostService {
         attachmentRepository.deleteByPostId(postId);
         reactionRepository.deleteByReactableTypeAndReactableId("POST", postId);
         postRepository.delete(post);
+    }
+
+    /* ── Visibility derivation ────────────────────────────────────────────── */
+
+    /**
+     * Derives the stored visibility from request context:
+     * <ul>
+     *   <li>teamId present → {@code TEAM_ONLY}</li>
+     *   <li>departmentId present (no teamId) → {@code DEPARTMENT_ONLY}</li>
+     *   <li>Otherwise → use whatever the client sent (PUBLIC or PRIVATE)</li>
+     * </ul>
+     */
+    private VisibilityType resolveVisibility(PostRequest req) {
+        if (req.getTeamId() != null && !req.getTeamId().isBlank()) {
+            return VisibilityType.TEAM_ONLY;
+        }
+        if (req.getDepartmentId() != null && !req.getDepartmentId().isBlank()) {
+            return VisibilityType.DEPARTMENT_ONLY;
+        }
+        // Default to PUBLIC if client sent nothing
+        return req.getPostVisibility() != null ? req.getPostVisibility() : VisibilityType.PUBLIC;
+    }
+
+    /**
+     * When updating, preserve the teamId / departmentId from the stored post
+     * so visibility is re-derived correctly even if the client omits them.
+     */
+    private PostRequest buildContextualRequest(PostRequest req, Post existingPost) {
+        if (req.getTeamId() == null) req.setTeamId(existingPost.getTeamId());
+        if (req.getDepartmentId() == null) req.setDepartmentId(existingPost.getDepartmentId());
+        return req;
     }
 
     /* ── Mapping ──────────────────────────────────────────────────────────── */

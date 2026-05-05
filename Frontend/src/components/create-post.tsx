@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { User, getFullName, PostType, PostVisibility } from '@/lib/types'
-import { PostRequest, PostResponse } from '@/lib/api'
+import { User, getFullName, PostType } from '@/lib/types'
+import { ClientPostVisibility, PostRequest, PostResponse } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Globe, Lock, Users, Building2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Globe, Lock } from 'lucide-react'
 
 // ── Type label helpers ────────────────────────────────────────────────────────
 
@@ -44,12 +44,17 @@ const POST_TYPE_LABELS: Record<PostType, { label: string; color: string }> = {
   },
 }
 
-const VISIBILITY_OPTIONS: { value: PostVisibility; label: string; icon: React.ReactNode }[] = [
-  { value: 'PUBLIC', label: 'Public', icon: <Globe size={14} /> },
-  { value: 'TEAM_ONLY', label: 'Team only', icon: <Users size={14} /> },
-  { value: 'DEPARTMENT_ONLY', label: 'Department only', icon: <Building2 size={14} /> },
-  { value: 'PRIVATE', label: 'Private', icon: <Lock size={14} /> },
-]
+/**
+ * Only PUBLIC and PRIVATE are shown to the user.
+ * When a post is created inside a team / department feed the server
+ * automatically sets TEAM_ONLY / DEPARTMENT_ONLY based on the presence of
+ * teamId / departmentId in the request body.
+ */
+const VISIBILITY_OPTIONS: { value: ClientPostVisibility; label: string; icon: React.ReactNode }[] =
+  [
+    { value: 'PUBLIC', label: 'Public', icon: <Globe size={14} /> },
+    { value: 'PRIVATE', label: 'Private', icon: <Lock size={14} /> },
+  ]
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -57,29 +62,25 @@ interface CreatePostProps {
   user: User
   /** Called with the freshly-created post so the parent can prepend it. */
   onPostCreate: (post: PostResponse) => void
-  /** When rendering inside a team page, pass the team id so it is sent with the post. */
+  /**
+   * When rendering inside a team page, pass the team id.
+   * The post will be linked to that team and the server will store it as TEAM_ONLY.
+   */
   teamId?: string
-  /** When rendering inside a department page, pass the department id. */
+  /**
+   * When rendering inside a department page, pass the department id.
+   * The post will be linked to that department and the server will store it as DEPARTMENT_ONLY.
+   */
   departmentId?: string
-  /** Controls which visibility options are shown (defaults to all). */
-  defaultVisibility?: PostVisibility
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function CreatePost({
-  user,
-  onPostCreate,
-  teamId,
-  departmentId,
-  defaultVisibility,
-}: CreatePostProps) {
+export function CreatePost({ user, onPostCreate, teamId, departmentId }: CreatePostProps) {
   const [content, setContent] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
   const [postType, setPostType] = useState<PostType>('DISCUSSION')
-  const [visibility, setVisibility] = useState<PostVisibility>(
-    defaultVisibility ?? (teamId ? 'TEAM_ONLY' : departmentId ? 'DEPARTMENT_ONLY' : 'PUBLIC')
-  )
+  const [visibility, setVisibility] = useState<ClientPostVisibility>('PUBLIC')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -98,6 +99,7 @@ export function CreatePost({
         content: content.trim(),
         postType,
         postVisibility: visibility,
+        // Context ids — the server derives TEAM_ONLY / DEPARTMENT_ONLY from these
         ...(teamId ? { teamId } : {}),
         ...(departmentId ? { departmentId } : {}),
       }
@@ -167,12 +169,12 @@ export function CreatePost({
                   </SelectContent>
                 </Select>
 
-                {/* Visibility selector */}
+                {/* Visibility selector — only PUBLIC / PRIVATE */}
                 <Select
                   value={visibility}
-                  onValueChange={(v) => setVisibility(v as PostVisibility)}
+                  onValueChange={(v) => setVisibility(v as ClientPostVisibility)}
                 >
-                  <SelectTrigger className="h-8 w-44 text-sm">
+                  <SelectTrigger className="h-8 w-36 text-sm">
                     <span className="flex items-center gap-1.5">
                       {selectedVisibility?.icon}
                       {selectedVisibility?.label}

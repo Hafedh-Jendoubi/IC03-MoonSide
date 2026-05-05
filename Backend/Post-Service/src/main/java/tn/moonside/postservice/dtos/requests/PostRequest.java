@@ -14,9 +14,18 @@ public class PostRequest {
     private String content;
 
     private TypePosts postType = TypePosts.DISCUSSION;
+
+    /**
+     * Only PUBLIC or PRIVATE are accepted from the client.
+     * TEAM_ONLY / DEPARTMENT_ONLY are derived automatically on the server
+     * when teamId / departmentId is present.
+     */
     private VisibilityType postVisibility = VisibilityType.PUBLIC;
 
+    /** Supplied automatically by the client when posting inside a team feed. */
     private String teamId;
+
+    /** Supplied automatically by the client when posting inside a department feed. */
     private String departmentId;
 
     private boolean isPinned = false;

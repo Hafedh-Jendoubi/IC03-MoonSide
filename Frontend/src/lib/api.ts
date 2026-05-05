@@ -707,7 +707,14 @@ export type PostType =
   | 'EVENT'
   | 'ACHIEVEMENT'
 
-export type PostVisibility = 'PUBLIC' | 'TEAM_ONLY' | 'DEPARTMENT_ONLY' | 'PRIVATE' | 'DRAFT'
+/**
+ * All possible visibility values returned by the server.
+ * TEAM_ONLY and DEPARTMENT_ONLY are set automatically – clients never submit them.
+ */
+export type PostVisibility = 'PUBLIC' | 'PRIVATE' | 'TEAM_ONLY' | 'DEPARTMENT_ONLY' | 'DRAFT'
+
+/** The subset a client may submit when creating or editing a post. */
+export type ClientPostVisibility = 'PUBLIC' | 'PRIVATE'
 
 // ── DTOs ─────────────────────────────────────────────────────────────────────
 
@@ -741,7 +748,8 @@ export interface PostResponse {
 export interface PostRequest {
   content: string
   postType?: PostType
-  postVisibility?: PostVisibility
+  /** Only PUBLIC or PRIVATE – TEAM_ONLY / DEPARTMENT_ONLY are derived server-side. */
+  postVisibility?: ClientPostVisibility
   teamId?: string
   departmentId?: string
   isPinned?: boolean
