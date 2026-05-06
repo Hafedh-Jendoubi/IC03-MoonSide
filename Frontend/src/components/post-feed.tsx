@@ -6,7 +6,7 @@ import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
 import { usePostFeed } from '@/hooks/use-post-feed'
 import { PostResponse } from '@/lib/api'
-import { User, PostVisibility } from '@/lib/types'
+import { User, ClientPostVisibility } from '@/lib/types'
 
 interface PostFeedProps {
   currentUser: User
@@ -17,7 +17,7 @@ interface PostFeedProps {
   /** Provide for a user profile feed */
   authorId?: string
   /** Override the default visibility preset in CreatePost */
-  defaultVisibility?: PostVisibility
+  defaultVisibility?: ClientPostVisibility
   emptyMessage?: string
 }
 

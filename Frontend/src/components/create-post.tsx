@@ -72,15 +72,26 @@ interface CreatePostProps {
    * The post will be linked to that department and the server will store it as DEPARTMENT_ONLY.
    */
   departmentId?: string
+  /**
+   * Override the initial visibility selection shown to the user.
+   * Defaults to 'PUBLIC' when not provided.
+   */
+  defaultVisibility?: ClientPostVisibility
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export function CreatePost({ user, onPostCreate, teamId, departmentId }: CreatePostProps) {
+export function CreatePost({
+  user,
+  onPostCreate,
+  teamId,
+  departmentId,
+  defaultVisibility,
+}: CreatePostProps) {
   const [content, setContent] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
   const [postType, setPostType] = useState<PostType>('DISCUSSION')
-  const [visibility, setVisibility] = useState<ClientPostVisibility>('PUBLIC')
+  const [visibility, setVisibility] = useState<ClientPostVisibility>(defaultVisibility ?? 'PUBLIC')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
