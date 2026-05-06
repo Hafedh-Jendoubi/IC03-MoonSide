@@ -48,6 +48,7 @@ export function PostFeed({
     refresh,
     prependPost,
     removePost,
+    updatePost,
   } = usePostFeed({ scope, currentUser })
 
   const handlePostCreate = (post: PostResponse) => {
@@ -100,6 +101,7 @@ export function PostFeed({
                   currentUserId={currentUser.id}
                   usersMap={usersMap}
                   onDelete={removePost}
+                  onUpdate={updatePost}
                 />
               </div>
             ))}

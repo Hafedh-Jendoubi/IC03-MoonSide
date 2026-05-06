@@ -28,6 +28,7 @@ interface UseFeedResult {
   refresh: () => void
   prependPost: (post: PostResponse) => void
   removePost: (postId: string) => void
+  updatePost: (updated: PostResponse) => void
 }
 
 export function usePostFeed({ scope, pageSize = 20, currentUser }: UseFeedOptions): UseFeedResult {
@@ -160,6 +161,11 @@ export function usePostFeed({ scope, pageSize = 20, currentUser }: UseFeedOption
     setPosts((prev) => prev.filter((p) => p.id !== postId))
   }, [])
 
+  /** Replace a post in the feed with an updated version returned by the server. */
+  const updatePost = useCallback((updated: PostResponse) => {
+    setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+  }, [])
+
   return {
     posts,
     usersMap,
@@ -171,5 +177,6 @@ export function usePostFeed({ scope, pageSize = 20, currentUser }: UseFeedOption
     refresh,
     prependPost,
     removePost,
+    updatePost,
   }
 }

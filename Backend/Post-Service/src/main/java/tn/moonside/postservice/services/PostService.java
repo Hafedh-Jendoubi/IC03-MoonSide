@@ -3,8 +3,10 @@ package tn.moonside.postservice.services;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.moonside.postservice.clients.OrganizationClient;
 import tn.moonside.postservice.dtos.requests.PostRequest;
 import tn.moonside.postservice.dtos.responses.*;
 import tn.moonside.postservice.entities.*;
@@ -24,6 +26,7 @@ public class PostService {
     private final AttachmentRepository attachmentRepository;
     private final ReactionRepository reactionRepository;
     private final ReactionTypeRepository reactionTypeRepository;
+    private final OrganizationClient organizationClient;
 
     /* ── Create ───────────────────────────────────────────────────────────── */
 
@@ -99,9 +102,22 @@ public class PostService {
 
     /* ── Update ───────────────────────────────────────────────────────────── */
 
-    public PostResponse updatePost(String postId, PostRequest req, String requesterId) {
+    /**
+     * Updates a post if the requester is authorised:
+     * <ul>
+     *   <li><b>Owner</b> – always allowed to edit their own post.</li>
+     *   <li><b>Team leader</b> – allowed when the post belongs to their team.</li>
+     *   <li><b>Department leader/manager</b> – allowed when the post belongs to
+     *       their department, OR when the post belongs to a team that is inside
+     *       their department.</li>
+     * </ul>
+     *
+     * @param roles Spring Security role names (without the "ROLE_" prefix) taken
+     *              from the JWT, e.g. ["EMPLOYEE", "TEAM_LEADER"].
+     */
+    public PostResponse updatePost(String postId, PostRequest req, String requesterId, List<String> roles) {
         Post post = findPost(postId);
-        assertOwner(post.getAuthorId(), requesterId, "edit");
+        assertCanEdit(post, requesterId, roles, "edit");
 
         post.setContent(req.getContent());
         post.setPostType(req.getPostType());
@@ -125,6 +141,49 @@ public class PostService {
         attachmentRepository.deleteByPostId(postId);
         reactionRepository.deleteByReactableTypeAndReactableId("POST", postId);
         postRepository.delete(post);
+    }
+
+    /* ── Authorization ────────────────────────────────────────────────────── */
+
+    /**
+     * Checks edit permission in order of specificity:
+     * 1. Owner of the post
+     * 2. Team leader of the team the post belongs to
+     * 3. Department leader/manager of the department the post belongs to
+     *    (directly OR via a team inside that department)
+     *
+     * Throws {@link AccessDeniedException} if none of the conditions are met.
+     */
+    private void assertCanEdit(Post post, String requesterId, List<String> roles, String action) {
+        // 1. Owner
+        if (post.getAuthorId().equals(requesterId)) return;
+
+        boolean isTeamLeader  = roles != null && roles.contains("TEAM_LEADER");
+        boolean isDeptManager = roles != null && (
+                roles.contains("DEPARTMENT_LEADER") || roles.contains("DEPARTMENT_MANAGER"));
+        boolean isCeo         = roles != null && roles.contains("CEO");
+
+        // CEO can do anything
+        if (isCeo) return;
+
+        // 2. Team leader: post must belong to their team
+        if (isTeamLeader && post.getTeamId() != null) {
+            if (organizationClient.isTeamLead(post.getTeamId(), requesterId)) return;
+        }
+
+        // 3. Department manager: post directly in their dept
+        if (isDeptManager && post.getDepartmentId() != null) {
+            if (organizationClient.isDepartmentManager(post.getDepartmentId(), requesterId)) return;
+        }
+
+        // 3b. Department manager: post in a team that belongs to their dept
+        if (isDeptManager && post.getTeamId() != null) {
+            String teamDeptId = organizationClient.getDepartmentIdForTeam(post.getTeamId());
+            if (teamDeptId != null
+                    && organizationClient.isDepartmentManager(teamDeptId, requesterId)) return;
+        }
+
+        throw new AccessDeniedException("You are not allowed to " + action + " this post");
     }
 
     /* ── Visibility derivation ────────────────────────────────────────────── */
@@ -201,8 +260,7 @@ public class PostService {
 
     private void assertOwner(String ownerId, String requesterId, String action) {
         if (!ownerId.equals(requesterId)) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                    "You are not allowed to " + action + " this post");
+            throw new AccessDeniedException("You are not allowed to " + action + " this post");
         }
     }
 }

@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { PostResponse, CommentResponse, commentApi, reactionApi, userApi } from '@/lib/api'
-import { User, getFullName, PostType } from '@/lib/types'
+import { PostResponse, CommentResponse, commentApi, reactionApi, userApi, postApi } from '@/lib/api'
+import { User, getFullName, PostType, ROLE, hasRole } from '@/lib/types'
 import {
   Heart,
   MessageCircle,
@@ -13,6 +13,9 @@ import {
   ChevronDown,
   ChevronUp,
   Send,
+  Pencil,
+  X,
+  Check,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -55,12 +58,9 @@ const POST_TYPE_STYLES: Record<PostType, { label: string; color: string }> = {
 }
 
 function formatTime(dateStr: string): string {
-  // The backend sends LocalDateTime without a timezone suffix.
-  // Appending "Z" tells the browser to treat it as UTC, which matches
-  // how the server stores it, avoiding a systematic offset of several hours.
   const normalized = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z'
   const d = new Date(normalized)
-  if (isNaN(d.getTime())) return dateStr // fallback: show raw string
+  if (isNaN(d.getTime())) return dateStr
 
   const now = new Date()
   const diffMs = Math.max(0, now.getTime() - d.getTime())
@@ -113,18 +113,10 @@ function UserAvatar({ user, size = 'md' }: { user: User | null | undefined; size
 }
 
 // ── useCommentAuthors ─────────────────────────────────────────────────────────
-/**
- * Maintains a local users map for comment authors.
- * Starts pre-seeded with the parent's usersMap (post authors + current user)
- * and fetches any missing author ids on demand.
- */
 function useCommentAuthors(seedMap: Record<string, User>) {
-  // Keep a merged map: seed values + anything we fetch ourselves
   const [localMap, setLocalMap] = useState<Record<string, User>>(seedMap)
   const fetchedIds = useRef<Set<string>>(new Set(Object.keys(seedMap)))
 
-  // When the parent map gains new entries (e.g. current user seeded late),
-  // merge them in without overwriting locally fetched data.
   useEffect(() => {
     setLocalMap((prev) => {
       const merged = { ...prev }
@@ -144,7 +136,6 @@ function useCommentAuthors(seedMap: Record<string, User>) {
     const missing = [...new Set(authorIds)].filter((id) => !fetchedIds.current.has(id))
     if (missing.length === 0) return
 
-    // Mark as in-flight immediately to prevent duplicate requests
     missing.forEach((id) => fetchedIds.current.add(id))
 
     const results = await Promise.allSettled(missing.map((id) => userApi.getById(id)))
@@ -166,23 +157,46 @@ function CommentRow({
   comment,
   usersMap,
   currentUserId,
-  postId,
+  currentUserRoles,
+  post,
   onDeleted,
+  onUpdated,
 }: {
   comment: CommentResponse
   usersMap: Record<string, User>
   currentUserId: string
-  postId: string
+  currentUserRoles: string[]
+  post: PostResponse
   onDeleted: (id: string) => void
+  onUpdated: (updated: CommentResponse) => void
 }) {
   const author = usersMap[comment.authorId]
   const isOwn = comment.authorId === currentUserId
+
+  // Leadership edit rights: team leader of the post's team, or dept manager of the post's dept
+  const isTeamLeader = currentUserRoles.includes(ROLE.TEAM_LEADER)
+  const isDeptLeader =
+    currentUserRoles.includes(ROLE.DEPARTMENT_LEADER) ||
+    currentUserRoles.includes('DEPARTMENT_MANAGER')
+  const isCeo = currentUserRoles.includes(ROLE.CEO)
+
+  const canEdit =
+    isOwn ||
+    isCeo ||
+    (isTeamLeader && !!post.teamId) ||
+    (isDeptLeader && (!!post.departmentId || !!post.teamId))
+
   const [likeCount, setLikeCount] = useState(comment.reactionCount)
   const [liked, setLiked] = useState(false)
 
+  // Inline edit state
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState(comment.content)
+  const [saving, setSaving] = useState(false)
+
   const handleLike = async () => {
     try {
-      const res = await reactionApi.reactToComment(postId, comment.id, {
+      const res = await reactionApi.reactToComment(post.id, comment.id, {
         reactionTypeCode: 'LIKE',
       })
       if (res) {
@@ -199,11 +213,32 @@ function CommentRow({
 
   const handleDelete = async () => {
     try {
-      await commentApi.deleteComment(postId, comment.id)
+      await commentApi.deleteComment(post.id, comment.id)
       onDeleted(comment.id)
     } catch (e) {
       console.error('Failed to delete comment:', e)
     }
+  }
+
+  const handleEditSave = async () => {
+    if (!editContent.trim() || saving) return
+    setSaving(true)
+    try {
+      const updated = await commentApi.updateComment(post.id, comment.id, {
+        content: editContent.trim(),
+      })
+      onUpdated(updated)
+      setIsEditing(false)
+    } catch (e) {
+      console.error('Failed to update comment:', e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleEditCancel = () => {
+    setEditContent(comment.content)
+    setIsEditing(false)
   }
 
   return (
@@ -215,7 +250,7 @@ function CommentRow({
             <p className="text-foreground text-sm font-semibold">
               {author ? getFullName(author) : 'Unknown user'}
             </p>
-            {isOwn && (
+            {(isOwn || canEdit) && !isEditing && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-6 w-6">
@@ -223,18 +258,58 @@ function CommentRow({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={handleDelete}
-                  >
-                    <Trash2 size={14} className="mr-2" />
-                    Delete
-                  </DropdownMenuItem>
+                  {canEdit && (
+                    <DropdownMenuItem onClick={() => setIsEditing(true)}>
+                      <Pencil size={14} className="mr-2" />
+                      Edit
+                    </DropdownMenuItem>
+                  )}
+                  {isOwn && (
+                    <>
+                      {canEdit && <DropdownMenuSeparator />}
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={handleDelete}
+                      >
+                        <Trash2 size={14} className="mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
           </div>
-          <p className="text-foreground mt-1 text-sm leading-relaxed">{comment.content}</p>
+
+          {isEditing ? (
+            <div className="mt-2 space-y-2">
+              <textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                maxLength={2000}
+                rows={3}
+                className="bg-background text-foreground placeholder-muted-foreground focus:ring-primary/30 w-full rounded-lg px-3 py-2 text-sm focus:ring-2 focus:outline-none dark:bg-slate-700"
+                autoFocus
+              />
+              <div className="flex justify-end gap-2">
+                <Button size="sm" variant="ghost" onClick={handleEditCancel} className="h-7 px-2">
+                  <X size={14} className="mr-1" />
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleEditSave}
+                  disabled={!editContent.trim() || saving}
+                  className="h-7 px-3"
+                >
+                  <Check size={14} className="mr-1" />
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-foreground mt-1 text-sm leading-relaxed">{comment.content}</p>
+          )}
         </div>
         <div className="text-muted-foreground mt-1 flex items-center gap-3 pl-3 text-xs">
           <span>{formatTime(comment.createdAt)}</span>
@@ -258,9 +333,10 @@ interface PostCardProps {
   currentUserId: string
   usersMap: Record<string, User>
   onDelete?: (postId: string) => void
+  onUpdate?: (updated: PostResponse) => void
 }
 
-export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardProps) {
+export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: PostCardProps) {
   const { user: currentUser } = useAuth()
 
   const [reactionCount, setReactionCount] = useState(post.reactionCount)
@@ -272,13 +348,40 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
   const [newComment, setNewComment] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
 
-  // ── Author map: merges parent map + current user + comment authors ──────────
-  const seedMap = currentUser ? { ...usersMap, [currentUser.id]: currentUser } : usersMap
+  // Post inline edit state
+  const [isEditingPost, setIsEditingPost] = useState(false)
+  const [editPostContent, setEditPostContent] = useState(post.content)
+  const [savingPost, setSavingPost] = useState(false)
 
+  // ── Role-based UI flags ────────────────────────────────────────────────────
+  const currentUserRoles: string[] = currentUser?.roles ?? []
+  const isOwn = post.authorId === currentUserId
+  const isTeamLeader = currentUserRoles.includes(ROLE.TEAM_LEADER)
+  const isDeptLeader =
+    currentUserRoles.includes(ROLE.DEPARTMENT_LEADER) ||
+    currentUserRoles.includes('DEPARTMENT_MANAGER')
+  const isCeo = currentUserRoles.includes(ROLE.CEO)
+
+  /**
+   * A user can edit a post if:
+   * - They are the author, OR
+   * - They are a CEO (edit anything), OR
+   * - They are a team leader AND the post belongs to a team (backend verifies it's THEIR team), OR
+   * - They are a dept leader AND the post belongs to a dept or team (backend verifies their scope).
+   *
+   * We show the button optimistically and let the backend enforce the exact scope.
+   */
+  const canEditPost =
+    isOwn ||
+    isCeo ||
+    (isTeamLeader && !!post.teamId) ||
+    (isDeptLeader && (!!post.departmentId || !!post.teamId))
+
+  // ── Author map ─────────────────────────────────────────────────────────────
+  const seedMap = currentUser ? { ...usersMap, [currentUser.id]: currentUser } : usersMap
   const { localMap: commentUsersMap, resolveAuthors } = useCommentAuthors(seedMap)
 
   const author = commentUsersMap[post.authorId]
-  const isOwn = post.authorId === currentUserId
 
   // Fetch initial reaction state
   useEffect(() => {
@@ -297,7 +400,6 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
     try {
       const page = await commentApi.getComments(post.id)
       setComments(page.content)
-      // Resolve all comment authors in one shot
       await resolveAuthors(page.content.map((c) => c.authorId))
     } catch (e) {
       console.error('Failed to load comments:', e)
@@ -328,13 +430,43 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
 
   const handleDelete = async () => {
     try {
-      const { postApi } = await import('@/lib/api')
       await postApi.delete(post.id)
       onDelete?.(post.id)
     } catch (e) {
       console.error('Failed to delete post:', e)
     }
   }
+
+  // ── Post inline edit ───────────────────────────────────────────────────────
+
+  const handleEditPostSave = async () => {
+    if (!editPostContent.trim() || savingPost) return
+    setSavingPost(true)
+    try {
+      const updated = await postApi.update(post.id, {
+        content: editPostContent.trim(),
+        postType: post.postType,
+        postVisibility: post.postVisibility as 'PUBLIC' | 'PRIVATE',
+        teamId: post.teamId ?? undefined,
+        departmentId: post.departmentId ?? undefined,
+        isPinned: post.isPinned,
+        isAIGenerated: post.isAIGenerated,
+      })
+      onUpdate?.(updated)
+      setIsEditingPost(false)
+    } catch (e) {
+      console.error('Failed to update post:', e)
+    } finally {
+      setSavingPost(false)
+    }
+  }
+
+  const handleEditPostCancel = () => {
+    setEditPostContent(post.content)
+    setIsEditingPost(false)
+  }
+
+  // ── Comment helpers ────────────────────────────────────────────────────────
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -345,7 +477,6 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
       setComments((prev) => [...prev, comment])
       setCommentCount((c) => c + 1)
       setNewComment('')
-      // Resolve the new comment's author (will be a no-op if current user already seeded)
       await resolveAuthors([comment.authorId])
     } catch (e) {
       console.error('Failed to add comment:', e)
@@ -357,6 +488,10 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
   const handleCommentDeleted = (commentId: string) => {
     setComments((prev) => prev.filter((c) => c.id !== commentId))
     setCommentCount((c) => Math.max(0, c - 1))
+  }
+
+  const handleCommentUpdated = (updated: CommentResponse) => {
+    setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
   }
 
   const typeStyle = POST_TYPE_STYLES[post.postType] ?? POST_TYPE_STYLES.DISCUSSION
@@ -381,8 +516,8 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
             <p className="text-muted-foreground text-xs">{formatTime(post.createdAt)}</p>
           </div>
 
-          {/* Options menu (own posts only) */}
-          {isOwn && (
+          {/* Options menu */}
+          {(canEditPost || isOwn) && !isEditingPost && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
@@ -390,22 +525,59 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
-                  onClick={handleDelete}
-                >
-                  <Trash2 size={14} className="mr-2" />
-                  Delete post
-                </DropdownMenuItem>
+                {canEditPost && (
+                  <DropdownMenuItem onClick={() => setIsEditingPost(true)}>
+                    <Pencil size={14} className="mr-2" />
+                    Edit post
+                  </DropdownMenuItem>
+                )}
+                {isOwn && (
+                  <>
+                    {canEditPost && <DropdownMenuSeparator />}
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={handleDelete}
+                    >
+                      <Trash2 size={14} className="mr-2" />
+                      Delete post
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           )}
         </div>
       </div>
 
-      {/* Content */}
-      <p className="text-foreground mb-4 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+      {/* Content — normal view or inline edit */}
+      {isEditingPost ? (
+        <div className="mb-4 space-y-2">
+          <textarea
+            value={editPostContent}
+            onChange={(e) => setEditPostContent(e.target.value)}
+            maxLength={5000}
+            rows={5}
+            className="bg-muted text-foreground placeholder-muted-foreground focus:ring-primary/30 w-full rounded-xl px-4 py-3 text-sm leading-relaxed focus:ring-2 focus:outline-none dark:bg-slate-800"
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={handleEditPostCancel}>
+              <X size={14} className="mr-1" />
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleEditPostSave}
+              disabled={!editPostContent.trim() || savingPost}
+            >
+              <Check size={14} className="mr-1" />
+              Save
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-foreground mb-4 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+      )}
 
       {/* Stats bar */}
       <div className="text-muted-foreground border-border flex items-center gap-6 border-t border-b py-2.5 text-sm dark:border-slate-700">
@@ -457,7 +629,7 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
       {/* Comment section */}
       {showComments && (
         <div className="border-border mt-2 border-t pt-4 dark:border-slate-700">
-          {/* Add comment — always shows current user's avatar correctly */}
+          {/* Add comment */}
           <form onSubmit={handleAddComment} className="mb-4 flex items-center gap-3">
             <UserAvatar user={commentUsersMap[currentUserId]} size="sm" />
             <div className="flex flex-1 items-center gap-2">
@@ -499,8 +671,10 @@ export function PostCard({ post, currentUserId, usersMap, onDelete }: PostCardPr
                   comment={c}
                   usersMap={commentUsersMap}
                   currentUserId={currentUserId}
-                  postId={post.id}
+                  currentUserRoles={currentUserRoles}
+                  post={post}
                   onDeleted={handleCommentDeleted}
+                  onUpdated={handleCommentUpdated}
                 />
               ))}
               {comments.length === 0 && (

@@ -148,12 +148,15 @@ services:
       - MONGO_POST_DATABASE=post_db
       - EUREKA_URI=http://eureka:8761/eureka/
       - JWT_SECRET=${JWT_SECRET}
+      - ORGANIZATION_SERVICE_URL=http://organization-service:8082
     depends_on:
       mongodb:
         condition: service_healthy
       eureka:
         condition: service_healthy
       user-service:
+        condition: service_started
+      organization-service:
         condition: service_started
     networks:
       - moonside-network
