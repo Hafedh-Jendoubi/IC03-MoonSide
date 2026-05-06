@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  BadgeCheck,
 } from 'lucide-react'
 import {
   departmentApi,
@@ -36,12 +37,21 @@ import Link from 'next/link'
 interface DepartmentCardProps {
   dept: DepartmentResponse
   teamCount: number
+  isJoined: boolean
 }
 
-function DepartmentCard({ dept, teamCount }: DepartmentCardProps) {
+function DepartmentCard({ dept, teamCount, isJoined }: DepartmentCardProps) {
   return (
     <Link href={`/department/${dept.id}`}>
-      <div className="group overflow-hidden rounded-lg transition-all duration-300 hover:shadow-lg">
+      <div className="group relative overflow-hidden rounded-lg transition-all duration-300 hover:shadow-lg">
+        {/* Joined Badge */}
+        {isJoined && (
+          <div className="absolute top-3 right-3 z-10 flex items-center gap-1 rounded-full bg-green-500 px-2.5 py-1 text-xs font-semibold text-white shadow-md">
+            <BadgeCheck className="h-3 w-3" />
+            Joined
+          </div>
+        )}
+
         {/* Image Container */}
         <div className="relative h-48 w-full overflow-hidden bg-gradient-to-br from-slate-400 to-slate-600">
           {dept.bannerUrl ? (
@@ -59,7 +69,9 @@ function DepartmentCard({ dept, teamCount }: DepartmentCardProps) {
         </div>
 
         {/* Content Container */}
-        <div className="bg-background border-border flex h-full flex-col space-y-3 border border-t-0 p-4">
+        <div
+          className={`bg-background border-border flex h-full flex-col space-y-3 border border-t-0 p-4 ${isJoined ? 'border-l-4 border-l-green-500' : ''}`}
+        >
           {/* Department Code/ID */}
           <div className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
             DEPT.{dept.id.slice(0, 8).toUpperCase()}
@@ -404,6 +416,11 @@ export default function DiscoverPage() {
 
   const joinedCount = teams.filter((t) => t.isMember).length
 
+  // Get departments that user has joined (has at least one team in them)
+  const joinedDepartmentIds = new Set(
+    myTeams.map((t) => t.departmentId).filter((id): id is string => id !== undefined)
+  )
+
   // Sort departments
   const sortedDepartments = (() => {
     let filtered = departments.filter((d) =>
@@ -481,25 +498,6 @@ export default function DiscoverPage() {
           )}
 
           {/* --------------------------------------------------------------- */}
-          {/* JOINED DEPARTMENTS (MY DEPARTMENTS)                            */}
-          {/* --------------------------------------------------------------- */}
-          {myTeams.length > 0 && (
-            <div className="space-y-6">
-              <h2 className="text-foreground text-2xl font-semibold">Joined Departments</h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {Array.from(new Set(myTeams.map((t) => t.departmentId)))
-                  .map((deptId) => {
-                    const dept = departments.find((d) => d.id === deptId)
-                    if (!dept) return null
-                    const deptTeams = teams.filter((t) => t.departmentId === deptId)
-                    return <DepartmentCard key={dept.id} dept={dept} teamCount={deptTeams.length} />
-                  })
-                  .filter(Boolean)}
-              </div>
-            </div>
-          )}
-
-          {/* --------------------------------------------------------------- */}
           {/* SEARCH & FILTER DEPARTMENTS                                    */}
           {/* --------------------------------------------------------------- */}
           <div className="space-y-4">
@@ -559,12 +557,31 @@ export default function DiscoverPage() {
                 <p className="text-muted-foreground">No departments match your search.</p>
               </div>
             ) : (
-              <div className="space-y-6">
-                <h2 className="text-foreground text-xl font-semibold">Departments</h2>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-foreground text-xl font-semibold">All Departments</h2>
+                  {joinedDepartmentIds.size > 0 && (
+                    <div className="bg-primary/10 text-primary flex items-center gap-2 rounded-full px-3 py-1 text-sm">
+                      <BadgeCheck className="h-4 w-4" />
+                      <span>
+                        You're a member of {joinedDepartmentIds.size} department
+                        {joinedDepartmentIds.size !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {sortedDepartments.slice(0, displayedDeptCount).map((dept) => {
+                  {sortedDepartments.map((dept) => {
                     const deptTeams = teams.filter((t) => t.departmentId === dept.id)
-                    return <DepartmentCard key={dept.id} dept={dept} teamCount={deptTeams.length} />
+                    const isJoined = joinedDepartmentIds.has(dept.id)
+                    return (
+                      <DepartmentCard
+                        key={dept.id}
+                        dept={dept}
+                        teamCount={deptTeams.length}
+                        isJoined={isJoined}
+                      />
+                    )
                   })}
                 </div>
 

@@ -128,11 +128,17 @@ function TeamSidebarCard({
   setMembersTeam,
 }: TeamSidebarCardProps) {
   const canView = canViewTeamMembers(user, team, department, userTeamIds)
+  const isMember = userTeamIds.includes(team.id)
+
   return (
     <div className="group relative">
       <Link href={`/team/${team.id}`}>
         <div
-          className="hover:bg-muted border-border/50 block rounded-lg border p-3 transition-colors"
+          className={`hover:bg-muted block rounded-lg border p-3 transition-colors ${
+            isMember
+              ? 'border-green-500/50 bg-green-500/5 hover:bg-green-500/10'
+              : 'border-border/50'
+          }`}
           title={team.name}
         >
           <div className="flex items-center gap-2">
@@ -148,9 +154,17 @@ function TeamSidebarCard({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <h4 className="text-foreground line-clamp-1 text-sm font-medium" title={team.name}>
-                {team.name}
-              </h4>
+              <div className="flex items-center gap-2">
+                <h4 className="text-foreground line-clamp-1 text-sm font-medium" title={team.name}>
+                  {team.name}
+                </h4>
+                {isMember && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-green-600 dark:text-green-400">
+                    <CheckCircle2 className="h-2.5 w-2.5" />
+                    Member
+                  </span>
+                )}
+              </div>
               <button
                 onClick={(e) => {
                   e.preventDefault()
@@ -1509,7 +1523,7 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
   )
 }
 
-// ── Page ───────────────────────────────────────────��──────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DepartmentFeedPage() {
   const params = useParams()
@@ -1747,15 +1761,16 @@ export default function DepartmentFeedPage() {
               <div className="border-border bg-background sticky top-4 rounded-lg border p-4">
                 <h3 className="text-foreground mb-4 text-lg font-semibold">Teams</h3>
 
-                {/* Public Teams Section */}
-                {teams.filter((t) => t.teamVisibility === 'PUBLIC').length > 0 && (
+                {/* Joined Teams Section - Show teams user is a member of */}
+                {teams.filter((t) => userTeamIds.includes(t.id)).length > 0 && (
                   <div className="mb-6">
-                    <h4 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wider uppercase">
-                      🔓 Public Teams
+                    <h4 className="mb-3 flex items-center gap-1.5 text-xs font-semibold tracking-wider text-green-600 uppercase dark:text-green-400">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Your Teams
                     </h4>
                     <div className="space-y-2">
                       {teams
-                        .filter((t) => t.teamVisibility === 'PUBLIC')
+                        .filter((t) => userTeamIds.includes(t.id))
                         .map((team) => (
                           <TeamSidebarCard
                             key={team.id}
@@ -1770,15 +1785,16 @@ export default function DepartmentFeedPage() {
                   </div>
                 )}
 
-                {/* Private Teams Section */}
-                {teams.filter((t) => t.teamVisibility === 'PRIVATE').length > 0 && (
-                  <div>
+                {/* Public Teams Section - excluding joined teams */}
+                {teams.filter((t) => t.teamVisibility === 'PUBLIC' && !userTeamIds.includes(t.id))
+                  .length > 0 && (
+                  <div className="mb-6">
                     <h4 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wider uppercase">
-                      🔒 Private Teams
+                      🔓 Public Teams
                     </h4>
                     <div className="space-y-2">
                       {teams
-                        .filter((t) => t.teamVisibility === 'PRIVATE')
+                        .filter((t) => t.teamVisibility === 'PUBLIC' && !userTeamIds.includes(t.id))
                         .map((team) => (
                           <TeamSidebarCard
                             key={team.id}
@@ -1791,6 +1807,39 @@ export default function DepartmentFeedPage() {
                         ))}
                     </div>
                   </div>
+                )}
+
+                {/* Private Teams Section - excluding joined teams */}
+                {teams.filter((t) => t.teamVisibility === 'PRIVATE' && !userTeamIds.includes(t.id))
+                  .length > 0 && (
+                  <div>
+                    <h4 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wider uppercase">
+                      🔒 Private Teams
+                    </h4>
+                    <div className="space-y-2">
+                      {teams
+                        .filter(
+                          (t) => t.teamVisibility === 'PRIVATE' && !userTeamIds.includes(t.id)
+                        )
+                        .map((team) => (
+                          <TeamSidebarCard
+                            key={team.id}
+                            team={team}
+                            department={department}
+                            user={user}
+                            userTeamIds={userTeamIds}
+                            setMembersTeam={setMembersTeam}
+                          />
+                        ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Show message if no teams available */}
+                {teams.length === 0 && (
+                  <p className="text-muted-foreground py-4 text-center text-sm">
+                    No teams in this department yet.
+                  </p>
                 )}
               </div>
             </div>
