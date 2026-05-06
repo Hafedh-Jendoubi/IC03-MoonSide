@@ -49,6 +49,20 @@ public class CommentService {
     }
 
     /**
+     * Returns all direct replies to a given comment, sorted oldest-first.
+     * Replies can themselves have replies (infinitely nested) — the client
+     * decides how deep to recurse.
+     */
+    public Page<CommentResponse> getReplies(String commentId, int page, int size) {
+        if (!commentRepository.existsById(commentId)) {
+            throw new IllegalArgumentException("Comment not found: " + commentId);
+        }
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "createdAt"));
+        return commentRepository.findByParentId(commentId, pageable)
+                .map(this::toResponse);
+    }
+
+    /**
      * Updates a comment if the requester is authorised:
      * <ul>
      *   <li><b>Owner</b> – always allowed to edit their own comment.</li>
@@ -72,6 +86,8 @@ public class CommentService {
     public void deleteComment(String commentId, String requesterId) {
         Comment comment = findComment(commentId);
         assertOwner(comment.getAuthorId(), requesterId);
+        // Cascade-delete all nested replies
+        deleteRepliesRecursively(commentId);
         reactionRepository.deleteByReactableTypeAndReactableId("COMMENT", commentId);
         commentRepository.delete(comment);
     }
@@ -121,7 +137,7 @@ public class CommentService {
     // ── Mapping ───────────────────────────────────────────────────────────────
 
     private CommentResponse toResponse(Comment c) {
-        long replyCount = commentRepository.findByParentId(c.getId()).size();
+        long replyCount = commentRepository.countByParentId(c.getId());
         long reactionCount = reactionRepository.countByReactableTypeAndReactableId("COMMENT", c.getId());
         return CommentResponse.builder()
                 .id(c.getId()).authorId(c.getAuthorId()).postId(c.getPostId())
@@ -133,6 +149,15 @@ public class CommentService {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private void deleteRepliesRecursively(String parentCommentId) {
+        List<Comment> replies = commentRepository.findAllReplies(parentCommentId);
+        for (Comment reply : replies) {
+            deleteRepliesRecursively(reply.getId());
+            reactionRepository.deleteByReactableTypeAndReactableId("COMMENT", reply.getId());
+            commentRepository.delete(reply);
+        }
+    }
 
     private Comment findComment(String id) {
         return commentRepository.findById(id)

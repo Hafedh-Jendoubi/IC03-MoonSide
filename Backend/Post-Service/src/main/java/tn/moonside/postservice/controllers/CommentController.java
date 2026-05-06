@@ -41,6 +41,20 @@ public class CommentController {
         return ResponseEntity.ok(ApiResponse.success(commentService.getTopLevelComments(postId, page, size)));
     }
 
+    /**
+     * GET /posts/{postId}/comments/{commentId}/replies
+     * Returns a paginated list of direct replies to a comment.
+     * Clients may call this recursively to load deeper nesting levels.
+     */
+    @GetMapping("/{commentId}/replies")
+    public ResponseEntity<ApiResponse<Page<CommentResponse>>> getReplies(
+            @PathVariable String postId,
+            @PathVariable String commentId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(commentService.getReplies(commentId, page, size)));
+    }
+
     @PutMapping("/{commentId}")
     public ResponseEntity<ApiResponse<CommentResponse>> updateComment(
             @PathVariable String postId,

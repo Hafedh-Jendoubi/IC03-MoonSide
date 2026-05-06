@@ -850,6 +850,12 @@ export const commentApi = {
   getComments: (postId: string, page = 0, size = 20) =>
     apiFetch<PageResponse<CommentResponse>>(`/posts/${postId}/comments?page=${page}&size=${size}`),
 
+  /** Fetch direct replies to a comment (paginated). */
+  getReplies: (postId: string, commentId: string, page = 0, size = 20) =>
+    apiFetch<PageResponse<CommentResponse>>(
+      `/posts/${postId}/comments/${commentId}/replies?page=${page}&size=${size}`
+    ),
+
   addComment: (postId: string, data: CommentRequest) =>
     apiFetch<CommentResponse>(`/posts/${postId}/comments`, {
       method: 'POST',

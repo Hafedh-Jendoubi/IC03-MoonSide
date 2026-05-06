@@ -16,6 +16,7 @@ import {
   Pencil,
   X,
   Check,
+  CornerDownRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -86,8 +87,15 @@ function formatTime(dateStr: string): string {
 
 // ── UserAvatar ────────────────────────────────────────────────────────────────
 
-function UserAvatar({ user, size = 'md' }: { user: User | null | undefined; size?: 'sm' | 'md' }) {
-  const sizeClass = size === 'sm' ? 'h-8 w-8 text-xs' : 'h-12 w-12 text-sm'
+function UserAvatar({
+  user,
+  size = 'md',
+}: {
+  user: User | null | undefined
+  size?: 'sm' | 'md' | 'xs'
+}) {
+  const sizeClass =
+    size === 'xs' ? 'h-6 w-6 text-[10px]' : size === 'sm' ? 'h-8 w-8 text-xs' : 'h-12 w-12 text-sm'
   if (!user) {
     return (
       <div
@@ -113,6 +121,7 @@ function UserAvatar({ user, size = 'md' }: { user: User | null | undefined; size
 }
 
 // ── useCommentAuthors ─────────────────────────────────────────────────────────
+
 function useCommentAuthors(seedMap: Record<string, User>) {
   const [localMap, setLocalMap] = useState<Record<string, User>>(seedMap)
   const fetchedIds = useRef<Set<string>>(new Set(Object.keys(seedMap)))
@@ -151,29 +160,115 @@ function useCommentAuthors(seedMap: Record<string, User>) {
   return { localMap, resolveAuthors }
 }
 
-// ── CommentRow ────────────────────────────────────────────────────────────────
+// ── ReplyInput ────────────────────────────────────────────────────────────────
 
-function CommentRow({
-  comment,
-  usersMap,
+function ReplyInput({
+  postId,
+  parentCommentId,
   currentUserId,
-  currentUserRoles,
-  post,
-  onDeleted,
-  onUpdated,
+  usersMap,
+  onAdded,
+  onCancel,
+  depth,
 }: {
+  postId: string
+  parentCommentId: string
+  currentUserId: string
+  usersMap: Record<string, User>
+  onAdded: (reply: CommentResponse) => void
+  onCancel: () => void
+  depth: number
+}) {
+  const [text, setText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!text.trim() || submitting) return
+    setSubmitting(true)
+    try {
+      const reply = await commentApi.addComment(postId, {
+        content: text.trim(),
+        parentId: parentCommentId,
+      })
+      onAdded(reply)
+      setText('')
+    } catch (err) {
+      console.error('Failed to post reply:', err)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-2 flex items-center gap-2">
+      <UserAvatar user={usersMap[currentUserId]} size={depth >= 2 ? 'xs' : 'sm'} />
+      <div className="flex flex-1 items-center gap-2">
+        <input
+          ref={inputRef}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Write a reply…"
+          maxLength={2000}
+          className="bg-muted text-foreground placeholder-muted-foreground focus:ring-primary/30 flex-1 rounded-full px-4 py-1.5 text-sm focus:ring-2 focus:outline-none dark:bg-slate-800"
+        />
+        <Button
+          type="submit"
+          size="icon"
+          disabled={!text.trim() || submitting}
+          className="h-7 w-7 shrink-0"
+        >
+          <Send size={12} />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          onClick={onCancel}
+          className="h-7 w-7 shrink-0"
+        >
+          <X size={12} />
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+// ── CommentRow (recursive) ────────────────────────────────────────────────────
+
+interface CommentRowProps {
   comment: CommentResponse
+  postId: string
   usersMap: Record<string, User>
   currentUserId: string
   currentUserRoles: string[]
   post: PostResponse
   onDeleted: (id: string) => void
   onUpdated: (updated: CommentResponse) => void
-}) {
+  resolveAuthors: (ids: string[]) => Promise<void>
+  depth?: number
+}
+
+function CommentRow({
+  comment,
+  postId,
+  usersMap,
+  currentUserId,
+  currentUserRoles,
+  post,
+  onDeleted,
+  onUpdated,
+  resolveAuthors,
+  depth = 0,
+}: CommentRowProps) {
   const author = usersMap[comment.authorId]
   const isOwn = comment.authorId === currentUserId
 
-  // Leadership edit rights: team leader of the post's team, or dept manager of the post's dept
   const isTeamLeader = currentUserRoles.includes(ROLE.TEAM_LEADER)
   const isDeptLeader =
     currentUserRoles.includes(ROLE.DEPARTMENT_LEADER) ||
@@ -186,17 +281,50 @@ function CommentRow({
     (isTeamLeader && !!post.teamId) ||
     (isDeptLeader && (!!post.departmentId || !!post.teamId))
 
+  // Like state
   const [likeCount, setLikeCount] = useState(comment.reactionCount)
   const [liked, setLiked] = useState(false)
 
-  // Inline edit state
+  // Edit state
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(comment.content)
   const [saving, setSaving] = useState(false)
 
+  // Reply state
+  const [showReplyInput, setShowReplyInput] = useState(false)
+  const [replies, setReplies] = useState<CommentResponse[]>([])
+  const [replyCount, setReplyCount] = useState(comment.replyCount)
+  const [showReplies, setShowReplies] = useState(false)
+  const [loadingReplies, setLoadingReplies] = useState(false)
+  const [repliesLoaded, setRepliesLoaded] = useState(false)
+
+  // Limit visual indentation depth to avoid layout issues
+  const avatarSize: 'sm' | 'xs' = depth >= 1 ? 'xs' : 'sm'
+  const indentClass = depth >= 3 ? '' : '' // CSS handles the margin
+
+  const loadReplies = useCallback(async () => {
+    if (loadingReplies || repliesLoaded) return
+    setLoadingReplies(true)
+    try {
+      const page = await commentApi.getReplies(postId, comment.id)
+      setReplies(page.content)
+      await resolveAuthors(page.content.map((r) => r.authorId))
+      setRepliesLoaded(true)
+    } catch (err) {
+      console.error('Failed to load replies:', err)
+    } finally {
+      setLoadingReplies(false)
+    }
+  }, [postId, comment.id, loadingReplies, repliesLoaded, resolveAuthors])
+
+  const toggleReplies = () => {
+    if (!showReplies && !repliesLoaded) loadReplies()
+    setShowReplies((s) => !s)
+  }
+
   const handleLike = async () => {
     try {
-      const res = await reactionApi.reactToComment(post.id, comment.id, {
+      const res = await reactionApi.reactToComment(postId, comment.id, {
         reactionTypeCode: 'LIKE',
       })
       if (res) {
@@ -213,7 +341,7 @@ function CommentRow({
 
   const handleDelete = async () => {
     try {
-      await commentApi.deleteComment(post.id, comment.id)
+      await commentApi.deleteComment(postId, comment.id)
       onDeleted(comment.id)
     } catch (e) {
       console.error('Failed to delete comment:', e)
@@ -224,7 +352,7 @@ function CommentRow({
     if (!editContent.trim() || saving) return
     setSaving(true)
     try {
-      const updated = await commentApi.updateComment(post.id, comment.id, {
+      const updated = await commentApi.updateComment(postId, comment.id, {
         content: editContent.trim(),
       })
       onUpdated(updated)
@@ -236,24 +364,41 @@ function CommentRow({
     }
   }
 
-  const handleEditCancel = () => {
-    setEditContent(comment.content)
-    setIsEditing(false)
+  const handleReplyAdded = async (reply: CommentResponse) => {
+    setReplies((prev) => [...prev, reply])
+    setReplyCount((c) => c + 1)
+    setShowReplies(true)
+    setRepliesLoaded(true)
+    setShowReplyInput(false)
+    await resolveAuthors([reply.authorId])
+  }
+
+  const handleReplyDeleted = (id: string) => {
+    setReplies((prev) => prev.filter((r) => r.id !== id))
+    setReplyCount((c) => Math.max(0, c - 1))
+  }
+
+  const handleReplyUpdated = (updated: CommentResponse) => {
+    setReplies((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
   }
 
   return (
-    <div className="flex gap-3">
-      <UserAvatar user={author} size="sm" />
-      <div className="flex-1">
+    <div
+      className={`flex gap-2 ${depth > 0 ? 'border-border ml-8 border-l pl-3 dark:border-slate-700' : ''}`}
+    >
+      <UserAvatar user={author} size={avatarSize} />
+
+      <div className="min-w-0 flex-1">
+        {/* Bubble */}
         <div className="bg-muted rounded-2xl px-4 py-3 dark:bg-slate-800">
-          <div className="flex items-center justify-between">
-            <p className="text-foreground text-sm font-semibold">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-foreground truncate text-sm font-semibold">
               {author ? getFullName(author) : 'Unknown user'}
             </p>
             {(isOwn || canEdit) && !isEditing && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6">
+                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
                     <MoreHorizontal size={14} />
                   </Button>
                 </DropdownMenuTrigger>
@@ -292,7 +437,15 @@ function CommentRow({
                 autoFocus
               />
               <div className="flex justify-end gap-2">
-                <Button size="sm" variant="ghost" onClick={handleEditCancel} className="h-7 px-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setEditContent(comment.content)
+                    setIsEditing(false)
+                  }}
+                  className="h-7 px-2"
+                >
                   <X size={14} className="mr-1" />
                   Cancel
                 </Button>
@@ -311,16 +464,79 @@ function CommentRow({
             <p className="text-foreground mt-1 text-sm leading-relaxed">{comment.content}</p>
           )}
         </div>
-        <div className="text-muted-foreground mt-1 flex items-center gap-3 pl-3 text-xs">
+
+        {/* Action row */}
+        <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-3 pl-3 text-xs">
           <span>{formatTime(comment.createdAt)}</span>
+
           <button
             onClick={handleLike}
             className={`hover:text-primary transition-colors ${liked ? 'text-primary font-semibold' : ''}`}
           >
             {liked ? '❤️' : '🤍'} {likeCount > 0 ? likeCount : ''}
           </button>
+
+          <button
+            onClick={() => setShowReplyInput((s) => !s)}
+            className="hover:text-primary flex items-center gap-1 font-medium transition-colors"
+          >
+            <CornerDownRight size={12} />
+            Reply
+          </button>
+
+          {replyCount > 0 && (
+            <button
+              onClick={toggleReplies}
+              className="hover:text-primary flex items-center gap-1 transition-colors"
+            >
+              {showReplies ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showReplies ? 'Hide' : 'View'} {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
+            </button>
+          )}
+
           {comment.isEdited && <span className="italic">edited</span>}
         </div>
+
+        {/* Reply input */}
+        {showReplyInput && (
+          <ReplyInput
+            postId={postId}
+            parentCommentId={comment.id}
+            currentUserId={currentUserId}
+            usersMap={usersMap}
+            onAdded={handleReplyAdded}
+            onCancel={() => setShowReplyInput(false)}
+            depth={depth}
+          />
+        )}
+
+        {/* Nested replies */}
+        {showReplies && (
+          <div className="mt-3 space-y-3">
+            {loadingReplies ? (
+              <div className="ml-8 flex gap-2">
+                <div className="bg-muted h-6 w-6 animate-pulse rounded-full dark:bg-slate-700" />
+                <div className="bg-muted h-12 flex-1 animate-pulse rounded-2xl dark:bg-slate-700" />
+              </div>
+            ) : (
+              replies.map((reply) => (
+                <CommentRow
+                  key={reply.id}
+                  comment={reply}
+                  postId={postId}
+                  usersMap={usersMap}
+                  currentUserId={currentUserId}
+                  currentUserRoles={currentUserRoles}
+                  post={post}
+                  onDeleted={handleReplyDeleted}
+                  onUpdated={handleReplyUpdated}
+                  resolveAuthors={resolveAuthors}
+                  depth={depth + 1}
+                />
+              ))
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -348,12 +564,10 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
   const [newComment, setNewComment] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
 
-  // Post inline edit state
   const [isEditingPost, setIsEditingPost] = useState(false)
   const [editPostContent, setEditPostContent] = useState(post.content)
   const [savingPost, setSavingPost] = useState(false)
 
-  // ── Role-based UI flags ────────────────────────────────────────────────────
   const currentUserRoles: string[] = currentUser?.roles ?? []
   const isOwn = post.authorId === currentUserId
   const isTeamLeader = currentUserRoles.includes(ROLE.TEAM_LEADER)
@@ -362,28 +576,17 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
     currentUserRoles.includes('DEPARTMENT_MANAGER')
   const isCeo = currentUserRoles.includes(ROLE.CEO)
 
-  /**
-   * A user can edit a post if:
-   * - They are the author, OR
-   * - They are a CEO (edit anything), OR
-   * - They are a team leader AND the post belongs to a team (backend verifies it's THEIR team), OR
-   * - They are a dept leader AND the post belongs to a dept or team (backend verifies their scope).
-   *
-   * We show the button optimistically and let the backend enforce the exact scope.
-   */
   const canEditPost =
     isOwn ||
     isCeo ||
     (isTeamLeader && !!post.teamId) ||
     (isDeptLeader && (!!post.departmentId || !!post.teamId))
 
-  // ── Author map ─────────────────────────────────────────────────────────────
   const seedMap = currentUser ? { ...usersMap, [currentUser.id]: currentUser } : usersMap
   const { localMap: commentUsersMap, resolveAuthors } = useCommentAuthors(seedMap)
 
   const author = commentUsersMap[post.authorId]
 
-  // Fetch initial reaction state
   useEffect(() => {
     reactionApi
       .getPostReactions(post.id)
@@ -437,8 +640,6 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
     }
   }
 
-  // ── Post inline edit ───────────────────────────────────────────────────────
-
   const handleEditPostSave = async () => {
     if (!editPostContent.trim() || savingPost) return
     setSavingPost(true)
@@ -460,13 +661,6 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
       setSavingPost(false)
     }
   }
-
-  const handleEditPostCancel = () => {
-    setEditPostContent(post.content)
-    setIsEditingPost(false)
-  }
-
-  // ── Comment helpers ────────────────────────────────────────────────────────
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -516,7 +710,6 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
             <p className="text-muted-foreground text-xs">{formatTime(post.createdAt)}</p>
           </div>
 
-          {/* Options menu */}
           {(canEditPost || isOwn) && !isEditingPost && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -549,7 +742,7 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
         </div>
       </div>
 
-      {/* Content — normal view or inline edit */}
+      {/* Content */}
       {isEditingPost ? (
         <div className="mb-4 space-y-2">
           <textarea
@@ -561,7 +754,14 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
             autoFocus
           />
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={handleEditPostCancel}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setEditPostContent(post.content)
+                setIsEditingPost(false)
+              }}
+            >
               <X size={14} className="mr-1" />
               Cancel
             </Button>
@@ -629,7 +829,7 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
       {/* Comment section */}
       {showComments && (
         <div className="border-border mt-2 border-t pt-4 dark:border-slate-700">
-          {/* Add comment */}
+          {/* Add top-level comment */}
           <form onSubmit={handleAddComment} className="mb-4 flex items-center gap-3">
             <UserAvatar user={commentUsersMap[currentUserId]} size="sm" />
             <div className="flex flex-1 items-center gap-2">
@@ -669,12 +869,15 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
                 <CommentRow
                   key={c.id}
                   comment={c}
+                  postId={post.id}
                   usersMap={commentUsersMap}
                   currentUserId={currentUserId}
                   currentUserRoles={currentUserRoles}
                   post={post}
                   onDeleted={handleCommentDeleted}
                   onUpdated={handleCommentUpdated}
+                  resolveAuthors={resolveAuthors}
+                  depth={0}
                 />
               ))}
               {comments.length === 0 && (
