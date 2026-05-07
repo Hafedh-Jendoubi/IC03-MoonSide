@@ -27,9 +27,10 @@ public class OrganizationClient {
 
     public OrganizationClient(
             RestTemplate restTemplate,
-            @Value("${services.organization-service.url:http://localhost:8082}") String orgServiceUrl) {
+            @Value("${services.organization-service.url:http://localhost:8084}") String orgServiceUrl) {
         this.restTemplate = restTemplate;
         this.orgServiceUrl = orgServiceUrl;
+        log.info("OrganizationClient configured with base URL: {}", orgServiceUrl);
     }
 
     // ── Team checks ───────────────────────────────────────────────────────────
@@ -44,7 +45,7 @@ public class OrganizationClient {
             if (data == null) return false;
             return userId.equals(data.get("leadId"));
         } catch (Exception e) {
-            log.warn("isTeamLead check failed team={} user={}: {}", teamId, userId, e.getMessage());
+            log.error("isTeamLead check failed — org-service unreachable? team={} user={}: {}", teamId, userId, e.getMessage());
             return false;
         }
     }
@@ -61,7 +62,7 @@ public class OrganizationClient {
             if (data == null) return false;
             return userId.equals(data.get("managerId"));
         } catch (Exception e) {
-            log.warn("isDepartmentManager check failed dept={} user={}: {}", deptId, userId, e.getMessage());
+            log.error("isDepartmentManager check failed — org-service unreachable? dept={} user={}: {}", deptId, userId, e.getMessage());
             return false;
         }
     }
@@ -77,7 +78,7 @@ public class OrganizationClient {
             Object deptId = data.get("departmentId");
             return deptId instanceof String s ? s : null;
         } catch (Exception e) {
-            log.warn("getDepartmentIdForTeam failed team={}: {}", teamId, e.getMessage());
+            log.error("getDepartmentIdForTeam failed — org-service unreachable? team={}: {}", teamId, e.getMessage());
             return null;
         }
     }

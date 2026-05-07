@@ -148,7 +148,7 @@ services:
       - MONGO_POST_DATABASE=post_db
       - EUREKA_URI=http://eureka:8761/eureka/
       - JWT_SECRET=${JWT_SECRET}
-      - ORGANIZATION_SERVICE_URL=http://organization-service:8082
+      - ORGANIZATION_SERVICE_URL=http://organization-service:8084
     depends_on:
       mongodb:
         condition: service_healthy
