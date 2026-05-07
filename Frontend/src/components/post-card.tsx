@@ -5,6 +5,7 @@ import { PostResponse, CommentResponse, commentApi, reactionApi, userApi, postAp
 import { User, getFullName, PostType, ROLE, hasRole } from '@/lib/types'
 import {
   Heart,
+  ThumbsUp,
   MessageCircle,
   Share2,
   MoreHorizontal,
@@ -57,6 +58,160 @@ const POST_TYPE_STYLES: Record<PostType, { label: string; color: string }> = {
     color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
   },
 }
+
+// ── Reaction types ─────────────────────────────────────────────────────────────
+
+const REACTION_TYPES = [
+  { code: 'LIKE', emoji: '👍', label: 'Like', Icon: ThumbsUp },
+  { code: 'LOVE', emoji: '❤️', label: 'Love', Icon: Heart },
+  { code: 'CLAP', emoji: '👏', label: 'Clap', Icon: null },
+  { code: 'WOW', emoji: '😮', label: 'Wow', Icon: null },
+  { code: 'HAHA', emoji: '😂', label: 'Haha', Icon: null },
+] as const
+
+type ReactionCode = (typeof REACTION_TYPES)[number]['code']
+
+// ── ReactionPicker (floating emoji bar) ────────────────────────────────────────
+
+function ReactionPicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (code: ReactionCode) => void
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [onClose])
+
+  return (
+    <div
+      ref={ref}
+      className="border-border bg-background absolute bottom-full left-0 z-50 mb-2 flex items-center gap-1 rounded-full border px-2 py-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+    >
+      {REACTION_TYPES.map(({ code, emoji, label }) => (
+        <button
+          key={code}
+          title={label}
+          onClick={() => {
+            onSelect(code)
+            onClose()
+          }}
+          className="group flex flex-col items-center"
+        >
+          <span className="text-xl transition-transform duration-100 group-hover:-translate-y-1 group-hover:scale-125">
+            {emoji}
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ── ReactionButton (post & comment shared) ─────────────────────────────────────
+
+function ReactionButton({
+  reactionCode,
+  reactionCount,
+  onReact,
+  size = 'post',
+}: {
+  reactionCode: ReactionCode | null
+  reactionCount: number
+  onReact: (code: ReactionCode) => Promise<void>
+  size?: 'post' | 'comment'
+}) {
+  const [showPicker, setShowPicker] = useState(false)
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const active = REACTION_TYPES.find((r) => r.code === reactionCode)
+
+  const handlePressStart = () => {
+    holdTimer.current = setTimeout(() => setShowPicker(true), 400)
+  }
+  const handlePressEnd = () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current)
+  }
+
+  const handleClick = () => {
+    if (showPicker) return
+    // quick click: toggle LIKE or remove existing
+    if (active) {
+      onReact(active.code) // toggles off
+    } else {
+      onReact('LIKE')
+    }
+  }
+
+  const handleSelect = (code: ReactionCode) => {
+    onReact(code)
+  }
+
+  if (size === 'comment') {
+    // Compact inline style for comments
+    return (
+      <div ref={containerRef} className="relative inline-flex items-center">
+        {showPicker && (
+          <ReactionPicker onSelect={handleSelect} onClose={() => setShowPicker(false)} />
+        )}
+        <button
+          onMouseDown={handlePressStart}
+          onMouseUp={handlePressEnd}
+          onMouseLeave={handlePressEnd}
+          onTouchStart={handlePressStart}
+          onTouchEnd={handlePressEnd}
+          onClick={handleClick}
+          className={`hover:text-primary flex items-center gap-1 transition-colors ${active ? 'text-primary font-semibold' : ''}`}
+        >
+          <span className="text-sm leading-none">{active ? active.emoji : '👍'}</span>
+          {reactionCount > 0 && <span>{reactionCount}</span>}
+          {!active && <span>Like</span>}
+        </button>
+      </div>
+    )
+  }
+
+  // Post size — full button
+  return (
+    <div ref={containerRef} className="relative">
+      {showPicker && (
+        <ReactionPicker onSelect={handleSelect} onClose={() => setShowPicker(false)} />
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        onMouseDown={handlePressStart}
+        onMouseUp={handlePressEnd}
+        onMouseLeave={handlePressEnd}
+        onTouchStart={handlePressStart}
+        onTouchEnd={handlePressEnd}
+        onClick={handleClick}
+        className={`flex items-center gap-2 ${active ? 'text-primary' : 'text-muted-foreground'}`}
+      >
+        {active ? (
+          <>
+            <span className="text-base leading-none">{active.emoji}</span>
+            <span>{active.label}</span>
+          </>
+        ) : (
+          <>
+            <ThumbsUp size={18} className="transition-all" />
+            <span>Like</span>
+          </>
+        )}
+      </Button>
+    </div>
+  )
+}
+
+// ── formatTime ─────────────────────────────────────────────────────────────────
 
 function formatTime(dateStr: string): string {
   const normalized = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z'
@@ -281,9 +436,19 @@ function CommentRow({
     (isTeamLeader && !!post.teamId) ||
     (isDeptLeader && (!!post.departmentId || !!post.teamId))
 
-  // Like state
+  // Reaction state
   const [likeCount, setLikeCount] = useState(comment.reactionCount)
-  const [liked, setLiked] = useState(false)
+  const [reactionCode, setReactionCode] = useState<ReactionCode | null>(null)
+
+  useEffect(() => {
+    reactionApi
+      .getCommentReactions(postId, comment.id)
+      .then((summary) => {
+        setLikeCount(summary.total)
+        setReactionCode((summary.userReaction?.reactionTypeCode as ReactionCode) ?? null)
+      })
+      .catch(() => {})
+  }, [postId, comment.id])
 
   // Edit state
   const [isEditing, setIsEditing] = useState(false)
@@ -322,16 +487,17 @@ function CommentRow({
     setShowReplies((s) => !s)
   }
 
-  const handleLike = async () => {
+  const handleReact = async (code: ReactionCode) => {
     try {
+      const prev = reactionCode
       const res = await reactionApi.reactToComment(postId, comment.id, {
-        reactionTypeCode: 'LIKE',
+        reactionTypeCode: code,
       })
       if (res) {
-        setLiked(true)
-        setLikeCount((c) => c + 1)
+        setReactionCode(code)
+        if (!prev) setLikeCount((c) => c + 1)
       } else {
-        setLiked(false)
+        setReactionCode(null)
         setLikeCount((c) => Math.max(0, c - 1))
       }
     } catch (e) {
@@ -469,12 +635,12 @@ function CommentRow({
         <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-3 pl-3 text-xs">
           <span>{formatTime(comment.createdAt)}</span>
 
-          <button
-            onClick={handleLike}
-            className={`hover:text-primary transition-colors ${liked ? 'text-primary font-semibold' : ''}`}
-          >
-            {liked ? '❤️' : '🤍'} {likeCount > 0 ? likeCount : ''}
-          </button>
+          <ReactionButton
+            reactionCode={reactionCode}
+            reactionCount={likeCount}
+            onReact={handleReact}
+            size="comment"
+          />
 
           <button
             onClick={() => setShowReplyInput((s) => !s)}
@@ -556,7 +722,7 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
   const { user: currentUser } = useAuth()
 
   const [reactionCount, setReactionCount] = useState(post.reactionCount)
-  const [hasLiked, setHasLiked] = useState(false)
+  const [activeReaction, setActiveReaction] = useState<ReactionCode | null>(null)
   const [commentCount, setCommentCount] = useState(post.commentCount)
   const [comments, setComments] = useState<CommentResponse[]>([])
   const [showComments, setShowComments] = useState(false)
@@ -592,7 +758,7 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
       .getPostReactions(post.id)
       .then((summary) => {
         setReactionCount(summary.total)
-        setHasLiked(!!summary.userReaction)
+        setActiveReaction((summary.userReaction?.reactionTypeCode as ReactionCode) ?? null)
       })
       .catch(() => {})
   }, [post.id])
@@ -616,14 +782,15 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
     setShowComments((s) => !s)
   }
 
-  const handleLike = async () => {
+  const handleReact = async (code: ReactionCode) => {
     try {
-      const res = await reactionApi.reactToPost(post.id, { reactionTypeCode: 'LIKE' })
+      const prev = activeReaction
+      const res = await reactionApi.reactToPost(post.id, { reactionTypeCode: code })
       if (res) {
-        setHasLiked(true)
-        setReactionCount((c) => c + 1)
+        setActiveReaction(code)
+        if (!prev) setReactionCount((c) => c + 1)
       } else {
-        setHasLiked(false)
+        setActiveReaction(null)
         setReactionCount((c) => Math.max(0, c - 1))
       }
     } catch (e) {
@@ -791,15 +958,12 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
 
       {/* Action buttons */}
       <div className="my-3 flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleLike}
-          className={`flex items-center gap-2 ${hasLiked ? 'text-primary' : 'text-muted-foreground'}`}
-        >
-          <Heart size={18} fill={hasLiked ? 'currentColor' : 'none'} className="transition-all" />
-          {hasLiked ? 'Liked' : 'Like'}
-        </Button>
+        <ReactionButton
+          reactionCode={activeReaction}
+          reactionCount={reactionCount}
+          onReact={handleReact}
+          size="post"
+        />
         <Button
           variant="ghost"
           size="sm"
