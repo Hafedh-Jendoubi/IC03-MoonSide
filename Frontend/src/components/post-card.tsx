@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
 import { PostResponse, CommentResponse, commentApi, reactionApi, userApi, postApi } from '@/lib/api'
 import { User, getFullName, PostType, ROLE, hasRole } from '@/lib/types'
 import {
@@ -245,9 +246,11 @@ function formatTime(dateStr: string): string {
 function UserAvatar({
   user,
   size = 'md',
+  clickable = false,
 }: {
   user: User | null | undefined
   size?: 'sm' | 'md' | 'xs'
+  clickable?: boolean
 }) {
   const sizeClass =
     size === 'xs' ? 'h-6 w-6 text-[10px]' : size === 'sm' ? 'h-8 w-8 text-xs' : 'h-12 w-12 text-sm'
@@ -259,7 +262,7 @@ function UserAvatar({
     )
   }
   const name = getFullName(user)
-  return user.avatar ? (
+  const avatar = user.avatar ? (
     <img
       src={user.avatar}
       alt={name}
@@ -273,6 +276,19 @@ function UserAvatar({
       {user.lastName?.[0]?.toUpperCase()}
     </div>
   )
+
+  if (clickable && user.id) {
+    return (
+      <Link
+        href={`/profile/${user.id}`}
+        className="ring-offset-background focus-visible:ring-ring flex-shrink-0 rounded-full transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+      >
+        {avatar}
+      </Link>
+    )
+  }
+
+  return avatar
 }
 
 // ── useCommentAuthors ─────────────────────────────────────────────────────────
@@ -552,15 +568,22 @@ function CommentRow({
     <div
       className={`flex gap-2 ${depth > 0 ? 'border-border ml-8 border-l pl-3 dark:border-slate-700' : ''}`}
     >
-      <UserAvatar user={author} size={avatarSize} />
+      <UserAvatar user={author} size={avatarSize} clickable />
 
       <div className="min-w-0 flex-1">
         {/* Bubble */}
         <div className="bg-muted rounded-2xl px-4 py-3 dark:bg-slate-800">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-foreground truncate text-sm font-semibold">
-              {author ? getFullName(author) : 'Unknown user'}
-            </p>
+            {author ? (
+              <Link
+                href={`/profile/${author.id}`}
+                className="text-foreground truncate text-sm font-semibold hover:underline"
+              >
+                {getFullName(author)}
+              </Link>
+            ) : (
+              <p className="text-foreground truncate text-sm font-semibold">Unknown user</p>
+            )}
             {(isOwn || canEdit) && !isEditing && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -861,13 +884,20 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
     <div className="border-border animate-slide-up bg-background rounded-xl border p-6 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
       {/* Header */}
       <div className="mb-4 flex items-start gap-4">
-        <UserAvatar user={author} />
+        <UserAvatar user={author} clickable />
         <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-foreground font-semibold">
-                {author ? getFullName(author) : 'Unknown user'}
-              </p>
+              {author ? (
+                <Link
+                  href={`/profile/${author.id}`}
+                  className="text-foreground font-semibold hover:underline"
+                >
+                  {getFullName(author)}
+                </Link>
+              ) : (
+                <p className="text-foreground font-semibold">Unknown user</p>
+              )}
               {post.isPinned && <Pin size={12} className="text-primary shrink-0" />}
               <Badge className={`${typeStyle.color} border-0 text-xs`}>{typeStyle.label}</Badge>
             </div>
