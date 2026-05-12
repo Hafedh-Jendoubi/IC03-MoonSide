@@ -252,21 +252,20 @@ async function fetchReactors(
   settled.forEach((r, i) => {
     if (r.status === 'fulfilled') userMap[uniqueIds[i]] = r.value as User
   })
-  return reactions
-    .map((r) => {
-      const u = userMap[r.userId]
-      if (!u) return null
-      return {
-        id: u.id,
-        firstName: u.firstName ?? '',
-        lastName: u.lastName ?? '',
-        email: u.email ?? '',
-        avatar: u.avatar ?? null,
-        jobTitle: u.jobTitle ?? null,
-        emoji: r.reactionTypeEmoji,
-      } satisfies ModalUser
+  return reactions.reduce<ModalUser[]>((acc, r) => {
+    const u = userMap[r.userId]
+    if (!u) return acc
+    acc.push({
+      id: u.id,
+      firstName: u.firstName ?? '',
+      lastName: u.lastName ?? '',
+      email: u.email ?? '',
+      avatar: u.avatar ?? null,
+      jobTitle: u.jobTitle ?? null,
+      emoji: r.reactionTypeEmoji ?? undefined,
     })
-    .filter((u): u is ModalUser => u !== null)
+    return acc
+  }, [])
 }
 
 // ── UserAvatar ────────────────────────────────────────────────────────────────
