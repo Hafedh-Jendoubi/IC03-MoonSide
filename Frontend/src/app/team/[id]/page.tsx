@@ -1241,122 +1241,140 @@ export default function TeamFeedPage() {
   return (
     <AuthLayout>
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Cover Banner */}
-        <div className="from-primary/20 to-secondary/20 relative mb-0 h-48 overflow-hidden rounded-xl bg-gradient-to-r">
-          {team.bannerUrl ? (
-            <img src={team.bannerUrl} alt={team.name} className="h-full w-full object-cover" />
-          ) : (
-            <div className="from-primary/20 to-secondary/20 h-full w-full bg-gradient-to-r" />
-          )}
-        </div>
-
         {/* Team Header */}
-        <div className="bg-background mb-8 flex items-end gap-6 px-2">
-          <div className="relative -mt-14 flex-shrink-0">
-            <div className="bg-muted flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-white shadow-lg dark:border-slate-800">
-              {team.avatarUrl ? (
-                <img src={team.avatarUrl} alt={team.name} className="h-full w-full object-cover" />
-              ) : (
-                <Users className="text-foreground h-14 w-14" />
-              )}
-            </div>
+        <div className="bg-background mb-8 px-2">
+          {/* Back Button */}
+          {teamDepartment && (
+            <Link
+              href={`/department/${team.departmentId}`}
+              className="text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-2 text-sm transition-colors hover:underline"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to {teamDepartment.name}
+            </Link>
+          )}
+
+          {/* Cover Banner */}
+          <div className="from-primary/20 to-secondary/20 relative mb-0 h-48 overflow-hidden rounded-xl bg-gradient-to-r">
+            {team.bannerUrl ? (
+              <img src={team.bannerUrl} alt={team.name} className="h-full w-full object-cover" />
+            ) : (
+              <div className="from-primary/20 to-secondary/20 h-full w-full bg-gradient-to-r" />
+            )}
           </div>
 
-          <div className="flex flex-1 items-end justify-between pt-4 pb-2">
-            <div>
-              <h1 className="text-foreground text-3xl font-bold">{team.name}</h1>
-              {team.description && (
-                <p className="text-muted-foreground mt-1 text-sm">{team.description}</p>
-              )}
-              {team.lead && (
-                <p className="text-muted-foreground mt-2 text-xs">
-                  Led by {team.lead.firstName} {team.lead.lastName}
-                </p>
-              )}
-              <button
-                onClick={() => {
-                  const pub = teamDepartment?.membersPublic ?? true
-                  const isLead = user?.id === team.leadId
-                  const isDeptLeader =
-                    hasRole(user, 'DEPARTMENT_LEADER') &&
-                    userManagedDeptIds.includes(team.departmentId)
-                  const isCEO = hasRole(user, 'CEO')
-                  if (pub || isLead || isDeptLeader || isCEO) {
-                    setMembersOpen(true)
-                  }
-                }}
-                className={`mt-1 flex items-center gap-1.5 text-xs transition-colors ${
-                  (teamDepartment?.membersPublic ?? true) ||
-                  user?.id === team.leadId ||
-                  hasRole(user, 'CEO') ||
-                  (hasRole(user, 'DEPARTMENT_LEADER') &&
-                    userManagedDeptIds.includes(team.departmentId))
-                    ? 'text-muted-foreground hover:text-primary hover:underline'
-                    : 'text-muted-foreground/50 cursor-not-allowed'
-                }`}
-                title={
-                  (teamDepartment?.membersPublic ?? true) ||
-                  user?.id === team.leadId ||
-                  hasRole(user, 'CEO') ||
-                  (hasRole(user, 'DEPARTMENT_LEADER') &&
-                    userManagedDeptIds.includes(team.departmentId))
-                    ? 'View members'
-                    : 'Member list is restricted to department members'
-                }
-              >
-                <Users className="h-3.5 w-3.5" />
-                {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
-                {!(teamDepartment?.membersPublic ?? true) &&
-                  !hasRole(user, 'CEO') &&
-                  user?.id !== team.leadId &&
-                  !(
-                    hasRole(user, 'DEPARTMENT_LEADER') &&
-                    userManagedDeptIds.includes(team.departmentId)
-                  ) && <Shield className="ml-0.5 h-3 w-3 opacity-60" />}
-              </button>
+          {/* Team Info */}
+          <div className="flex items-end gap-6">
+            <div className="relative -mt-14 flex-shrink-0">
+              <div className="bg-muted flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-white shadow-lg dark:border-slate-800">
+                {team.avatarUrl ? (
+                  <img
+                    src={team.avatarUrl}
+                    alt={team.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <Users className="text-foreground h-14 w-14" />
+                )}
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                onClick={handleFollow}
-                disabled={followLoading}
-                className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
-                  team.isFollowing
-                    ? 'border-primary text-primary hover:bg-primary/10'
-                    : 'border-border text-foreground hover:bg-muted'
-                }`}
-              >
-                {followLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : team.isFollowing ? (
-                  <BellOff className="h-4 w-4" />
-                ) : (
-                  <Bell className="h-4 w-4" />
+            <div className="flex flex-1 items-end justify-between pt-4 pb-2">
+              <div>
+                <h1 className="text-foreground text-3xl font-bold">{team.name}</h1>
+                {team.description && (
+                  <p className="text-muted-foreground mt-1 text-sm">{team.description}</p>
                 )}
-                {team.isFollowing ? 'Following' : 'Follow'}
-                {team.followerCount > 0 && (
-                  <span
-                    role="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setShowFollowersModal(true)
-                    }}
-                    className="text-muted-foreground hover:text-primary cursor-pointer text-xs transition-colors"
-                  >
-                    ({team.followerCount})
-                  </span>
+                {team.lead && (
+                  <p className="text-muted-foreground mt-2 text-xs">
+                    Led by {team.lead.firstName} {team.lead.lastName}
+                  </p>
                 )}
-              </button>
-
-              {showManageButton && (
                 <button
-                  onClick={() => setManageOpen(true)}
-                  className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+                  onClick={() => {
+                    const pub = teamDepartment?.membersPublic ?? true
+                    const isLead = user?.id === team.leadId
+                    const isDeptLeader =
+                      hasRole(user, 'DEPARTMENT_LEADER') &&
+                      userManagedDeptIds.includes(team.departmentId)
+                    const isCEO = hasRole(user, 'CEO')
+                    if (pub || isLead || isDeptLeader || isCEO) {
+                      setMembersOpen(true)
+                    }
+                  }}
+                  className={`mt-1 flex items-center gap-1.5 text-xs transition-colors ${
+                    (teamDepartment?.membersPublic ?? true) ||
+                    user?.id === team.leadId ||
+                    hasRole(user, 'CEO') ||
+                    (hasRole(user, 'DEPARTMENT_LEADER') &&
+                      userManagedDeptIds.includes(team.departmentId))
+                      ? 'text-muted-foreground hover:text-primary hover:underline'
+                      : 'text-muted-foreground/50 cursor-not-allowed'
+                  }`}
+                  title={
+                    (teamDepartment?.membersPublic ?? true) ||
+                    user?.id === team.leadId ||
+                    hasRole(user, 'CEO') ||
+                    (hasRole(user, 'DEPARTMENT_LEADER') &&
+                      userManagedDeptIds.includes(team.departmentId))
+                      ? 'View members'
+                      : 'Member list is restricted to department members'
+                  }
                 >
-                  <Settings className="h-4 w-4" />
-                  Manage Team
+                  <Users className="h-3.5 w-3.5" />
+                  {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
+                  {!(teamDepartment?.membersPublic ?? true) &&
+                    !hasRole(user, 'CEO') &&
+                    user?.id !== team.leadId &&
+                    !(
+                      hasRole(user, 'DEPARTMENT_LEADER') &&
+                      userManagedDeptIds.includes(team.departmentId)
+                    ) && <Shield className="ml-0.5 h-3 w-3 opacity-60" />}
                 </button>
-              )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button
+                  onClick={handleFollow}
+                  disabled={followLoading}
+                  className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
+                    team.isFollowing
+                      ? 'border-primary text-primary hover:bg-primary/10'
+                      : 'border-border text-foreground hover:bg-muted'
+                  }`}
+                >
+                  {followLoading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : team.isFollowing ? (
+                    <BellOff className="h-4 w-4" />
+                  ) : (
+                    <Bell className="h-4 w-4" />
+                  )}
+                  {team.isFollowing ? 'Following' : 'Follow'}
+                  {team.followerCount > 0 && (
+                    <span
+                      role="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setShowFollowersModal(true)
+                      }}
+                      className="text-muted-foreground hover:text-primary cursor-pointer text-xs transition-colors"
+                    >
+                      ({team.followerCount})
+                    </span>
+                  )}
+                </button>
+
+                {showManageButton && (
+                  <button
+                    onClick={() => setManageOpen(true)}
+                    className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+                  >
+                    <Settings className="h-4 w-4" />
+                    Manage Team
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
