@@ -51,6 +51,7 @@ import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
 import { usePostFeed } from '@/hooks/use-post-feed'
 import { User, hasRole } from '@/lib/types'
+import { UsersModal } from '@/components/users-modal'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -1151,6 +1152,7 @@ export default function TeamFeedPage() {
   const [membersOpen, setMembersOpen] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
   const [teamDepartment, setTeamDepartment] = useState<DepartmentResponse | null>(null)
+  const [showFollowersModal, setShowFollowersModal] = useState(false)
 
   // ── Post feed: fetches from API, resolves authors ─────────────────────────
   const { posts, usersMap, prependPost } = usePostFeed({
@@ -1333,7 +1335,16 @@ export default function TeamFeedPage() {
                 )}
                 {team.isFollowing ? 'Following' : 'Follow'}
                 {team.followerCount > 0 && (
-                  <span className="text-muted-foreground text-xs">({team.followerCount})</span>
+                  <span
+                    role="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowFollowersModal(true)
+                    }}
+                    className="text-muted-foreground hover:text-primary cursor-pointer text-xs transition-colors"
+                  >
+                    ({team.followerCount})
+                  </span>
                 )}
               </button>
 
@@ -1349,6 +1360,23 @@ export default function TeamFeedPage() {
             </div>
           </div>
         </div>
+
+        <UsersModal
+          open={showFollowersModal}
+          onOpenChange={setShowFollowersModal}
+          title="Followers"
+          fetchUsers={async () => {
+            const users = await teamApi.getFollowers(teamId)
+            return users.map((u) => ({
+              id: u.id,
+              firstName: u.firstName,
+              lastName: u.lastName,
+              email: u.email,
+              avatar: u.avatar,
+              jobTitle: u.jobTitle,
+            }))
+          }}
+        />
 
         {/* Posts Feed */}
         <div className="space-y-6">

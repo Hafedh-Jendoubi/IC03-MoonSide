@@ -20,4 +20,6 @@ public interface FollowRepository extends MongoRepository<Follow, String> {
     List<Follow> findByUserIdAndTargetType(String userId, FollowTargetType targetType);
 
     List<Follow> findByUserId(String userId);
+
+    List<Follow> findByTargetIdAndTargetType(String targetId, FollowTargetType targetType);
 }

@@ -1,10 +1,12 @@
 import { apiFetch } from '../../client'
-import type { DepartmentResponse, DepartmentRequest } from '../../types/organizations'
+import type { DepartmentResponse, DepartmentRequest, UserSummary } from '../../types/organizations'
 
 export const departmentApi = {
   getAll: () => apiFetch<DepartmentResponse[]>('/organizations/departments'),
   getActive: () => apiFetch<DepartmentResponse[]>('/organizations/departments/active'),
   getById: (id: string) => apiFetch<DepartmentResponse>(`/organizations/departments/${id}`),
+  getFollowers: (id: string) =>
+    apiFetch<UserSummary[]>(`/organizations/departments/${id}/followers`),
   create: (data: DepartmentRequest) =>
     apiFetch<DepartmentResponse>('/organizations/departments', {
       method: 'POST',

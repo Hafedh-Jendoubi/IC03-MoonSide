@@ -688,6 +688,15 @@ public class TeamService {
         return toResponse(team, userId);
     }
 
+    public List<UserSummary> getTeamFollowers(String teamId) {
+        findById(teamId); // validate exists
+        return followRepository.findByTargetIdAndTargetType(teamId, FollowTargetType.TEAM)
+                .stream()
+                .map(f -> userServiceClient.findById(f.getUserId()).orElse(null))
+                .filter(u -> u != null)
+                .collect(Collectors.toList());
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private void assertCanAssignMember(Team team, String requestingUserId, List<String> roles) {

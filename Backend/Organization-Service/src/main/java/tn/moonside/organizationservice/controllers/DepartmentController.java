@@ -141,6 +141,16 @@ public class DepartmentController {
     // ── Follow / Unfollow ─────────────────────────────────────────────────────
 
     /**
+     * GET /organizations/departments/{id}/followers
+     * Returns the list of users following this department.
+     */
+    @GetMapping("/{id}/followers")
+    public ResponseEntity<ApiResponse<List<tn.moonside.organizationservice.dtos.responses.UserSummary>>> getDepartmentFollowers(
+            @PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.success(departmentService.getDepartmentFollowers(id)));
+    }
+
+    /**
      * POST /organizations/departments/{id}/follow
      * The authenticated user starts following this department.
      */

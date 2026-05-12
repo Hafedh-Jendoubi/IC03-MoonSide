@@ -1,5 +1,10 @@
 import { apiFetch } from '../../client'
-import type { TeamResponse, TeamRequest, UserTeamResponse } from '../../types/organizations'
+import type {
+  TeamResponse,
+  TeamRequest,
+  UserTeamResponse,
+  UserSummary,
+} from '../../types/organizations'
 
 export const teamApi = {
   getAll: () => apiFetch<TeamResponse[]>('/organizations/teams'),
@@ -20,6 +25,8 @@ export const teamApi = {
   getById: (id: string) => apiFetch<TeamResponse>(`/organizations/teams/${id}`),
 
   getMembers: (id: string) => apiFetch<UserTeamResponse[]>(`/organizations/teams/${id}/members`),
+
+  getFollowers: (id: string) => apiFetch<UserSummary[]>(`/organizations/teams/${id}/followers`),
 
   create: (data: TeamRequest) =>
     apiFetch<TeamResponse>('/organizations/teams', {

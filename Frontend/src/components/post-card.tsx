@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/lib/auth-context'
+import { UsersModal, ModalUser } from '@/components/users-modal'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -172,7 +173,6 @@ function ReactionButton({
           className={`hover:text-primary flex items-center gap-1 transition-colors ${active ? 'text-primary font-semibold' : ''}`}
         >
           <span className="text-sm leading-none">{active ? active.emoji : '👍'}</span>
-          {reactionCount > 0 && <span>{reactionCount}</span>}
           {!active && <span>Like</span>}
         </button>
       </div>
@@ -239,6 +239,34 @@ function formatTime(dateStr: string): string {
   const remainingMonths = diffMonths - diffYears * 12
   if (remainingMonths === 0) return `${diffYears}y ago`
   return `${diffYears}y ${remainingMonths}mo ago`
+}
+
+// ── fetchReactors ─────────────────────────────────────────────────────────────
+
+async function fetchReactors(
+  reactions: Awaited<ReturnType<typeof reactionApi.getPostReactors>>
+): Promise<ModalUser[]> {
+  const uniqueIds = [...new Set(reactions.map((r) => r.userId))]
+  const settled = await Promise.allSettled(uniqueIds.map((id) => userApi.getById(id)))
+  const userMap: Record<string, User> = {}
+  settled.forEach((r, i) => {
+    if (r.status === 'fulfilled') userMap[uniqueIds[i]] = r.value as User
+  })
+  return reactions
+    .map((r) => {
+      const u = userMap[r.userId]
+      if (!u) return null
+      return {
+        id: u.id,
+        firstName: u.firstName ?? '',
+        lastName: u.lastName ?? '',
+        email: u.email ?? '',
+        avatar: u.avatar ?? null,
+        jobTitle: u.jobTitle ?? null,
+        emoji: r.reactionTypeEmoji,
+      } satisfies ModalUser
+    })
+    .filter((u): u is ModalUser => u !== null)
 }
 
 // ── UserAvatar ────────────────────────────────────────────────────────────────
@@ -455,6 +483,7 @@ function CommentRow({
   // Reaction state
   const [likeCount, setLikeCount] = useState(comment.reactionCount)
   const [reactionCode, setReactionCode] = useState<ReactionCode | null>(null)
+  const [showReactorsModal, setShowReactorsModal] = useState(false)
 
   useEffect(() => {
     reactionApi
@@ -665,6 +694,26 @@ function CommentRow({
             size="comment"
           />
 
+          {likeCount > 0 && (
+            <button
+              onClick={() => setShowReactorsModal(true)}
+              className="hover:text-primary -ml-2 transition-colors"
+              title="See who reacted"
+            >
+              ({likeCount})
+            </button>
+          )}
+
+          <UsersModal
+            open={showReactorsModal}
+            onOpenChange={setShowReactorsModal}
+            title="Reactions"
+            fetchUsers={async () => {
+              const reactions = await reactionApi.getCommentReactors(postId, comment.id)
+              return fetchReactors(reactions)
+            }}
+          />
+
           <button
             onClick={() => setShowReplyInput((s) => !s)}
             className="hover:text-primary flex items-center gap-1 font-medium transition-colors"
@@ -746,6 +795,7 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
 
   const [reactionCount, setReactionCount] = useState(post.reactionCount)
   const [activeReaction, setActiveReaction] = useState<ReactionCode | null>(null)
+  const [showReactorsModal, setShowReactorsModal] = useState(false)
   const [commentCount, setCommentCount] = useState(post.commentCount)
   const [comments, setComments] = useState<CommentResponse[]>([])
   const [showComments, setShowComments] = useState(false)
@@ -978,13 +1028,28 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
 
       {/* Stats bar */}
       <div className="text-muted-foreground border-border flex items-center gap-6 border-t border-b py-2.5 text-sm dark:border-slate-700">
-        <span>
+        <button
+          onClick={() => reactionCount > 0 && setShowReactorsModal(true)}
+          className={
+            reactionCount > 0 ? 'hover:text-foreground transition-colors' : 'cursor-default'
+          }
+        >
           {reactionCount} {reactionCount === 1 ? 'reaction' : 'reactions'}
-        </span>
+        </button>
         <button onClick={toggleComments} className="hover:text-foreground transition-colors">
           {commentCount} {commentCount === 1 ? 'comment' : 'comments'}
         </button>
       </div>
+
+      <UsersModal
+        open={showReactorsModal}
+        onOpenChange={setShowReactorsModal}
+        title="Reactions"
+        fetchUsers={async () => {
+          const reactions = await reactionApi.getPostReactors(post.id)
+          return fetchReactors(reactions)
+        }}
+      />
 
       {/* Action buttons */}
       <div className="my-3 flex items-center gap-1">

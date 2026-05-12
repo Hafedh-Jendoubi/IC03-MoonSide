@@ -36,6 +36,12 @@ public class ReactionController {
         return ResponseEntity.ok(ApiResponse.success(reactionService.getSummary("POST", postId, userId)));
     }
 
+    @GetMapping("/posts/{postId}/reactions/users")
+    public ResponseEntity<ApiResponse<java.util.List<ReactionResponse>>> getPostReactors(
+            @PathVariable String postId) {
+        return ResponseEntity.ok(ApiResponse.success(reactionService.getReactors("POST", postId)));
+    }
+
     /* ── Comment reactions ───────────────────────────────────────────────── */
 
     @PostMapping("/posts/{postId}/comments/{commentId}/reactions")
@@ -55,5 +61,12 @@ public class ReactionController {
             @PathVariable String commentId,
             @AuthenticationPrincipal String userId) {
         return ResponseEntity.ok(ApiResponse.success(reactionService.getSummary("COMMENT", commentId, userId)));
+    }
+
+    @GetMapping("/posts/{postId}/comments/{commentId}/reactions/users")
+    public ResponseEntity<ApiResponse<java.util.List<ReactionResponse>>> getCommentReactors(
+            @PathVariable String postId,
+            @PathVariable String commentId) {
+        return ResponseEntity.ok(ApiResponse.success(reactionService.getReactors("COMMENT", commentId)));
     }
 }

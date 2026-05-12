@@ -332,6 +332,15 @@ public class DepartmentService {
         return toResponse(dept, userId);
     }
 
+    public List<UserSummary> getDepartmentFollowers(String departmentId) {
+        findById(departmentId); // validate exists
+        return followRepository.findByTargetIdAndTargetType(departmentId, FollowTargetType.DEPARTMENT)
+                .stream()
+                .map(f -> userServiceClient.findById(f.getUserId()).orElse(null))
+                .filter(u -> u != null)
+                .collect(Collectors.toList());
+    }
+
     public DepartmentResponse unfollowDepartment(String departmentId, String userId) {
         Department dept = findById(departmentId);
         followRepository.deleteByUserIdAndTargetIdAndTargetType(

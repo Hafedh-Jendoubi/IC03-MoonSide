@@ -82,6 +82,16 @@ public class ReactionService {
                 .build();
     }
 
+    public List<ReactionResponse> getReactors(String reactableType, String reactableId) {
+        return reactionRepository.findByReactableTypeAndReactableId(reactableType, reactableId)
+                .stream()
+                .map(r -> reactionTypeRepository.findById(r.getReactionTypeId())
+                        .map(rt -> toResponse(r, rt))
+                        .orElse(null))
+                .filter(r -> r != null)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     private ReactionResponse toResponse(Reaction r, ReactionType rt) {
         return ReactionResponse.builder()
                 .id(r.getId()).userId(r.getUserId())

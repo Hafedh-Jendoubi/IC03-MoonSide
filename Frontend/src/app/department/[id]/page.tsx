@@ -55,6 +55,7 @@ import { PostCard } from '@/components/post-card'
 import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
 import { User, hasRole } from '@/lib/types'
+import { UsersModal } from '@/components/users-modal'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -1166,6 +1167,7 @@ function DeptSettingsSection({ department }: { department: DepartmentResponse })
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [showFollowersModal, setShowFollowersModal] = useState(false)
 
   const isDirty = membersPublic !== (department.membersPublic ?? true)
 
@@ -1188,110 +1190,136 @@ function DeptSettingsSection({ department }: { department: DepartmentResponse })
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-foreground text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground mt-1 text-sm">Department configuration and info.</p>
-      </div>
-      <div className="divide-y rounded-xl border">
-        {/* Status */}
-        <div className="space-y-2 p-5">
-          <div className="flex items-center gap-2">
-            <Eye className="text-muted-foreground h-4 w-4" />
-            <h2 className="text-foreground text-sm font-semibold">Status</h2>
-          </div>
-          <p className="text-muted-foreground text-xs">
-            The current activation state of this department.
-          </p>
-          <div className="mt-2 flex items-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${department.isActive ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${department.isActive ? 'bg-green-500' : 'bg-muted-foreground'}`}
-              />
-              {department.isActive ? 'Active' : 'Inactive'}
-            </span>
-          </div>
+    <>
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-foreground text-2xl font-bold">Settings</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Department configuration and info.</p>
         </div>
-
-        {/* Member Visibility */}
-        <div className="space-y-3 p-5">
-          <div className="flex items-center gap-2">
-            <Users className="text-muted-foreground h-4 w-4" />
-            <h2 className="text-foreground text-sm font-semibold">Member Visibility</h2>
-          </div>
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            Control who can see the member lists of teams under this department.
-          </p>
-          <label className="hover:bg-muted/30 flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors">
-            <div className="relative mt-0.5 flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={membersPublic}
-                onChange={(e) => setMembersPublic(e.target.checked)}
-                className="peer sr-only"
-              />
-              <div
-                className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${membersPublic ? 'border-primary bg-primary' : 'border-muted-foreground bg-background'}`}
-              >
-                {membersPublic && (
-                  <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none">
-                    <path
-                      d="M2 6l3 3 5-5"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                )}
-              </div>
+        <div className="divide-y rounded-xl border">
+          {/* Status */}
+          <div className="space-y-2 p-5">
+            <div className="flex items-center gap-2">
+              <Eye className="text-muted-foreground h-4 w-4" />
+              <h2 className="text-foreground text-sm font-semibold">Status</h2>
             </div>
-            <div className="min-w-0">
-              <p className="text-foreground text-sm font-medium">
-                Allow all users to view team members
-              </p>
-              <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
-                {membersPublic
-                  ? 'Any authenticated user can open a team member list in this department.'
-                  : 'Only department members, Team Leaders, and the Department Leader can view team member lists.'}
-              </p>
-            </div>
-          </label>
-
-          {saveError && <p className="text-destructive text-xs">{saveError}</p>}
-          {saveSuccess && (
-            <p className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Setting saved successfully.
+            <p className="text-muted-foreground text-xs">
+              The current activation state of this department.
             </p>
-          )}
+            <div className="mt-2 flex items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${department.isActive ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${department.isActive ? 'bg-green-500' : 'bg-muted-foreground'}`}
+                />
+                {department.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+          </div>
 
-          <div className="flex justify-end">
+          {/* Member Visibility */}
+          <div className="space-y-3 p-5">
+            <div className="flex items-center gap-2">
+              <Users className="text-muted-foreground h-4 w-4" />
+              <h2 className="text-foreground text-sm font-semibold">Member Visibility</h2>
+            </div>
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              Control who can see the member lists of teams under this department.
+            </p>
+            <label className="hover:bg-muted/30 flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors">
+              <div className="relative mt-0.5 flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={membersPublic}
+                  onChange={(e) => setMembersPublic(e.target.checked)}
+                  className="peer sr-only"
+                />
+                <div
+                  className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${membersPublic ? 'border-primary bg-primary' : 'border-muted-foreground bg-background'}`}
+                >
+                  {membersPublic && (
+                    <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none">
+                      <path
+                        d="M2 6l3 3 5-5"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <p className="text-foreground text-sm font-medium">
+                  Allow all users to view team members
+                </p>
+                <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
+                  {membersPublic
+                    ? 'Any authenticated user can open a team member list in this department.'
+                    : 'Only department members, Team Leaders, and the Department Leader can view team member lists.'}
+                </p>
+              </div>
+            </label>
+
+            {saveError && <p className="text-destructive text-xs">{saveError}</p>}
+            {saveSuccess && (
+              <p className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Setting saved successfully.
+              </p>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                onClick={handleSave}
+                disabled={!isDirty || saving}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="space-y-1 p-5">
+            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              Teams
+            </p>
+            <p className="text-foreground text-2xl font-bold">{department.teamCount}</p>
+          </div>
+          <div className="space-y-1 p-5">
+            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              Followers
+            </p>
             <button
-              onClick={handleSave}
-              disabled={!isDirty || saving}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => setShowFollowersModal(true)}
+              className="text-foreground hover:text-primary text-2xl font-bold transition-colors hover:underline"
             >
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              {saving ? 'Saving…' : 'Save'}
+              {department.followerCount}
             </button>
           </div>
         </div>
-
-        {/* Stats */}
-        <div className="space-y-1 p-5">
-          <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Teams</p>
-          <p className="text-foreground text-2xl font-bold">{department.teamCount}</p>
-        </div>
-        <div className="space-y-1 p-5">
-          <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            Followers
-          </p>
-          <p className="text-foreground text-2xl font-bold">{department.followerCount}</p>
-        </div>
       </div>
-    </div>
+
+      <UsersModal
+        open={showFollowersModal}
+        onOpenChange={setShowFollowersModal}
+        title="Followers"
+        fetchUsers={async () => {
+          const users = await departmentApi.getFollowers(department.id)
+          return users.map((u) => ({
+            id: u.id,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            email: u.email,
+            avatar: u.avatar,
+            jobTitle: u.jobTitle,
+          }))
+        }}
+      />
+    </>
   )
 }
 
@@ -1540,6 +1568,7 @@ export default function DepartmentFeedPage() {
   const [membersTeam, setMembersTeam] = useState<TeamResponse | null>(null)
   const [followLoading, setFollowLoading] = useState(false)
   const [userTeamIds, setUserTeamIds] = useState<string[]>([])
+  const [showFollowersModal, setShowFollowersModal] = useState(false)
 
   useEffect(() => {
     if (!deptId) return
@@ -1734,7 +1763,14 @@ export default function DepartmentFeedPage() {
                 )}
                 {department.isFollowing ? 'Following' : 'Follow'}
                 {department.followerCount > 0 && (
-                  <span className="text-muted-foreground text-xs">
+                  <span
+                    role="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setShowFollowersModal(true)
+                    }}
+                    className="text-muted-foreground hover:text-primary cursor-pointer text-xs transition-colors"
+                  >
                     ({department.followerCount})
                   </span>
                 )}
@@ -1753,6 +1789,24 @@ export default function DepartmentFeedPage() {
             </div>
           </div>
         </div>
+
+        {/* Followers modal (for main page header area) */}
+        <UsersModal
+          open={showFollowersModal}
+          onOpenChange={setShowFollowersModal}
+          title="Followers"
+          fetchUsers={async () => {
+            const users = await departmentApi.getFollowers(deptId)
+            return users.map((u) => ({
+              id: u.id,
+              firstName: u.firstName,
+              lastName: u.lastName,
+              email: u.email,
+              avatar: u.avatar,
+              jobTitle: u.jobTitle,
+            }))
+          }}
+        />
 
         {/* Grid */}
         <div className="grid gap-8 lg:grid-cols-4">

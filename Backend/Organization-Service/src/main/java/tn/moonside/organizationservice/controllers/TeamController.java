@@ -190,6 +190,16 @@ public class TeamController {
     // ── Follow / Unfollow ─────────────────────────────────────────────────────
 
     /**
+     * GET /organizations/teams/{teamId}/followers
+     * Returns the list of users following this team.
+     */
+    @GetMapping("/{teamId}/followers")
+    public ResponseEntity<ApiResponse<List<tn.moonside.organizationservice.dtos.responses.UserSummary>>> getTeamFollowers(
+            @PathVariable String teamId) {
+        return ResponseEntity.ok(ApiResponse.success(teamService.getTeamFollowers(teamId)));
+    }
+
+    /**
      * POST /organizations/teams/{teamId}/follow
      * The authenticated user starts following this team.
      */
