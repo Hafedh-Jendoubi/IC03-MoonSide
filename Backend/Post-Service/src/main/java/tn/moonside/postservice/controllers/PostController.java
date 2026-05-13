@@ -110,7 +110,7 @@ public class PostController {
     public ResponseEntity<ApiResponse<Void>> deletePost(
             @PathVariable String postId,
             @AuthenticationPrincipal String userId) {
-        postService.deletePost(postId, userId);
+        postService.deletePost(postId, userId, extractRoles());
         return ResponseEntity.ok(ApiResponse.success(null, "Post deleted"));
     }
 

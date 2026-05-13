@@ -1641,6 +1641,14 @@ export default function DepartmentFeedPage() {
     }
   }
 
+  const handlePostDelete = (postId: string) => {
+    setPosts((prev) => prev.filter((p) => p.id !== postId))
+  }
+
+  const handlePostUpdate = (updated: PostResponse) => {
+    setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+  }
+
   const handleLike = () => {
     // Like functionality is handled by PostCard component via API calls
   }
@@ -1916,7 +1924,13 @@ export default function DepartmentFeedPage() {
                     key={post.id}
                     style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
                   >
-                    <PostCard post={post} currentUserId={user.id} usersMap={usersMap} />
+                    <PostCard
+                      post={post}
+                      currentUserId={user.id}
+                      usersMap={usersMap}
+                      onDelete={handlePostDelete}
+                      onUpdate={handlePostUpdate}
+                    />
                   </div>
                 ))
               )}

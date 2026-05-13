@@ -190,9 +190,9 @@ public class PostService {
     /* ── Delete ───────────────────────────────────────────────────────────── */
 
     @Transactional
-    public void deletePost(String postId, String requesterId) {
+    public void deletePost(String postId, String requesterId, List<String> roles) {
         Post post = findPost(postId);
-        assertOwner(post.getAuthorId(), requesterId, "delete");
+        assertCanEdit(post, requesterId, roles, "delete");
 
         commentRepository.deleteByPostId(postId);
         attachmentRepository.deleteByPostId(postId);

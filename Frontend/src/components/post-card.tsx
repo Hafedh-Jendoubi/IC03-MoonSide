@@ -842,6 +842,9 @@ export function PostCard({
   const canEditPost =
     isOwn || isCeo || isLeaderOfThisTeam || (isDeptLeader && (!!post.departmentId || !!post.teamId))
 
+  const canDeletePost =
+    isOwn || isCeo || isLeaderOfThisTeam || (isDeptLeader && (!!post.departmentId || !!post.teamId))
+
   const seedMap = currentUser ? { ...usersMap, [currentUser.id]: currentUser } : usersMap
   const { localMap: commentUsersMap, resolveAuthors } = useCommentAuthors(seedMap)
 
@@ -978,7 +981,7 @@ export function PostCard({
             <p className="text-muted-foreground text-xs">{formatTime(post.createdAt)}</p>
           </div>
 
-          {(canEditPost || isOwn) && !isEditingPost && (
+          {(canEditPost || canDeletePost) && !isEditingPost && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
@@ -992,7 +995,7 @@ export function PostCard({
                     Edit post
                   </DropdownMenuItem>
                 )}
-                {isOwn && (
+                {canDeletePost && (
                   <>
                     {canEditPost && <DropdownMenuSeparator />}
                     <DropdownMenuItem

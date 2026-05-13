@@ -137,6 +137,10 @@ export default function FeedPage() {
     setPosts((prev) => prev.filter((p) => p.id !== postId))
   }
 
+  const handlePostUpdate = (updated: PostResponse) => {
+    setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+  }
+
   // Seed current user into the map so their own posts render immediately
   useEffect(() => {
     if (user && !usersMap[user.id]) {
@@ -179,6 +183,7 @@ export default function FeedPage() {
                     currentUserId={user.id}
                     usersMap={usersMap}
                     onDelete={handlePostDelete}
+                    onUpdate={handlePostUpdate}
                   />
                 </div>
               ))}

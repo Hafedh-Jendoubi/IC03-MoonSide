@@ -1155,7 +1155,7 @@ export default function TeamFeedPage() {
   const [showFollowersModal, setShowFollowersModal] = useState(false)
 
   // ── Post feed: fetches from API, resolves authors ─────────────────────────
-  const { posts, usersMap, prependPost } = usePostFeed({
+  const { posts, usersMap, prependPost, removePost, updatePost } = usePostFeed({
     scope: { type: 'team', teamId },
     currentUser: user,
   })
@@ -1415,6 +1415,8 @@ export default function TeamFeedPage() {
                     post={post}
                     currentUserId={user.id}
                     usersMap={usersMap}
+                    onDelete={removePost}
+                    onUpdate={updatePost}
                     currentLeadTeamId={team?.leadId === user.id ? team.id : null}
                   />
                 </div>
