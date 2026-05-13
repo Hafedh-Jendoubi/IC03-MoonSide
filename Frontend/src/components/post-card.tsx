@@ -450,6 +450,7 @@ interface CommentRowProps {
   onUpdated: (updated: CommentResponse) => void
   resolveAuthors: (ids: string[]) => Promise<void>
   depth?: number
+  currentLeadTeamId?: string | null
 }
 
 function CommentRow({
@@ -463,6 +464,7 @@ function CommentRow({
   onUpdated,
   resolveAuthors,
   depth = 0,
+  currentLeadTeamId,
 }: CommentRowProps) {
   const author = usersMap[comment.authorId]
   const isOwn = comment.authorId === currentUserId
@@ -473,11 +475,13 @@ function CommentRow({
     currentUserRoles.includes('DEPARTMENT_MANAGER')
   const isCeo = currentUserRoles.includes(ROLE.CEO)
 
+  // Same scoping rule as PostCard: only allow edit on comments in the
+  // specific team the user leads, not on any team post.
+  const isLeaderOfThisTeam =
+    isTeamLeader && !!currentLeadTeamId && post.teamId === currentLeadTeamId
+
   const canEdit =
-    isOwn ||
-    isCeo ||
-    (isTeamLeader && !!post.teamId) ||
-    (isDeptLeader && (!!post.departmentId || !!post.teamId))
+    isOwn || isCeo || isLeaderOfThisTeam || (isDeptLeader && (!!post.departmentId || !!post.teamId))
 
   // Reaction state
   const [likeCount, setLikeCount] = useState(comment.reactionCount)
@@ -769,6 +773,7 @@ function CommentRow({
                   onUpdated={handleReplyUpdated}
                   resolveAuthors={resolveAuthors}
                   depth={depth + 1}
+                  currentLeadTeamId={currentLeadTeamId}
                 />
               ))
             )}
@@ -787,9 +792,23 @@ interface PostCardProps {
   usersMap: Record<string, User>
   onDelete?: (postId: string) => void
   onUpdate?: (updated: PostResponse) => void
+  /**
+   * The ID of the team that the current user leads, if any.
+   * When provided, team-leader edit authority is scoped to posts belonging
+   * to exactly this team. Pass null / undefined on feeds and pages where
+   * team-lead context is unknown.
+   */
+  currentLeadTeamId?: string | null
 }
 
-export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: PostCardProps) {
+export function PostCard({
+  post,
+  currentUserId,
+  usersMap,
+  onDelete,
+  onUpdate,
+  currentLeadTeamId,
+}: PostCardProps) {
   const { user: currentUser } = useAuth()
 
   const [reactionCount, setReactionCount] = useState(post.reactionCount)
@@ -814,11 +833,14 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
     currentUserRoles.includes('DEPARTMENT_MANAGER')
   const isCeo = currentUserRoles.includes(ROLE.CEO)
 
+  // A team leader may only edit posts that belong to the specific team they lead.
+  // currentLeadTeamId is undefined/null on feeds and department pages where we
+  // don't know which team the user leads, so the button is hidden there.
+  const isLeaderOfThisTeam =
+    isTeamLeader && !!currentLeadTeamId && post.teamId === currentLeadTeamId
+
   const canEditPost =
-    isOwn ||
-    isCeo ||
-    (isTeamLeader && !!post.teamId) ||
-    (isDeptLeader && (!!post.departmentId || !!post.teamId))
+    isOwn || isCeo || isLeaderOfThisTeam || (isDeptLeader && (!!post.departmentId || !!post.teamId))
 
   const seedMap = currentUser ? { ...usersMap, [currentUser.id]: currentUser } : usersMap
   const { localMap: commentUsersMap, resolveAuthors } = useCommentAuthors(seedMap)
@@ -1136,6 +1158,7 @@ export function PostCard({ post, currentUserId, usersMap, onDelete, onUpdate }: 
                   onUpdated={handleCommentUpdated}
                   resolveAuthors={resolveAuthors}
                   depth={0}
+                  currentLeadTeamId={currentLeadTeamId}
                 />
               ))}
               {comments.length === 0 && (

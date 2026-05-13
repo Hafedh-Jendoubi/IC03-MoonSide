@@ -1411,7 +1411,12 @@ export default function TeamFeedPage() {
             ) : (
               posts.map((post, index) => (
                 <div key={post.id} style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}>
-                  <PostCard post={post} currentUserId={user.id} usersMap={usersMap} />
+                  <PostCard
+                    post={post}
+                    currentUserId={user.id}
+                    usersMap={usersMap}
+                    currentLeadTeamId={team?.leadId === user.id ? team.id : null}
+                  />
                 </div>
               ))
             )}
