@@ -9,14 +9,16 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
  * Thin HTTP client that calls Organization-Service to check team / department
- * leadership and membership.
+ * leadership, membership, and follow state.
  *
- * All methods are fail-safe: any network / HTTP error returns false / null
- * so a transient unavailability of org-service never blocks the post-edit path.
+ * All methods are fail-safe: any network / HTTP error returns false / null / empty
+ * so a transient unavailability of org-service never blocks the post path.
  */
 @Component
 @Slf4j
@@ -35,9 +37,7 @@ public class OrganizationClient {
 
     // ── Team checks ───────────────────────────────────────────────────────────
 
-    /**
-     * Returns true if {@code userId} is the designated lead of team {@code teamId}.
-     */
+    /** Returns true if {@code userId} is the designated lead of team {@code teamId}. */
     public boolean isTeamLead(String teamId, String userId) {
         if (teamId == null || userId == null) return false;
         try {
@@ -52,9 +52,7 @@ public class OrganizationClient {
 
     // ── Department checks ─────────────────────────────────────────────────────
 
-    /**
-     * Returns true if {@code userId} is the manager of department {@code deptId}.
-     */
+    /** Returns true if {@code userId} is the manager of department {@code deptId}. */
     public boolean isDepartmentManager(String deptId, String userId) {
         if (deptId == null || userId == null) return false;
         try {
@@ -67,9 +65,7 @@ public class OrganizationClient {
         }
     }
 
-    /**
-     * Returns the departmentId of the given team, or null on any error.
-     */
+    /** Returns the departmentId of the given team, or null on any error. */
     public String getDepartmentIdForTeam(String teamId) {
         if (teamId == null) return null;
         try {
@@ -80,6 +76,75 @@ public class OrganizationClient {
         } catch (Exception e) {
             log.error("getDepartmentIdForTeam failed — org-service unreachable? team={}: {}", teamId, e.getMessage());
             return null;
+        }
+    }
+
+    // ── Follow feed ───────────────────────────────────────────────────────────
+
+    /**
+     * Returns the IDs of departments that the current authenticated user follows.
+     * Returns an empty list on any error.
+     */
+    @SuppressWarnings("unchecked")
+    public List<String> getFollowedDepartmentIds() {
+        try {
+            Map<?, ?> data = fetchData(orgServiceUrl + "/organizations/follows/mine");
+            if (data == null) return Collections.emptyList();
+            Object list = data.get("followedDepartmentIds");
+            return list instanceof List<?> l ? (List<String>) l : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("getFollowedDepartmentIds failed — org-service unreachable?: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Returns the IDs of teams that the current authenticated user follows.
+     * Returns an empty list on any error.
+     */
+    @SuppressWarnings("unchecked")
+    public List<String> getFollowedTeamIds() {
+        try {
+            Map<?, ?> data = fetchData(orgServiceUrl + "/organizations/follows/mine");
+            if (data == null) return Collections.emptyList();
+            Object list = data.get("followedTeamIds");
+            return list instanceof List<?> l ? (List<String>) l : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("getFollowedTeamIds failed — org-service unreachable?: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Single call that returns both lists at once so we only hit org-service once
+     * per feed request. Returns a two-element array: [departmentIds, teamIds].
+     */
+    @SuppressWarnings("unchecked")
+    public UserFollows getUserFollows() {
+        try {
+            Map<?, ?> data = fetchData(orgServiceUrl + "/organizations/follows/mine");
+            if (data == null) return UserFollows.empty();
+
+            Object depts = data.get("followedDepartmentIds");
+            Object teams = data.get("followedTeamIds");
+
+            List<String> departmentIds = depts instanceof List<?> l ? (List<String>) l : Collections.emptyList();
+            List<String> teamIds       = teams instanceof List<?> l ? (List<String>) l : Collections.emptyList();
+
+            return new UserFollows(departmentIds, teamIds);
+        } catch (Exception e) {
+            log.error("getUserFollows failed — org-service unreachable?: {}", e.getMessage());
+            return UserFollows.empty();
+        }
+    }
+
+    /** Value-object returned by {@link #getUserFollows()}. */
+    public record UserFollows(List<String> departmentIds, List<String> teamIds) {
+        public static UserFollows empty() {
+            return new UserFollows(Collections.emptyList(), Collections.emptyList());
+        }
+        public boolean hasAnyFollows() {
+            return !departmentIds.isEmpty() || !teamIds.isEmpty();
         }
     }
 

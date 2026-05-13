@@ -3,8 +3,20 @@ import type { PostResponse, PostRequest } from '../../types/posts'
 import type { PageResponse } from '../../types/common'
 
 export const postApi = {
+  /**
+   * Global public feed — all PUBLIC posts, newest first.
+   * Not personalised.
+   */
   getFeed: (page = 0, size = 20) =>
     apiFetch<PageResponse<PostResponse>>(`/posts/feed?page=${page}&size=${size}`),
+
+  /**
+   * Personalised following feed.
+   * Returns posts from departments and teams the authenticated user follows.
+   * Returns an empty page when the user follows nothing (not an error).
+   */
+  getFollowingFeed: (page = 0, size = 20) =>
+    apiFetch<PageResponse<PostResponse>>(`/posts/feed/following?page=${page}&size=${size}`),
 
   getByAuthor: (authorId: string, page = 0, size = 20) =>
     apiFetch<PageResponse<PostResponse>>(`/posts/author/${authorId}?page=${page}&size=${size}`),

@@ -33,12 +33,9 @@ public class PostService {
     public PostResponse createPost(PostRequest req, String authorId) {
         /*
          * Visibility derivation rules:
-         *  - If the post is created inside a team feed  → TEAM_ONLY
-         *  - If the post is created inside a department feed → DEPARTMENT_ONLY
-         *  - Otherwise the client-supplied value (PUBLIC or PRIVATE) is used.
-         *
-         * This means clients only ever submit PUBLIC or PRIVATE; the server
-         * automatically upgrades the visibility when a context id is present.
+         *  - teamId present       → TEAM_ONLY
+         *  - departmentId present → DEPARTMENT_ONLY
+         *  - Otherwise            → client-supplied value (PUBLIC / PRIVATE)
          */
         VisibilityType resolvedVisibility = resolveVisibility(req);
 
@@ -64,10 +61,65 @@ public class PostService {
         return toResponse(post);
     }
 
+    /** Global public feed (no follow filtering). */
     public Page<PostResponse> getPublicFeed(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         return postRepository
                 .findByPostVisibilityIn(List.of(VisibilityType.PUBLIC), pageable)
+                .map(this::toResponse);
+    }
+
+    /**
+     * Personalised feed for the authenticated user.
+     *
+     * Rules:
+     * <ul>
+     *   <li>Fetches the list of departments and teams the user follows from
+     *       Organization-Service in a single HTTP call.</li>
+     *   <li>Queries posts that belong to any of those departments or teams,
+     *       restricted to PUBLIC, DEPARTMENT_ONLY, and TEAM_ONLY visibility
+     *       (PRIVATE posts are never surfaced in feeds).</li>
+     *   <li>If the user follows nothing, returns an empty page instead of
+     *       accidentally returning all posts.</li>
+     * </ul>
+     *
+     * @param userId the authenticated user's ID (extracted from JWT by the controller)
+     * @param page   zero-based page index
+     * @param size   maximum items per page
+     */
+    public Page<PostResponse> getFollowingFeed(String userId, int page, int size) {
+        // 1. Resolve what the user follows (single HTTP call to org-service)
+        OrganizationClient.UserFollows follows = organizationClient.getUserFollows();
+
+        log.debug("Building following feed for user={}: {} departments, {} teams",
+                userId, follows.departmentIds().size(), follows.teamIds().size());
+
+        // 2. Nothing followed → return empty page immediately
+        if (!follows.hasAnyFollows()) {
+            return Page.empty(PageRequest.of(page, size));
+        }
+
+        // 3. Query MongoDB for posts belonging to followed departments OR teams
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        List<VisibilityType> allowedVisibilities = List.of(
+                VisibilityType.PUBLIC,
+                VisibilityType.DEPARTMENT_ONLY,
+                VisibilityType.TEAM_ONLY
+        );
+
+        // Ensure neither list is empty for the $in query
+        // (MongoDB $in: [] matches nothing, which is the correct behaviour —
+        //  but we guard anyway to keep the intent explicit)
+        List<String> deptIds = follows.departmentIds().isEmpty()
+                ? List.of("__no_dept__")
+                : follows.departmentIds();
+        List<String> teamIds = follows.teamIds().isEmpty()
+                ? List.of("__no_team__")
+                : follows.teamIds();
+
+        return postRepository
+                .findFollowingFeed(deptIds, teamIds, allowedVisibilities, pageable)
                 .map(this::toResponse);
     }
 
@@ -77,8 +129,7 @@ public class PostService {
     }
 
     /**
-     * Returns all posts for a team: both TEAM_ONLY posts and PUBLIC posts
-     * that were linked to this team.
+     * Returns all posts for a team: TEAM_ONLY and PUBLIC posts linked to this team.
      */
     public Page<PostResponse> getByTeam(String teamId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
@@ -89,8 +140,8 @@ public class PostService {
     }
 
     /**
-     * Returns all posts for a department: both DEPARTMENT_ONLY posts and PUBLIC
-     * posts that were linked to this department.
+     * Returns all posts for a department: DEPARTMENT_ONLY and PUBLIC posts linked
+     * to this department.
      */
     public Page<PostResponse> getByDepartment(String departmentId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
@@ -102,26 +153,12 @@ public class PostService {
 
     /* ── Update ───────────────────────────────────────────────────────────── */
 
-    /**
-     * Updates a post if the requester is authorised:
-     * <ul>
-     *   <li><b>Owner</b> – always allowed to edit their own post.</li>
-     *   <li><b>Team leader</b> – allowed when the post belongs to their team.</li>
-     *   <li><b>Department leader/manager</b> – allowed when the post belongs to
-     *       their department, OR when the post belongs to a team that is inside
-     *       their department.</li>
-     * </ul>
-     *
-     * @param roles Spring Security role names (without the "ROLE_" prefix) taken
-     *              from the JWT, e.g. ["EMPLOYEE", "TEAM_LEADER"].
-     */
     public PostResponse updatePost(String postId, PostRequest req, String requesterId, List<String> roles) {
         Post post = findPost(postId);
         assertCanEdit(post, requesterId, roles, "edit");
 
         post.setContent(req.getContent());
         post.setPostType(req.getPostType());
-        // Re-derive visibility on update as well (context ids on the existing post are preserved)
         PostRequest contextualReq = buildContextualRequest(req, post);
         post.setPostVisibility(resolveVisibility(contextualReq));
         post.setPinned(req.isPinned());
@@ -145,17 +182,7 @@ public class PostService {
 
     /* ── Authorization ────────────────────────────────────────────────────── */
 
-    /**
-     * Checks edit permission in order of specificity:
-     * 1. Owner of the post
-     * 2. Team leader of the team the post belongs to
-     * 3. Department leader/manager of the department the post belongs to
-     *    (directly OR via a team inside that department)
-     *
-     * Throws {@link AccessDeniedException} if none of the conditions are met.
-     */
     private void assertCanEdit(Post post, String requesterId, List<String> roles, String action) {
-        // 1. Owner
         if (post.getAuthorId().equals(requesterId)) return;
 
         boolean isTeamLeader  = roles != null && roles.contains("TEAM_LEADER");
@@ -163,20 +190,14 @@ public class PostService {
                 roles.contains("DEPARTMENT_LEADER") || roles.contains("DEPARTMENT_MANAGER"));
         boolean isCeo         = roles != null && roles.contains("CEO");
 
-        // CEO can do anything
         if (isCeo) return;
 
-        // 2. Team leader: post must belong to their team
         if (isTeamLeader && post.getTeamId() != null) {
             if (organizationClient.isTeamLead(post.getTeamId(), requesterId)) return;
         }
-
-        // 3. Department manager: post directly in their dept
         if (isDeptManager && post.getDepartmentId() != null) {
             if (organizationClient.isDepartmentManager(post.getDepartmentId(), requesterId)) return;
         }
-
-        // 3b. Department manager: post in a team that belongs to their dept
         if (isDeptManager && post.getTeamId() != null) {
             String teamDeptId = organizationClient.getDepartmentIdForTeam(post.getTeamId());
             if (teamDeptId != null
@@ -188,14 +209,6 @@ public class PostService {
 
     /* ── Visibility derivation ────────────────────────────────────────────── */
 
-    /**
-     * Derives the stored visibility from request context:
-     * <ul>
-     *   <li>teamId present → {@code TEAM_ONLY}</li>
-     *   <li>departmentId present (no teamId) → {@code DEPARTMENT_ONLY}</li>
-     *   <li>Otherwise → use whatever the client sent (PUBLIC or PRIVATE)</li>
-     * </ul>
-     */
     private VisibilityType resolveVisibility(PostRequest req) {
         if (req.getTeamId() != null && !req.getTeamId().isBlank()) {
             return VisibilityType.TEAM_ONLY;
@@ -203,14 +216,9 @@ public class PostService {
         if (req.getDepartmentId() != null && !req.getDepartmentId().isBlank()) {
             return VisibilityType.DEPARTMENT_ONLY;
         }
-        // Default to PUBLIC if client sent nothing
         return req.getPostVisibility() != null ? req.getPostVisibility() : VisibilityType.PUBLIC;
     }
 
-    /**
-     * When updating, preserve the teamId / departmentId from the stored post
-     * so visibility is re-derived correctly even if the client omits them.
-     */
     private PostRequest buildContextualRequest(PostRequest req, Post existingPost) {
         if (req.getTeamId() == null) req.setTeamId(existingPost.getTeamId());
         if (req.getDepartmentId() == null) req.setDepartmentId(existingPost.getDepartmentId());

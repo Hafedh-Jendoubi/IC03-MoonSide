@@ -37,11 +37,40 @@ public class PostController {
         return ResponseEntity.ok(ApiResponse.success(postService.getById(postId)));
     }
 
+    /**
+     * GET /posts/feed
+     * Global public feed — returns all PUBLIC posts, newest first.
+     * Not personalised; no authentication required beyond gateway filtering.
+     */
     @GetMapping("/feed")
     public ResponseEntity<ApiResponse<Page<PostResponse>>> getFeed(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.success(postService.getPublicFeed(page, size)));
+    }
+
+    /**
+     * GET /posts/feed/following
+     *
+     * Personalised feed for the authenticated user.
+     * Returns posts from the departments and teams the user follows,
+     * ordered by newest first.
+     *
+     * Visibility rules applied server-side:
+     *  - PUBLIC posts in a followed dept/team  → included
+     *  - DEPARTMENT_ONLY posts                 → included (user follows that dept)
+     *  - TEAM_ONLY posts                       → included (user follows that team)
+     *  - PRIVATE posts                         → never included
+     *
+     * Returns an empty page (not an error) when the user follows nothing.
+     */
+    @GetMapping("/feed/following")
+    public ResponseEntity<ApiResponse<Page<PostResponse>>> getFollowingFeed(
+            @AuthenticationPrincipal String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(
+                ApiResponse.success(postService.getFollowingFeed(userId, page, size)));
     }
 
     @GetMapping("/author/{authorId}")
@@ -87,10 +116,6 @@ public class PostController {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /**
-     * Extracts role names (stripped of the "ROLE_" prefix) from the current
-     * security context so they can be passed into the service layer.
-     */
     private List<String> extractRoles() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null) return Collections.emptyList();
