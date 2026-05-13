@@ -82,42 +82,15 @@ public class OrganizationClient {
     // ── Follow feed ───────────────────────────────────────────────────────────
 
     /**
-     * Returns the IDs of departments that the current authenticated user follows.
-     * Returns an empty list on any error.
-     */
-    @SuppressWarnings("unchecked")
-    public List<String> getFollowedDepartmentIds() {
-        try {
-            Map<?, ?> data = fetchData(orgServiceUrl + "/organizations/follows/mine");
-            if (data == null) return Collections.emptyList();
-            Object list = data.get("followedDepartmentIds");
-            return list instanceof List<?> l ? (List<String>) l : Collections.emptyList();
-        } catch (Exception e) {
-            log.error("getFollowedDepartmentIds failed — org-service unreachable?: {}", e.getMessage());
-            return Collections.emptyList();
-        }
-    }
-
-    /**
-     * Returns the IDs of teams that the current authenticated user follows.
-     * Returns an empty list on any error.
-     */
-    @SuppressWarnings("unchecked")
-    public List<String> getFollowedTeamIds() {
-        try {
-            Map<?, ?> data = fetchData(orgServiceUrl + "/organizations/follows/mine");
-            if (data == null) return Collections.emptyList();
-            Object list = data.get("followedTeamIds");
-            return list instanceof List<?> l ? (List<String>) l : Collections.emptyList();
-        } catch (Exception e) {
-            log.error("getFollowedTeamIds failed — org-service unreachable?: {}", e.getMessage());
-            return Collections.emptyList();
-        }
-    }
-
-    /**
-     * Single call that returns both lists at once so we only hit org-service once
-     * per feed request. Returns a two-element array: [departmentIds, teamIds].
+     * Single call that returns both explicit-follow lists and implicit-membership
+     * lists at once so we only hit org-service once per feed request.
+     *
+     * <ul>
+     *   <li>{@code departmentIds} — departments the user explicitly follows</li>
+     *   <li>{@code teamIds}       — teams the user explicitly follows</li>
+     *   <li>{@code memberTeamIds} — teams the user is a member of</li>
+     *   <li>{@code memberDeptIds} — departments of the user's member teams</li>
+     * </ul>
      */
     @SuppressWarnings("unchecked")
     public UserFollows getUserFollows() {
@@ -125,26 +98,58 @@ public class OrganizationClient {
             Map<?, ?> data = fetchData(orgServiceUrl + "/organizations/follows/mine");
             if (data == null) return UserFollows.empty();
 
-            Object depts = data.get("followedDepartmentIds");
-            Object teams = data.get("followedTeamIds");
+            List<String> followedDepts  = readStringList(data, "followedDepartmentIds");
+            List<String> followedTeams  = readStringList(data, "followedTeamIds");
+            List<String> memberTeams    = readStringList(data, "memberTeamIds");
+            List<String> memberDepts    = readStringList(data, "memberDepartmentIds");
 
-            List<String> departmentIds = depts instanceof List<?> l ? (List<String>) l : Collections.emptyList();
-            List<String> teamIds       = teams instanceof List<?> l ? (List<String>) l : Collections.emptyList();
-
-            return new UserFollows(departmentIds, teamIds);
+            return new UserFollows(followedDepts, followedTeams, memberTeams, memberDepts);
         } catch (Exception e) {
             log.error("getUserFollows failed — org-service unreachable?: {}", e.getMessage());
             return UserFollows.empty();
         }
     }
 
-    /** Value-object returned by {@link #getUserFollows()}. */
-    public record UserFollows(List<String> departmentIds, List<String> teamIds) {
+    @SuppressWarnings("unchecked")
+    private List<String> readStringList(Map<?, ?> data, String key) {
+        Object val = data.get(key);
+        return val instanceof List<?> l ? (List<String>) l : Collections.emptyList();
+    }
+
+    /**
+     * Value-object returned by {@link #getUserFollows()}.
+     *
+     * <p>Combines explicit follows and implicit team membership so the feed
+     * query can be built in a single pass.</p>
+     */
+    public record UserFollows(
+            List<String> departmentIds,
+            List<String> teamIds,
+            List<String> memberTeamIds,
+            List<String> memberDepartmentIds) {
+
         public static UserFollows empty() {
-            return new UserFollows(Collections.emptyList(), Collections.emptyList());
+            return new UserFollows(
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    Collections.emptyList(),
+                    Collections.emptyList());
         }
+
+        /** True when there is at least one source of posts to show. */
+        public boolean hasAnyContent() {
+            return !departmentIds.isEmpty()
+                    || !teamIds.isEmpty()
+                    || !memberTeamIds.isEmpty()
+                    || !memberDepartmentIds.isEmpty();
+        }
+
+        /**
+         * @deprecated Use {@link #hasAnyContent()} — kept for backwards compatibility.
+         */
+        @Deprecated
         public boolean hasAnyFollows() {
-            return !departmentIds.isEmpty() || !teamIds.isEmpty();
+            return hasAnyContent();
         }
     }
 

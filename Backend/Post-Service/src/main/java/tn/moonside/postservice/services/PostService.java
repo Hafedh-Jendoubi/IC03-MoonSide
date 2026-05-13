@@ -15,6 +15,7 @@ import tn.moonside.postservice.repositories.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -72,15 +73,22 @@ public class PostService {
     /**
      * Personalised feed for the authenticated user.
      *
-     * Rules:
+     * <p>Rules:</p>
      * <ul>
-     *   <li>Fetches the list of departments and teams the user follows from
+     *   <li>Fetches explicit follows <em>and</em> implicit membership from
      *       Organization-Service in a single HTTP call.</li>
-     *   <li>Queries posts that belong to any of those departments or teams,
-     *       restricted to PUBLIC, DEPARTMENT_ONLY, and TEAM_ONLY visibility
-     *       (PRIVATE posts are never surfaced in feeds).</li>
-     *   <li>If the user follows nothing, returns an empty page instead of
-     *       accidentally returning all posts.</li>
+     *   <li>A user automatically sees posts from:
+     *     <ol>
+     *       <li>Departments they explicitly follow.</li>
+     *       <li>Teams they explicitly follow.</li>
+     *       <li>Teams they are a <strong>member</strong> of (joined / assigned).</li>
+     *       <li>Departments that contain a team they are a member of —
+     *           even if the user never pressed "follow" on that department.</li>
+     *     </ol>
+     *   </li>
+     *   <li>Visibility rules: PUBLIC, DEPARTMENT_ONLY, and TEAM_ONLY posts are
+     *       included; PRIVATE posts are never surfaced.</li>
+     *   <li>If the user has no follows and no memberships, returns an empty page.</li>
      * </ul>
      *
      * @param userId the authenticated user's ID (extracted from JWT by the controller)
@@ -88,18 +96,35 @@ public class PostService {
      * @param size   maximum items per page
      */
     public Page<PostResponse> getFollowingFeed(String userId, int page, int size) {
-        // 1. Resolve what the user follows (single HTTP call to org-service)
+        // 1. Resolve follows + memberships (single HTTP call to org-service)
         OrganizationClient.UserFollows follows = organizationClient.getUserFollows();
 
-        log.debug("Building following feed for user={}: {} departments, {} teams",
-                userId, follows.departmentIds().size(), follows.teamIds().size());
+        // 2. Merge explicit follows with implicit membership — deduplicate in stream
+        List<String> allDeptIds = Stream.concat(
+                        follows.departmentIds().stream(),
+                        follows.memberDepartmentIds().stream())
+                .distinct()
+                .toList();
 
-        // 2. Nothing followed → return empty page immediately
-        if (!follows.hasAnyFollows()) {
+        List<String> allTeamIds = Stream.concat(
+                        follows.teamIds().stream(),
+                        follows.memberTeamIds().stream())
+                .distinct()
+                .toList();
+
+        log.debug(
+            "Building feed for user={}: followedDepts={}, memberDepts={} → totalDepts={} | "
+          + "followedTeams={}, memberTeams={} → totalTeams={}",
+            userId,
+            follows.departmentIds().size(), follows.memberDepartmentIds().size(), allDeptIds.size(),
+            follows.teamIds().size(),       follows.memberTeamIds().size(),       allTeamIds.size());
+
+        // 3. Nothing to show → return empty page immediately
+        if (allDeptIds.isEmpty() && allTeamIds.isEmpty()) {
             return Page.empty(PageRequest.of(page, size));
         }
 
-        // 3. Query MongoDB for posts belonging to followed departments OR teams
+        // 4. Query MongoDB for posts belonging to any of the resolved departments OR teams
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
 
         List<VisibilityType> allowedVisibilities = List.of(
@@ -108,15 +133,10 @@ public class PostService {
                 VisibilityType.TEAM_ONLY
         );
 
-        // Ensure neither list is empty for the $in query
-        // (MongoDB $in: [] matches nothing, which is the correct behaviour —
-        //  but we guard anyway to keep the intent explicit)
-        List<String> deptIds = follows.departmentIds().isEmpty()
-                ? List.of("__no_dept__")
-                : follows.departmentIds();
-        List<String> teamIds = follows.teamIds().isEmpty()
-                ? List.of("__no_team__")
-                : follows.teamIds();
+        // Guard: MongoDB $in: [] matches nothing, which is what we want —
+        // but we use a sentinel to keep the query intent explicit.
+        List<String> deptIds = allDeptIds.isEmpty() ? List.of("__no_dept__") : allDeptIds;
+        List<String> teamIds = allTeamIds.isEmpty() ? List.of("__no_team__") : allTeamIds;
 
         return postRepository
                 .findFollowingFeed(deptIds, teamIds, allowedVisibilities, pageable)
