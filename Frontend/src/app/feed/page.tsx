@@ -1,37 +1,71 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { AuthLayout } from '@/components/auth-layout'
 import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
-import { postApi, userApi, PostResponse, PageResponse } from '@/lib/api'
+import { postApi, userApi, departmentApi, teamApi, PostResponse } from '@/lib/api'
 import { User } from '@/lib/types'
-import { Loader2, RefreshCw, Rss, Globe, Users, BookmarkX } from 'lucide-react'
+import { Loader2, RefreshCw, Globe, Users, BookmarkX, Building2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FeedTab = 'following' | 'discover'
+/** Cached label for a dept/team ID so we only fetch each name once. */
+type OriginLabel = { kind: 'department' | 'team'; name: string }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function FeedPage() {
   const { user } = useAuth()
 
-  const [activeTab, setActiveTab] = useState<FeedTab>('following')
   const [posts, setPosts] = useState<PostResponse[]>([])
   const [usersMap, setUsersMap] = useState<Record<string, User>>({})
+  const [originsMap, setOriginsMap] = useState<Record<string, OriginLabel>>({})
   const [page, setPage] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Prevent stale closure issues when tab switches trigger a reload
-  const activeTabRef = useRef(activeTab)
-  activeTabRef.current = activeTab
+  // ── Origin resolution (dept / team names) ─────────────────────────────────
+
+  const resolveOrigins = useCallback(
+    async (newPosts: PostResponse[]) => {
+      const missingDepts = [
+        ...new Set(
+          newPosts.map((p) => p.departmentId).filter((id): id is string => !!id && !originsMap[id])
+        ),
+      ]
+      const missingTeams = [
+        ...new Set(
+          newPosts.map((p) => p.teamId).filter((id): id is string => !!id && !originsMap[id])
+        ),
+      ]
+
+      if (missingDepts.length === 0 && missingTeams.length === 0) return
+
+      const [deptResults, teamResults] = await Promise.all([
+        Promise.allSettled(missingDepts.map((id) => departmentApi.getById(id))),
+        Promise.allSettled(missingTeams.map((id) => teamApi.getById(id))),
+      ])
+
+      const updates: Record<string, OriginLabel> = {}
+      deptResults.forEach((r, i) => {
+        if (r.status === 'fulfilled')
+          updates[missingDepts[i]] = { kind: 'department', name: (r.value as any).name }
+      })
+      teamResults.forEach((r, i) => {
+        if (r.status === 'fulfilled')
+          updates[missingTeams[i]] = { kind: 'team', name: (r.value as any).name }
+      })
+
+      setOriginsMap((prev) => ({ ...prev, ...updates }))
+    },
+    [originsMap]
+  )
 
   // ── Author resolution ──────────────────────────────────────────────────────
 
@@ -53,7 +87,7 @@ export default function FeedPage() {
   // ── Data loading ───────────────────────────────────────────────────────────
 
   const loadFeed = useCallback(
-    async (tab: FeedTab, pageNum = 0) => {
+    async (pageNum = 0) => {
       try {
         if (pageNum === 0) {
           setLoading(true)
@@ -63,13 +97,7 @@ export default function FeedPage() {
         }
         setError(null)
 
-        let data: PageResponse<PostResponse>
-
-        if (tab === 'following') {
-          data = await postApi.getFollowingFeed(pageNum, 20)
-        } else {
-          data = await postApi.getFeed(pageNum, 20)
-        }
+        const data = await postApi.getFollowingFeed(pageNum, 20)
 
         if (pageNum === 0) {
           setPosts(data.content)
@@ -79,7 +107,7 @@ export default function FeedPage() {
 
         setTotalPages(data.totalPages)
         setPage(pageNum)
-        await resolveAuthors(data.content)
+        await Promise.all([resolveAuthors(data.content), resolveOrigins(data.content)])
       } catch (err) {
         console.error('Failed to load feed:', err)
         setError('Could not load posts. Please try again.')
@@ -88,36 +116,18 @@ export default function FeedPage() {
         setLoadingMore(false)
       }
     },
-    [resolveAuthors]
+    [resolveAuthors, resolveOrigins]
   )
 
-  // Initial load
   useEffect(() => {
-    loadFeed('following', 0)
+    loadFeed(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Reload when tab changes
-  const handleTabChange = (tab: FeedTab) => {
-    if (tab === activeTab) return
-    setActiveTab(tab)
-    loadFeed(tab, 0)
-  }
-
   // ── Post lifecycle ─────────────────────────────────────────────────────────
 
-  const handlePostCreate = async (newPost: PostResponse) => {
-    // Only prepend to the current tab if the post belongs there
-    const isFollowingTab = activeTab === 'following'
-    const isPublic = newPost.postVisibility === 'PUBLIC'
-
-    // For the following tab: new posts that have a teamId or departmentId are
-    // guaranteed to appear in the feed (user created them so they follow the context).
-    // For the discover tab: only PUBLIC posts appear.
-    if (isFollowingTab || isPublic) {
-      setPosts((prev) => [newPost, ...prev])
-    }
-
+  const handlePostCreate = (newPost: PostResponse) => {
+    setPosts((prev) => [newPost, ...prev])
     if (user && !usersMap[user.id]) {
       setUsersMap((prev) => ({ ...prev, [user.id]: user }))
     }
@@ -141,26 +151,8 @@ export default function FeedPage() {
   return (
     <AuthLayout>
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Create Post */}
         <CreatePost user={user} onPostCreate={handlePostCreate} />
 
-        {/* Tab bar */}
-        <div className="bg-muted mt-6 mb-2 flex gap-1 rounded-lg border p-1">
-          <TabButton
-            active={activeTab === 'following'}
-            onClick={() => handleTabChange('following')}
-            icon={<Rss size={15} />}
-            label="Following"
-          />
-          <TabButton
-            active={activeTab === 'discover'}
-            onClick={() => handleTabChange('discover')}
-            icon={<Globe size={15} />}
-            label="Discover"
-          />
-        </div>
-
-        {/* Feed body */}
         {loading ? (
           <div className="flex flex-col items-center gap-4 py-16">
             <Loader2 className="text-primary h-8 w-8 animate-spin" />
@@ -169,18 +161,19 @@ export default function FeedPage() {
         ) : error ? (
           <div className="py-12 text-center">
             <p className="text-muted-foreground mb-4">{error}</p>
-            <Button variant="outline" onClick={() => loadFeed(activeTab, 0)}>
+            <Button variant="outline" onClick={() => loadFeed(0)}>
               <RefreshCw size={16} className="mr-2" /> Retry
             </Button>
           </div>
         ) : (
           <>
-            <div className="mt-4 space-y-6">
+            <div className="mt-6 space-y-6">
               {posts.map((post, index) => (
                 <div
                   key={post.id}
                   style={{ animation: `slide-up 0.3s ease-out ${index * 40}ms both` }}
                 >
+                  <PostOriginBadge post={post} originsMap={originsMap} />
                   <PostCard
                     post={post}
                     currentUserId={user.id}
@@ -191,27 +184,11 @@ export default function FeedPage() {
               ))}
             </div>
 
-            {/* Empty states */}
-            {posts.length === 0 && activeTab === 'following' && <FollowingEmptyState />}
+            {posts.length === 0 && <FollowingEmptyState />}
 
-            {posts.length === 0 && activeTab === 'discover' && (
-              <div className="py-12 text-center">
-                <div className="mb-4 text-6xl">📝</div>
-                <h2 className="text-foreground mb-2 text-xl font-semibold">No public posts yet</h2>
-                <p className="text-muted-foreground">
-                  Be the first to share something with the organisation!
-                </p>
-              </div>
-            )}
-
-            {/* Load more */}
             {page + 1 < totalPages && (
               <div className="mt-8 flex justify-center">
-                <Button
-                  variant="outline"
-                  onClick={() => loadFeed(activeTab, page + 1)}
-                  disabled={loadingMore}
-                >
+                <Button variant="outline" onClick={() => loadFeed(page + 1)} disabled={loadingMore}>
                   {loadingMore ? (
                     <>
                       <Loader2 size={16} className="mr-2 animate-spin" />
@@ -230,34 +207,49 @@ export default function FeedPage() {
   )
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
+// ─── PostOriginBadge ──────────────────────────────────────────────────────────
 
-function TabButton({
-  active,
-  onClick,
-  icon,
-  label,
+function PostOriginBadge({
+  post,
+  originsMap,
 }: {
-  active: boolean
-  onClick: () => void
-  icon: React.ReactNode
-  label: string
+  post: PostResponse
+  originsMap: Record<string, OriginLabel>
 }) {
+  const id = post.teamId ?? post.departmentId
+  if (!id) return null
+
+  const origin = originsMap[id]
+
+  if (!origin) {
+    return (
+      <div className="mb-1.5 flex items-center gap-1.5 px-1">
+        <div className="bg-muted h-3 w-32 animate-pulse rounded" />
+      </div>
+    )
+  }
+
+  const isTeam = origin.kind === 'team'
+
   return (
-    <button
-      onClick={onClick}
-      className={[
-        'flex flex-1 items-center justify-center gap-1.5 rounded-md px-4 py-2 text-sm font-medium transition-colors',
-        active
-          ? 'bg-background text-foreground shadow-sm'
-          : 'text-muted-foreground hover:text-foreground',
-      ].join(' ')}
-    >
-      {icon}
-      {label}
-    </button>
+    <div className="mb-1.5 flex items-center gap-1.5 px-1">
+      <span className="text-muted-foreground text-xs">Posted in</span>
+      <Link
+        href={isTeam ? `/team/${id}` : `/department/${id}`}
+        className="bg-muted/60 text-foreground hover:bg-muted inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors"
+      >
+        {isTeam ? (
+          <Users size={11} className="shrink-0 text-blue-500" />
+        ) : (
+          <Building2 size={11} className="shrink-0 text-violet-500" />
+        )}
+        {origin.name}
+      </Link>
+    </div>
   )
 }
+
+// ─── FollowingEmptyState ──────────────────────────────────────────────────────
 
 function FollowingEmptyState() {
   return (
@@ -267,8 +259,8 @@ function FollowingEmptyState() {
       </div>
       <h2 className="text-foreground mb-2 text-xl font-semibold">Your feed is empty</h2>
       <p className="text-muted-foreground mx-auto mb-6 max-w-sm text-sm">
-        Follow departments or teams to see their posts here. Everything posted there — including
-        comments — will appear in your personal feed.
+        Follow departments or teams to see their posts here. Everything posted there will appear in
+        your personal feed.
       </p>
       <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
         <Button asChild>
