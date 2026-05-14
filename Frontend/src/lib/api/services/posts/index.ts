@@ -1,4 +1,5 @@
 // Posts service
+export { attachmentApi } from './attachments'
 import { apiFetch } from '../../client'
 import type {
   PostResponse,

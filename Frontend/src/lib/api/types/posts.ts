@@ -9,12 +9,18 @@ export type PostType =
 export type PostVisibility = 'PUBLIC' | 'PRIVATE' | 'TEAM_ONLY' | 'DEPARTMENT_ONLY' | 'DRAFT'
 export type ClientPostVisibility = 'PUBLIC' | 'PRIVATE'
 
+export type AttachmentType = 'IMAGE' | 'VIDEO' | 'DOCUMENT' | 'AUDIO' | 'OTHER'
+
 export interface AttachmentResponse {
   id: string
-  url: string
+  postId: string
+  uploaderId: string
   fileName: string
-  fileType: string
-  fileSize: number
+  fileURL: string
+  fileSizeBytes: number
+  contentType: string
+  attachmentType: AttachmentType
+  uploadedAt: string
 }
 
 export interface PostResponse {

@@ -18,7 +18,7 @@ export { mediaApi } from './services/media'
 export { auditApi } from './services/audit'
 export { departmentApi } from './services/organizations/departments'
 export { teamApi } from './services/organizations/teams'
-export { postApi, commentApi, reactionApi } from './services/posts'
+export { postApi, commentApi, reactionApi, attachmentApi } from './services/posts'
 
 // Re-export core utilities
 export { tokenStorage, apiFetch } from './client'

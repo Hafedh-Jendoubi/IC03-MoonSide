@@ -2,7 +2,16 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Link from 'next/link'
-import { PostResponse, CommentResponse, commentApi, reactionApi, userApi, postApi } from '@/lib/api'
+import {
+  PostResponse,
+  AttachmentResponse,
+  CommentResponse,
+  commentApi,
+  reactionApi,
+  userApi,
+  postApi,
+  attachmentApi,
+} from '@/lib/api'
 import { User, getFullName, PostType, ROLE, hasRole } from '@/lib/types'
 import {
   Heart,
@@ -19,6 +28,11 @@ import {
   X,
   Check,
   CornerDownRight,
+  FileText,
+  Film,
+  Music,
+  Download,
+  Paperclip,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -208,6 +222,80 @@ function ReactionButton({
           </>
         )}
       </Button>
+    </div>
+  )
+}
+
+// ── AttachmentGallery ─────────────────────────────────────────────────────────
+
+function attachmentIcon(contentType: string) {
+  if (contentType.startsWith('image/')) return null // rendered as <img>
+  if (contentType.startsWith('video/')) return <Film size={20} className="text-purple-400" />
+  if (contentType.startsWith('audio/')) return <Music size={20} className="text-green-400" />
+  return <FileText size={20} className="text-orange-400" />
+}
+
+function AttachmentGallery({ attachments }: { attachments: AttachmentResponse[] }) {
+  if (!attachments || attachments.length === 0) return null
+
+  const images = attachments.filter((a) => a.contentType?.startsWith('image/'))
+  const others = attachments.filter((a) => !a.contentType?.startsWith('image/'))
+
+  return (
+    <div className="mb-4 space-y-3">
+      {/* Image grid */}
+      {images.length > 0 && (
+        <div
+          className={`grid gap-2 overflow-hidden rounded-xl ${
+            images.length === 1
+              ? 'grid-cols-1'
+              : images.length === 2
+                ? 'grid-cols-2'
+                : images.length === 3
+                  ? 'grid-cols-2'
+                  : 'grid-cols-2'
+          }`}
+        >
+          {images.map((img, idx) => (
+            <a
+              key={img.id}
+              href={img.fileURL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`block overflow-hidden rounded-lg ${
+                images.length === 3 && idx === 0 ? 'col-span-2' : ''
+              }`}
+            >
+              <img
+                src={img.fileURL}
+                alt={img.fileName}
+                className="h-full max-h-80 w-full object-cover transition-transform duration-200 hover:scale-[1.02]"
+              />
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* Non-image files */}
+      {others.length > 0 && (
+        <div className="space-y-1.5">
+          {others.map((att) => (
+            <a
+              key={att.id}
+              href={att.fileURL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="border-border bg-muted hover:bg-muted/70 flex items-center gap-3 rounded-lg border px-4 py-2.5 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
+            >
+              {attachmentIcon(att.contentType ?? '')}
+              <span className="text-foreground min-w-0 flex-1 truncate text-sm font-medium">
+                {att.fileName}
+              </span>
+              <Download size={14} className="text-muted-foreground shrink-0" />
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
@@ -821,6 +909,8 @@ export function PostCard({
   const [newComment, setNewComment] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
 
+  const [attachments, setAttachments] = useState<AttachmentResponse[]>(post.attachments ?? [])
+
   const [isEditingPost, setIsEditingPost] = useState(false)
   const [editPostContent, setEditPostContent] = useState(post.content)
   const [savingPost, setSavingPost] = useState(false)
@@ -849,6 +939,18 @@ export function PostCard({
   const { localMap: commentUsersMap, resolveAuthors } = useCommentAuthors(seedMap)
 
   const author = commentUsersMap[post.authorId]
+
+  // Load attachments on mount (the feed may return a trimmed post object)
+  useEffect(() => {
+    if (post.attachments && post.attachments.length > 0) {
+      setAttachments(post.attachments)
+      return
+    }
+    attachmentApi
+      .list(post.id)
+      .then((list) => setAttachments(list))
+      .catch(() => {})
+  }, [post.id])
 
   useEffect(() => {
     reactionApi
@@ -1049,6 +1151,9 @@ export function PostCard({
       ) : (
         <p className="text-foreground mb-4 leading-relaxed whitespace-pre-wrap">{post.content}</p>
       )}
+
+      {/* Attachments */}
+      <AttachmentGallery attachments={attachments} />
 
       {/* Stats bar */}
       <div className="text-muted-foreground border-border flex items-center gap-6 border-t border-b py-2.5 text-sm dark:border-slate-700">

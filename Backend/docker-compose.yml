@@ -149,6 +149,11 @@ services:
       - EUREKA_URI=http://eureka:8761/eureka/
       - JWT_SECRET=${JWT_SECRET}
       - ORGANIZATION_SERVICE_URL=http://organization-service:8084
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - MINIO_POST_BUCKET=post-attachments
+      - MINIO_PUBLIC_ENDPOINT=${MINIO_PUBLIC_ENDPOINT}
     depends_on:
       mongodb:
         condition: service_healthy
@@ -158,6 +163,8 @@ services:
         condition: service_started
       organization-service:
         condition: service_started
+      minio:
+        condition: service_healthy
     networks:
       - moonside-network
 
