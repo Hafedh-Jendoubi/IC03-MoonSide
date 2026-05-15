@@ -174,7 +174,7 @@ export function Navbar() {
                       className="border-primary h-10 w-10 rounded-full border-2 object-cover"
                     />
                   ) : (
-                    <div className="border-primary bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold">
+                    <div className="border-primary bg-primary text-primary-foreground flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold">
                       {user.firstName?.[0]?.toUpperCase()}
                       {user.lastName?.[0]?.toUpperCase()}
                     </div>

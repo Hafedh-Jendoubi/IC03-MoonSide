@@ -178,7 +178,7 @@ function LoginForm() {
   )
 
   return (
-    <div className="animate-fade-in flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4">
+    <div className="animate-fade-in dark:from-background dark:to-background flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4">
       <Card className="animate-scale-in w-full max-w-md p-8">
         {step === 'login' && (
           <>
@@ -460,7 +460,7 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4">
+        <div className="dark:from-background dark:to-background flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4">
           <Card className="flex w-full max-w-md flex-col items-center justify-center space-y-4 p-8">
             <div className="border-primary h-12 w-12 animate-spin rounded-full border-4 border-t-transparent"></div>
             <p className="text-muted-foreground font-medium">Loading WorkSphere...</p>
