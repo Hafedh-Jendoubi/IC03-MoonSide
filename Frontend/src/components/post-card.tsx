@@ -28,11 +28,6 @@ import {
   X,
   Check,
   CornerDownRight,
-  FileText,
-  Film,
-  Music,
-  Download,
-  Paperclip,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -45,6 +40,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/lib/auth-context'
 import { UsersModal, ModalUser } from '@/components/users-modal'
+import { AttachmentGallery } from '@/components/attachment-gallery'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -222,80 +218,6 @@ function ReactionButton({
           </>
         )}
       </Button>
-    </div>
-  )
-}
-
-// ── AttachmentGallery ─────────────────────────────────────────────────────────
-
-function attachmentIcon(contentType: string) {
-  if (contentType.startsWith('image/')) return null // rendered as <img>
-  if (contentType.startsWith('video/')) return <Film size={20} className="text-purple-400" />
-  if (contentType.startsWith('audio/')) return <Music size={20} className="text-green-400" />
-  return <FileText size={20} className="text-orange-400" />
-}
-
-function AttachmentGallery({ attachments }: { attachments: AttachmentResponse[] }) {
-  if (!attachments || attachments.length === 0) return null
-
-  const images = attachments.filter((a) => a.contentType?.startsWith('image/'))
-  const others = attachments.filter((a) => !a.contentType?.startsWith('image/'))
-
-  return (
-    <div className="mb-4 space-y-3">
-      {/* Image grid */}
-      {images.length > 0 && (
-        <div
-          className={`grid gap-2 overflow-hidden rounded-xl ${
-            images.length === 1
-              ? 'grid-cols-1'
-              : images.length === 2
-                ? 'grid-cols-2'
-                : images.length === 3
-                  ? 'grid-cols-2'
-                  : 'grid-cols-2'
-          }`}
-        >
-          {images.map((img, idx) => (
-            <a
-              key={img.id}
-              href={img.fileURL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`block overflow-hidden rounded-lg ${
-                images.length === 3 && idx === 0 ? 'col-span-2' : ''
-              }`}
-            >
-              <img
-                src={img.fileURL}
-                alt={img.fileName}
-                className="h-full max-h-80 w-full object-cover transition-transform duration-200 hover:scale-[1.02]"
-              />
-            </a>
-          ))}
-        </div>
-      )}
-
-      {/* Non-image files */}
-      {others.length > 0 && (
-        <div className="space-y-1.5">
-          {others.map((att) => (
-            <a
-              key={att.id}
-              href={att.fileURL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="border-border bg-muted hover:bg-muted/70 flex items-center gap-3 rounded-lg border px-4 py-2.5 transition-colors dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
-            >
-              {attachmentIcon(att.contentType ?? '')}
-              <span className="text-foreground min-w-0 flex-1 truncate text-sm font-medium">
-                {att.fileName}
-              </span>
-              <Download size={14} className="text-muted-foreground shrink-0" />
-            </a>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
