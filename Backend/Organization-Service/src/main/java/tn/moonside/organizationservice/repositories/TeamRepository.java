@@ -10,11 +10,14 @@ public interface TeamRepository extends MongoRepository<Team, String> {
 
     List<Team> findByDepartmentId(String departmentId);
 
-    List<Team> findByTeamVisibility(VisibilityType visibility);
+    /** Teams NOT attached to any department. */
+    List<Team> findByDepartmentIdIsNull();
 
-    List<Team> findByLeadId(String leadId);
+    List<Team> findByTeamVisibility(VisibilityType visibility);
 
     List<Team> findByNameContainingIgnoreCase(String name);
 
-    boolean existsByNameIgnoreCaseAndDepartmentId(String name, String departmentId);
+    List<Team> findByLeadId(String leadId);
+
+    boolean existsByNameAndDepartmentId(String name, String departmentId);
 }

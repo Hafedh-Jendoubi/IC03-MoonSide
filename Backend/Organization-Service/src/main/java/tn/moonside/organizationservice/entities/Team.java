@@ -17,7 +17,10 @@ public class Team {
     @Id
     private String id;
 
-    /** Foreign key to Department._id */
+    /**
+     * Foreign key to Department._id.
+     * NULL means this is an independent team (not part of any department).
+     */
     private String departmentId;
 
     /** User ID of the team lead (must exist in user-service). */

@@ -41,6 +41,16 @@ public class TeamController {
     }
 
     /**
+     * GET /organizations/teams/independent
+     * Returns PUBLIC teams that have no department — shown on the Discover page.
+     */
+    @GetMapping("/independent")
+    public ResponseEntity<ApiResponse<List<TeamResponse>>> getIndependentTeams(
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.success(teamService.getIndependentTeams(userId)));
+    }
+
+    /**
      * GET /organizations/teams/visible
      * Returns all teams the authenticated user is allowed to see:
      *  - All PUBLIC teams

@@ -33,6 +33,8 @@ public class SecurityConfig {
                 // ── Public discovery (GET only) ───────────────────────────────
                 .requestMatchers(HttpMethod.GET, "/organizations/departments/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/public").authenticated()
+                .requestMatchers(HttpMethod.GET, "/organizations/teams/independent").authenticated()
+                .requestMatchers(HttpMethod.GET, "/organizations/projects/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/visible").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/search").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/{teamId}").authenticated()
@@ -65,7 +67,11 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT, "/organizations/departments/**")
                     .hasAnyRole("CEO", "DEPARTMENT_LEADER")
 
-                .requestMatchers(HttpMethod.POST,   "/organizations/teams").hasAnyRole("CEO", "DEPARTMENT_LEADER")
+                .requestMatchers(HttpMethod.POST,   "/organizations/projects").hasRole("CEO")
+                .requestMatchers(HttpMethod.PUT,    "/organizations/projects/**").hasRole("CEO")
+                .requestMatchers(HttpMethod.DELETE, "/organizations/projects/**").hasRole("CEO")
+
+                .requestMatchers(HttpMethod.POST,   "/organizations/teams").hasAnyRole("CEO", "DEPARTMENT_LEADER", "HUMAN_RESOURCES")
                 .requestMatchers(HttpMethod.DELETE, "/organizations/teams/**").hasAnyRole("CEO", "DEPARTMENT_LEADER")
 
                 // Team updates

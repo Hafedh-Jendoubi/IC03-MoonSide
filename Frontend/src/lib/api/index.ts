@@ -18,6 +18,7 @@ export { mediaApi } from './services/media'
 export { auditApi } from './services/audit'
 export { departmentApi } from './services/organizations/departments'
 export { teamApi } from './services/organizations/teams'
+export { projectApi } from './services/organizations/projects'
 export { postApi, commentApi, reactionApi, attachmentApi } from './services/posts'
 
 // Re-export core utilities

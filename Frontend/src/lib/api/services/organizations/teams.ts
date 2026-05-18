@@ -11,6 +11,9 @@ export const teamApi = {
 
   getPublic: () => apiFetch<TeamResponse[]>('/organizations/teams/public'),
 
+  /** Teams not belonging to any department — for the Discover page. */
+  getIndependent: () => apiFetch<TeamResponse[]>('/organizations/teams/independent'),
+
   /** Returns PUBLIC teams + PRIVATE teams the current user is allowed to see */
   getVisible: () => apiFetch<TeamResponse[]>('/organizations/teams/visible'),
 
