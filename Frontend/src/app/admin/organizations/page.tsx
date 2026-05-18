@@ -235,7 +235,6 @@ function TeamForm({
           <select
             value={departmentId}
             onChange={(e) => setDepartmentId(e.target.value)}
-            required
             className="border-input bg-background focus-visible:ring-ring mt-1 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
           >
             <option value="">— Select —</option>

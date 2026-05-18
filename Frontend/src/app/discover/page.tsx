@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -16,46 +16,23 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
-  GitBranch,
   Globe,
-  ExternalLink,
-  Code2,
-  Calendar,
-  FolderGit2,
   BadgeCheck,
+  Building2,
+  UserCheck,
 } from 'lucide-react'
 import {
   teamApi,
-  projectApi,
+  departmentApi,
   userApi,
   TeamResponse,
-  ProjectResponse,
+  DepartmentResponse,
   UserTeamResponse,
   UserResponse,
 } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
 import { useAuth } from '@/lib/auth-context'
 import Link from 'next/link'
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-const STATUS_LABEL: Record<string, string> = {
-  PLANNING: 'Planning',
-  IN_PROGRESS: 'In Progress',
-  ON_HOLD: 'On Hold',
-  COMPLETED: 'Completed',
-  CANCELLED: 'Cancelled',
-  ARCHIVED: 'Archived',
-}
-
-const STATUS_COLOR: Record<string, string> = {
-  PLANNING: 'bg-slate-500/15 text-slate-400',
-  IN_PROGRESS: 'bg-blue-500/15 text-blue-400',
-  ON_HOLD: 'bg-amber-500/15 text-amber-400',
-  COMPLETED: 'bg-green-500/15 text-green-500',
-  CANCELLED: 'bg-red-500/15 text-red-400',
-  ARCHIVED: 'bg-slate-500/15 text-slate-500',
-}
 
 // ── Independent Team Card ─────────────────────────────────────────────────────
 
@@ -71,232 +48,270 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining }: TeamCardPro
   const isPrivate = team.teamVisibility !== 'PUBLIC'
 
   return (
-    <div className="bg-background border-border group flex h-full flex-col overflow-hidden rounded-xl border transition-shadow hover:shadow-md">
-      {/* Banner / Avatar header */}
-      <div className="relative h-24 overflow-hidden bg-gradient-to-br from-slate-700 to-slate-800">
-        {team.bannerUrl && (
-          <img src={team.bannerUrl} alt="" className="h-full w-full object-cover opacity-70" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-        {/* Avatar */}
-        <div className="absolute -bottom-5 left-4">
-          <div className="border-background bg-muted flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border-2 text-lg font-bold">
-            {team.avatarUrl ? (
-              <img src={team.avatarUrl} alt={team.name} className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-foreground">{team.name[0]?.toUpperCase()}</span>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex flex-1 flex-col gap-3 px-4 pt-8 pb-4">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="text-foreground truncate font-semibold">{team.name}</h3>
-            {isPrivate ? (
-              <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
-                <Lock className="h-3 w-3" /> Private
-              </div>
-            ) : (
-              <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
-                <Globe className="h-3 w-3" /> Public
-              </div>
-            )}
-          </div>
-          <div className="text-muted-foreground flex items-center gap-1 text-xs">
-            <Users className="h-3.5 w-3.5" />
-            <span>{team.memberCount}</span>
-          </div>
-        </div>
-
-        {team.description && (
-          <p className="text-muted-foreground line-clamp-2 flex-1 text-sm">{team.description}</p>
-        )}
-
-        {team.lead && (
-          <div className="flex items-center gap-2">
-            <div className="bg-primary/10 flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full">
-              {team.lead.avatar ? (
-                <img src={team.lead.avatar} alt="" className="h-full w-full object-cover" />
+    <Link href={`/team/${team.id}`} className="block h-full">
+      <div className="bg-background border-border group flex h-full flex-col overflow-hidden rounded-xl border transition-shadow hover:shadow-md">
+        {/* Banner / Avatar header */}
+        <div className="relative h-24 overflow-hidden bg-gradient-to-br from-slate-700 to-slate-800">
+          {team.bannerUrl && (
+            <img src={team.bannerUrl} alt="" className="h-full w-full object-cover opacity-70" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+          {/* Avatar */}
+          <div className="absolute -bottom-5 left-4">
+            <div className="border-background bg-muted flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border-2 text-lg font-bold">
+              {team.avatarUrl ? (
+                <img src={team.avatarUrl} alt={team.name} className="h-full w-full object-cover" />
               ) : (
-                <span className="text-primary text-[10px] font-bold">{team.lead.firstName[0]}</span>
+                <span className="text-foreground">{team.name[0]?.toUpperCase()}</span>
               )}
             </div>
-            <span className="text-muted-foreground text-xs">
-              Led by{' '}
-              <span className="text-foreground font-medium">
-                {team.lead.firstName} {team.lead.lastName}
-              </span>
-            </span>
           </div>
-        )}
+        </div>
 
-        {/* Footer actions */}
-        <div className="border-border mt-auto flex items-center justify-between border-t pt-3">
-          <button
-            onClick={() => onViewMembers(team)}
-            className="text-muted-foreground hover:text-foreground text-xs transition-colors"
-          >
-            View members
-          </button>
+        {/* Content */}
+        <div className="flex flex-1 flex-col gap-3 px-4 pt-8 pb-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="text-foreground truncate font-semibold">{team.name}</h3>
+              {isPrivate ? (
+                <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+                  <Lock className="h-3 w-3" /> Private
+                </div>
+              ) : (
+                <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+                  <Globe className="h-3 w-3" /> Public
+                </div>
+              )}
+            </div>
+            <div className="text-muted-foreground flex items-center gap-1 text-xs">
+              <Users className="h-3.5 w-3.5" />
+              <span>{team.memberCount}</span>
+            </div>
+          </div>
 
-          {team.isMember ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onLeave(team)}
-              disabled={joining}
-              className="h-7 text-xs"
-            >
-              {joining ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <UserMinus className="h-3 w-3" />
-              )}
-              <span className="ml-1">Leave</span>
-            </Button>
-          ) : isPrivate ? (
-            <Button size="sm" variant="ghost" disabled className="h-7 text-xs">
-              <Lock className="h-3 w-3" />
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              onClick={() => onJoin(team)}
-              disabled={joining}
-              className="h-7 text-xs"
-            >
-              {joining ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <UserPlus className="h-3 w-3" />
-              )}
-              <span className="ml-1">Join</span>
-            </Button>
+          {team.description && (
+            <p className="text-muted-foreground line-clamp-2 flex-1 text-sm">{team.description}</p>
           )}
+
+          {team.lead && (
+            <div className="flex items-center gap-2">
+              <div className="bg-primary/10 flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full">
+                {team.lead.avatar ? (
+                  <img src={team.lead.avatar} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="text-primary text-[10px] font-bold">
+                    {team.lead.firstName[0]}
+                  </span>
+                )}
+              </div>
+              <span className="text-muted-foreground text-xs">
+                Led by{' '}
+                <span className="text-foreground font-medium">
+                  {team.lead.firstName} {team.lead.lastName}
+                </span>
+              </span>
+            </div>
+          )}
+
+          {/* Footer actions */}
+          <div className="border-border mt-auto flex items-center justify-between border-t pt-3">
+            <button
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                onViewMembers(team)
+              }}
+              className="text-muted-foreground hover:text-foreground text-xs transition-colors"
+            >
+              View members
+            </button>
+
+            {team.isMember ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onLeave(team)
+                }}
+                disabled={joining}
+                className="h-7 text-xs"
+              >
+                {joining ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <UserMinus className="h-3 w-3" />
+                )}
+                <span className="ml-1">Leave</span>
+              </Button>
+            ) : isPrivate ? (
+              <Button size="sm" variant="ghost" disabled className="h-7 text-xs">
+                <Lock className="h-3 w-3" />
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onJoin(team)
+                }}
+                disabled={joining}
+                className="h-7 text-xs"
+              >
+                {joining ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <UserPlus className="h-3 w-3" />
+                )}
+                <span className="ml-1">Join</span>
+              </Button>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </Link>
   )
 }
 
-// ── Project Card ──────────────────────────────────────────────────────────────
+// ── Department Card ───────────────────────────────────────────────────────────
 
-function ProjectCard({ project }: { project: ProjectResponse }) {
+interface DepartmentCardProps {
+  department: DepartmentResponse
+  onFollow: (dept: DepartmentResponse) => void
+  onUnfollow: (dept: DepartmentResponse) => void
+  following: boolean
+}
+
+function DepartmentCard({ department, onFollow, onUnfollow, following }: DepartmentCardProps) {
   return (
-    <div className="bg-background border-border group flex h-full flex-col overflow-hidden rounded-xl border transition-shadow hover:shadow-md">
-      {/* Header */}
-      <div className="relative h-20 overflow-hidden bg-gradient-to-br from-indigo-900/60 to-purple-900/60">
-        {project.bannerUrl && (
-          <img src={project.bannerUrl} alt="" className="h-full w-full object-cover opacity-60" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
-        {/* Status badge */}
-        <div className="absolute top-3 right-3">
-          <span
-            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLOR[project.status] ?? ''}`}
-          >
-            {STATUS_LABEL[project.status] ?? project.status}
-          </span>
-        </div>
-        {/* Icon */}
-        <div className="absolute -bottom-4 left-4">
-          <div className="border-background flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border-2 bg-indigo-900">
-            {project.avatarUrl ? (
-              <img
-                src={project.avatarUrl}
-                alt={project.name}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <FolderGit2 className="h-5 w-5 text-indigo-300" />
-            )}
+    <Link href={`/department/${department.id}`} className="block h-full">
+      <div className="bg-background border-border group flex h-full flex-col overflow-hidden rounded-xl border transition-shadow hover:shadow-md">
+        {/* Banner */}
+        <div className="relative h-24 overflow-hidden bg-gradient-to-br from-violet-900/70 to-indigo-900/70">
+          {department.bannerUrl && (
+            <img
+              src={department.bannerUrl}
+              alt=""
+              className="h-full w-full object-cover opacity-70"
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+          {/* Avatar */}
+          <div className="absolute -bottom-5 left-4">
+            <div className="border-background bg-muted flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border-2 text-lg font-bold">
+              {department.avatarUrl ? (
+                <img
+                  src={department.avatarUrl}
+                  alt={department.name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Building2 className="text-muted-foreground h-6 w-6" />
+              )}
+            </div>
           </div>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div className="flex flex-1 flex-col gap-3 px-4 pt-7 pb-4">
-        <div>
-          <h3 className="text-foreground leading-tight font-semibold">{project.name}</h3>
-          {project.description && (
-            <p className="text-muted-foreground mt-1 line-clamp-2 text-xs">{project.description}</p>
+          {/* Active badge */}
+          {department.isActive && (
+            <div className="absolute top-3 right-3">
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] font-medium text-green-400">
+                Active
+              </span>
+            </div>
           )}
         </div>
 
-        {/* Tech stack */}
-        {project.technologies && project.technologies.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {project.technologies.slice(0, 5).map((tech) => (
-              <span
-                key={tech}
-                className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium"
+        {/* Content */}
+        <div className="flex flex-1 flex-col gap-3 px-4 pt-8 pb-4">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="text-foreground truncate font-semibold">{department.name}</h3>
+              <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
+                <Users className="h-3 w-3" />
+                <span>
+                  {department.teamCount} {department.teamCount === 1 ? 'team' : 'teams'}
+                </span>
+              </div>
+            </div>
+            <div className="text-muted-foreground flex items-center gap-1 text-xs">
+              <UserCheck className="h-3.5 w-3.5" />
+              <span>{department.followerCount}</span>
+            </div>
+          </div>
+
+          {department.description && (
+            <p className="text-muted-foreground line-clamp-2 flex-1 text-sm">
+              {department.description}
+            </p>
+          )}
+
+          {department.manager && (
+            <div className="flex items-center gap-2">
+              <div className="bg-primary/10 flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full">
+                {department.manager.avatar ? (
+                  <img
+                    src={department.manager.avatar}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-primary text-[10px] font-bold">
+                    {department.manager.firstName[0]}
+                  </span>
+                )}
+              </div>
+              <span className="text-muted-foreground text-xs">
+                Managed by{' '}
+                <span className="text-foreground font-medium">
+                  {department.manager.firstName} {department.manager.lastName}
+                </span>
+              </span>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="border-border mt-auto flex items-center justify-end border-t pt-3">
+            {department.isFollowing ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.preventDefault()
+                  onUnfollow(department)
+                }}
+                disabled={following}
+                className="h-7 text-xs"
               >
-                {tech}
-              </span>
-            ))}
-            {project.technologies.length > 5 && (
-              <span className="text-muted-foreground text-[10px]">
-                +{project.technologies.length - 5} more
-              </span>
+                {following ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <UserMinus className="h-3 w-3" />
+                )}
+                <span className="ml-1">Unfollow</span>
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.preventDefault()
+                  onFollow(department)
+                }}
+                disabled={following}
+                className="h-7 text-xs"
+              >
+                {following ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <UserPlus className="h-3 w-3" />
+                )}
+                <span className="ml-1">Follow</span>
+              </Button>
             )}
           </div>
-        )}
-
-        {/* Teams */}
-        {project.teams && project.teams.length > 0 && (
-          <div className="flex items-center gap-1.5">
-            <Users className="text-muted-foreground h-3 w-3 shrink-0" />
-            <span className="text-muted-foreground text-xs">
-              {project.teams.map((t) => t.name).join(', ')}
-            </span>
-          </div>
-        )}
-
-        {/* Dates */}
-        {(project.startDate || project.endDate) && (
-          <div className="text-muted-foreground flex items-center gap-1 text-xs">
-            <Calendar className="h-3 w-3 shrink-0" />
-            <span>
-              {project.startDate ? new Date(project.startDate).toLocaleDateString() : '?'}
-              {' → '}
-              {project.endDate ? new Date(project.endDate).toLocaleDateString() : 'Ongoing'}
-            </span>
-          </div>
-        )}
-
-        {/* Links */}
-        <div className="border-border mt-auto flex items-center gap-3 border-t pt-3">
-          {project.repositoryUrl && (
-            <a
-              href={project.repositoryUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
-            >
-              <GitBranch className="h-3.5 w-3.5" />
-              Repo
-            </a>
-          )}
-          {project.projectUrl && (
-            <a
-              href={project.projectUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-xs transition-colors"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-              Live
-            </a>
-          )}
-          {!project.repositoryUrl && !project.projectUrl && (
-            <span className="text-muted-foreground text-xs">No links yet</span>
-          )}
         </div>
       </div>
-    </div>
+    </Link>
   )
 }
 
@@ -330,31 +345,31 @@ function UserCard({ user }: { user: UserTeamResponse }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-type ActiveTab = 'teams' | 'projects'
+type ActiveTab = 'teams' | 'departments'
 type TeamSortType = 'name' | 'members'
-type ProjectSortType = 'name' | 'status'
+type DeptSortType = 'name' | 'teams' | 'followers'
 
 export default function DiscoverPage() {
   const { user: currentUser } = useAuth()
 
   const [independentTeams, setIndependentTeams] = useState<TeamResponse[]>([])
-  const [projects, setProjects] = useState<ProjectResponse[]>([])
+  const [departments, setDepartments] = useState<DepartmentResponse[]>([])
   const [myTeams, setMyTeams] = useState<TeamResponse[]>([])
   const [users, setUsers] = useState<UserResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [activeTab, setActiveTab] = useState<ActiveTab>('teams')
+  const [activeTab, setActiveTab] = useState<ActiveTab>('departments')
 
   // Team controls
   const [teamSearch, setTeamSearch] = useState('')
   const [teamSort, setTeamSort] = useState<TeamSortType>('name')
   const [joiningTeam, setJoiningTeam] = useState<string | null>(null)
 
-  // Project controls
-  const [projectSearch, setProjectSearch] = useState('')
-  const [projectSort, setProjectSort] = useState<ProjectSortType>('name')
-  const [projectStatusFilter, setProjectStatusFilter] = useState<string>('ALL')
+  // Department controls
+  const [deptSearch, setDeptSearch] = useState('')
+  const [deptSort, setDeptSort] = useState<DeptSortType>('name')
+  const [followingDept, setFollowingDept] = useState<string | null>(null)
 
   // People carousel
   const [currentUserIndex, setCurrentUserIndex] = useState(0)
@@ -376,15 +391,15 @@ export default function DiscoverPage() {
     setLoading(true)
     setError(null)
     try {
-      const [indTeams, publicProjects, mine, allUsers] = await Promise.all([
+      const [indTeams, depts, mine, allUsers] = await Promise.all([
         teamApi.getIndependent(),
-        projectApi.getPublic(),
+        departmentApi.getAll(),
         teamApi.getMy(),
         userApi.getAll(),
       ])
       const myIds = new Set(mine.map((t) => t.id))
       setIndependentTeams(indTeams.map((t) => ({ ...t, isMember: myIds.has(t.id) })))
-      setProjects(publicProjects)
+      setDepartments(depts)
       setMyTeams(mine)
       setUsers(allUsers.filter((u) => u.id !== currentUser?.id))
     } catch (e: any) {
@@ -454,6 +469,34 @@ export default function DiscoverPage() {
     }
   }
 
+  // ── Follow / Unfollow Department ──────────────────────────────────────────
+
+  async function handleFollow(dept: DepartmentResponse) {
+    setFollowingDept(dept.id)
+    try {
+      const updated = await departmentApi.follow(dept.id)
+      setDepartments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))
+      showToast(`You are now following ${dept.name}!`, 'success')
+    } catch (e: any) {
+      showToast(e.message ?? 'Could not follow department', 'error')
+    } finally {
+      setFollowingDept(null)
+    }
+  }
+
+  async function handleUnfollow(dept: DepartmentResponse) {
+    setFollowingDept(dept.id)
+    try {
+      const updated = await departmentApi.unfollow(dept.id)
+      setDepartments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))
+      showToast(`Unfollowed ${dept.name}`, 'success')
+    } catch (e: any) {
+      showToast(e.message ?? 'Could not unfollow department', 'error')
+    } finally {
+      setFollowingDept(null)
+    }
+  }
+
   // ── Derived ───────────────────────────────────────────────────────────────
 
   const filteredTeams = independentTeams
@@ -462,17 +505,16 @@ export default function DiscoverPage() {
       teamSort === 'members' ? b.memberCount - a.memberCount : a.name.localeCompare(b.name)
     )
 
-  const filteredProjects = projects
-    .filter(
-      (p) =>
-        p.name.toLowerCase().includes(projectSearch.toLowerCase()) &&
-        (projectStatusFilter === 'ALL' || p.status === projectStatusFilter)
-    )
-    .sort((a, b) =>
-      projectSort === 'status' ? a.status.localeCompare(b.status) : a.name.localeCompare(b.name)
-    )
+  const filteredDepts = departments
+    .filter((d) => d.name.toLowerCase().includes(deptSearch.toLowerCase()))
+    .sort((a, b) => {
+      if (deptSort === 'teams') return b.teamCount - a.teamCount
+      if (deptSort === 'followers') return b.followerCount - a.followerCount
+      return a.name.localeCompare(b.name)
+    })
 
   const joinedCount = independentTeams.filter((t) => t.isMember).length
+  const followingCount = departments.filter((d) => d.isFollowing).length
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
 
@@ -516,26 +558,25 @@ export default function DiscoverPage() {
             </div>
           )}
 
-          {/* Page header */}
-          <div>
-            <h1 className="text-foreground text-2xl font-bold">Discover</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Explore independent teams and software projects across the organization.
-            </p>
-          </div>
-
           {/* Stats row */}
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <StatCard
+              icon={<Building2 className="h-5 w-5 text-violet-400" />}
+              label="Departments"
+              value={departments.length}
+            />
             <StatCard
               icon={<Users className="h-5 w-5 text-blue-400" />}
               label="Independent Teams"
               value={independentTeams.length}
             />
-            <StatCard
-              icon={<Code2 className="h-5 w-5 text-indigo-400" />}
-              label="Projects"
-              value={projects.length}
-            />
+            {followingCount > 0 && (
+              <StatCard
+                icon={<UserCheck className="h-5 w-5 text-violet-400" />}
+                label="Depts Following"
+                value={followingCount}
+              />
+            )}
             {joinedCount > 0 && (
               <StatCard
                 icon={<BadgeCheck className="h-5 w-5 text-green-400" />}
@@ -547,13 +588,79 @@ export default function DiscoverPage() {
 
           {/* Tab switcher */}
           <div className="border-border flex w-fit gap-1 rounded-xl border p-1">
-            <TabBtn active={activeTab === 'teams'} onClick={() => setActiveTab('teams')}>
-              <Users className="h-4 w-4" /> Teams
+            <TabBtn
+              active={activeTab === 'departments'}
+              onClick={() => setActiveTab('departments')}
+            >
+              <Building2 className="h-4 w-4" /> Departments
             </TabBtn>
-            <TabBtn active={activeTab === 'projects'} onClick={() => setActiveTab('projects')}>
-              <FolderGit2 className="h-4 w-4" /> Projects
+            <TabBtn active={activeTab === 'teams'} onClick={() => setActiveTab('teams')}>
+              <Users className="h-4 w-4" /> Independent Teams
             </TabBtn>
           </div>
+
+          {/* ── DEPARTMENTS TAB ────────────────────────────────────────────── */}
+          {activeTab === 'departments' && (
+            <div className="space-y-5">
+              {/* Controls */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="relative min-w-48 flex-1">
+                  <Search className="text-muted-foreground absolute top-2.5 left-3 h-4 w-4" />
+                  <Input
+                    placeholder="Search departments…"
+                    value={deptSearch}
+                    onChange={(e) => setDeptSearch(e.target.value)}
+                    className="pl-9"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant={deptSort === 'name' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setDeptSort('name')}
+                  >
+                    A–Z
+                  </Button>
+                  <Button
+                    variant={deptSort === 'teams' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setDeptSort('teams')}
+                  >
+                    Most Teams
+                  </Button>
+                  <Button
+                    variant={deptSort === 'followers' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setDeptSort('followers')}
+                  >
+                    Most Followers
+                  </Button>
+                </div>
+              </div>
+
+              {filteredDepts.length === 0 ? (
+                <Empty
+                  icon={<Building2 className="h-8 w-8" />}
+                  title={deptSearch ? 'No departments match your search' : 'No departments yet'}
+                  subtitle={
+                    deptSearch ? '' : 'Departments across the organization will appear here.'
+                  }
+                />
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {filteredDepts.map((dept) => (
+                    <DepartmentCard
+                      key={dept.id}
+                      department={dept}
+                      onFollow={handleFollow}
+                      onUnfollow={handleUnfollow}
+                      following={followingDept === dept.id}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ── TEAMS TAB ─────────────────────────────────────────────────── */}
           {activeTab === 'teams' && (
@@ -606,50 +713,6 @@ export default function DiscoverPage() {
                       onViewMembers={handleViewMembers}
                       joining={joiningTeam === team.id}
                     />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ── PROJECTS TAB ──────────────────────────────────────────────── */}
-          {activeTab === 'projects' && (
-            <div className="space-y-5">
-              {/* Controls */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="relative min-w-48 flex-1">
-                  <Search className="text-muted-foreground absolute top-2.5 left-3 h-4 w-4" />
-                  <Input
-                    placeholder="Search projects…"
-                    value={projectSearch}
-                    onChange={(e) => setProjectSearch(e.target.value)}
-                    className="pl-9"
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {['ALL', 'PLANNING', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED'].map((s) => (
-                    <Button
-                      key={s}
-                      variant={projectStatusFilter === s ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setProjectStatusFilter(s)}
-                    >
-                      {s === 'ALL' ? 'All' : STATUS_LABEL[s]}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {filteredProjects.length === 0 ? (
-                <Empty
-                  icon={<FolderGit2 className="h-8 w-8" />}
-                  title={projectSearch ? 'No projects match your search' : 'No projects yet'}
-                  subtitle="Software projects managed by teams will appear here."
-                />
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {filteredProjects.map((project) => (
-                    <ProjectCard key={project.id} project={project} />
                   ))}
                 </div>
               )}
