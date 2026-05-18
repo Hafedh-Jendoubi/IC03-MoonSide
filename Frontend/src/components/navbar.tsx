@@ -7,7 +7,17 @@ import { useAuth } from '@/lib/auth-context'
 import { canAccessBackOffice, getFullName } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Heart, Mail, Bell, Search, LogOut, Settings, User, Shield, Compass } from 'lucide-react'
+import {
+  FileArchive,
+  Mail,
+  Bell,
+  Search,
+  LogOut,
+  Settings,
+  User,
+  Shield,
+  Compass,
+} from 'lucide-react'
 import { Notification } from '@/lib/types'
 
 export function Navbar() {
@@ -51,7 +61,7 @@ export function Navbar() {
   }
 
   const navLinks = [
-    { href: '/feed', label: 'Feed', icon: Heart },
+    { href: '/feed', label: 'Feed', icon: FileArchive },
     { href: '/messages', label: 'Messages', icon: Mail },
     { href: '/discover', label: 'Discover', icon: Compass },
   ]

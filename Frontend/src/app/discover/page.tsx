@@ -3,10 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Users,
-  Lock,
   Loader2,
   X,
   UserPlus,
@@ -20,6 +18,7 @@ import {
   BadgeCheck,
   Building2,
   UserCheck,
+  Lock,
 } from 'lucide-react'
 import {
   teamApi,
@@ -27,7 +26,6 @@ import {
   userApi,
   TeamResponse,
   DepartmentResponse,
-  UserTeamResponse,
   UserResponse,
 } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
@@ -38,26 +36,23 @@ import Link from 'next/link'
 
 interface TeamCardProps {
   team: TeamResponse
-  onJoin: (team: TeamResponse) => void
-  onLeave: (team: TeamResponse) => void
-  onViewMembers: (team: TeamResponse) => void
-  joining: boolean
+  onFollow: (team: TeamResponse) => void
+  onUnfollow: (team: TeamResponse) => void
+  following: boolean
 }
 
-function TeamCard({ team, onJoin, onLeave, onViewMembers, joining }: TeamCardProps) {
-  const isPrivate = team.teamVisibility !== 'PUBLIC'
-
+function TeamCard({ team, onFollow, onUnfollow, following }: TeamCardProps) {
   return (
     <Link href={`/team/${team.id}`} className="block h-full">
       <div className="bg-background border-border group flex h-full flex-col overflow-hidden rounded-xl border transition-shadow hover:shadow-md">
         {/* Banner / Avatar header */}
-        <div className="relative h-24 overflow-hidden bg-gradient-to-br from-slate-700 to-slate-800">
+        <div className="relative h-24 bg-gradient-to-br from-slate-700 to-slate-800">
           {team.bannerUrl && (
             <img src={team.bannerUrl} alt="" className="h-full w-full object-cover opacity-70" />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
           {/* Avatar */}
-          <div className="absolute -bottom-5 left-4">
+          <div className="absolute bottom-0 left-4 translate-y-1/2">
             <div className="border-background bg-muted flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border-2 text-lg font-bold">
               {team.avatarUrl ? (
                 <img src={team.avatarUrl} alt={team.name} className="h-full w-full object-cover" />
@@ -69,11 +64,11 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining }: TeamCardPro
         </div>
 
         {/* Content */}
-        <div className="flex flex-1 flex-col gap-3 px-4 pt-8 pb-4">
+        <div className="flex flex-1 flex-col gap-3 px-4 pt-10 pb-4">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h3 className="text-foreground truncate font-semibold">{team.name}</h3>
-              {isPrivate ? (
+              {team.teamVisibility ? (
                 <div className="text-muted-foreground mt-0.5 flex items-center gap-1 text-xs">
                   <Lock className="h-3 w-3" /> Private
                 </div>
@@ -114,40 +109,25 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining }: TeamCardPro
           )}
 
           {/* Footer actions */}
-          <div className="border-border mt-auto flex items-center justify-between border-t pt-3">
-            <button
-              onClick={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                onViewMembers(team)
-              }}
-              className="text-muted-foreground hover:text-foreground text-xs transition-colors"
-            >
-              View members
-            </button>
-
-            {team.isMember ? (
+          <div className="border-border mt-auto flex items-center justify-end border-t pt-3">
+            {team.isFollowing ? (
               <Button
                 size="sm"
                 variant="outline"
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
-                  onLeave(team)
+                  onUnfollow(team)
                 }}
-                disabled={joining}
+                disabled={following}
                 className="h-7 text-xs"
               >
-                {joining ? (
+                {following ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
                   <UserMinus className="h-3 w-3" />
                 )}
-                <span className="ml-1">Leave</span>
-              </Button>
-            ) : isPrivate ? (
-              <Button size="sm" variant="ghost" disabled className="h-7 text-xs">
-                <Lock className="h-3 w-3" />
+                <span className="ml-1">Unfollow</span>
               </Button>
             ) : (
               <Button
@@ -155,17 +135,17 @@ function TeamCard({ team, onJoin, onLeave, onViewMembers, joining }: TeamCardPro
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
-                  onJoin(team)
+                  onFollow(team)
                 }}
-                disabled={joining}
+                disabled={following}
                 className="h-7 text-xs"
               >
-                {joining ? (
+                {following ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
                 ) : (
                   <UserPlus className="h-3 w-3" />
                 )}
-                <span className="ml-1">Join</span>
+                <span className="ml-1">Follow</span>
               </Button>
             )}
           </div>
@@ -189,7 +169,7 @@ function DepartmentCard({ department, onFollow, onUnfollow, following }: Departm
     <Link href={`/department/${department.id}`} className="block h-full">
       <div className="bg-background border-border group flex h-full flex-col overflow-hidden rounded-xl border transition-shadow hover:shadow-md">
         {/* Banner */}
-        <div className="relative h-24 overflow-hidden bg-gradient-to-br from-violet-900/70 to-indigo-900/70">
+        <div className="relative h-24 bg-gradient-to-br from-violet-900/70 to-indigo-900/70">
           {department.bannerUrl && (
             <img
               src={department.bannerUrl}
@@ -199,7 +179,7 @@ function DepartmentCard({ department, onFollow, onUnfollow, following }: Departm
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
           {/* Avatar */}
-          <div className="absolute -bottom-5 left-4">
+          <div className="absolute bottom-0 left-4 translate-y-1/2">
             <div className="border-background bg-muted flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl border-2 text-lg font-bold">
               {department.avatarUrl ? (
                 <img
@@ -223,7 +203,7 @@ function DepartmentCard({ department, onFollow, onUnfollow, following }: Departm
         </div>
 
         {/* Content */}
-        <div className="flex flex-1 flex-col gap-3 px-4 pt-8 pb-4">
+        <div className="flex flex-1 flex-col gap-3 px-4 pt-10 pb-4">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <h3 className="text-foreground truncate font-semibold">{department.name}</h3>
@@ -315,34 +295,6 @@ function DepartmentCard({ department, onFollow, onUnfollow, following }: Departm
   )
 }
 
-// ── User Card ─────────────────────────────────────────────────────────────────
-
-function UserCard({ user }: { user: UserTeamResponse }) {
-  if (!user.user) return null
-  const initials = `${user.user.firstName[0]}${user.user.lastName[0]}`.toUpperCase()
-  return (
-    <div className="bg-background border-border flex h-full flex-col space-y-3 rounded-lg border p-4 text-center">
-      <div className="bg-muted text-foreground mx-auto flex h-14 w-14 items-center justify-center rounded-full font-semibold">
-        {initials}
-      </div>
-      <div className="min-w-0 flex-1">
-        <h3 className="text-foreground truncate text-sm font-semibold">
-          {user.user.firstName} {user.user.lastName}
-        </h3>
-        {user.user.jobTitle && (
-          <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">{user.user.jobTitle}</p>
-        )}
-      </div>
-      {user.user.email && (
-        <div className="text-muted-foreground border-border flex items-center justify-center gap-1 border-t pt-3 text-xs">
-          <Mail className="h-3 w-3" />
-          <span className="truncate">{user.user.email}</span>
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 type ActiveTab = 'teams' | 'departments'
@@ -354,7 +306,6 @@ export default function DiscoverPage() {
 
   const [independentTeams, setIndependentTeams] = useState<TeamResponse[]>([])
   const [departments, setDepartments] = useState<DepartmentResponse[]>([])
-  const [myTeams, setMyTeams] = useState<TeamResponse[]>([])
   const [users, setUsers] = useState<UserResponse[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -364,7 +315,7 @@ export default function DiscoverPage() {
   // Team controls
   const [teamSearch, setTeamSearch] = useState('')
   const [teamSort, setTeamSort] = useState<TeamSortType>('name')
-  const [joiningTeam, setJoiningTeam] = useState<string | null>(null)
+  const [followingTeam, setFollowingTeam] = useState<string | null>(null)
 
   // Department controls
   const [deptSearch, setDeptSearch] = useState('')
@@ -377,30 +328,19 @@ export default function DiscoverPage() {
   // Toast
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
 
-  // Members modal
-  const [membersDialog, setMembersDialog] = useState<{
-    open: boolean
-    team: TeamResponse | null
-    members: UserTeamResponse[]
-    loading: boolean
-  }>({ open: false, team: null, members: [], loading: false })
-
   // ── Load ─────────────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [indTeams, depts, mine, allUsers] = await Promise.all([
+      const [indTeams, depts, allUsers] = await Promise.all([
         teamApi.getIndependent(),
         departmentApi.getAll(),
-        teamApi.getMy(),
         userApi.getAll(),
       ])
-      const myIds = new Set(mine.map((t) => t.id))
-      setIndependentTeams(indTeams.map((t) => ({ ...t, isMember: myIds.has(t.id) })))
+      setIndependentTeams(indTeams)
       setDepartments(depts)
-      setMyTeams(mine)
       setUsers(allUsers.filter((u) => u.id !== currentUser?.id))
     } catch (e: any) {
       setError(e.message ?? 'Failed to load data')
@@ -418,54 +358,35 @@ export default function DiscoverPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  // ── Join / Leave ──────────────────────────────────────────────────────────
+  // ── Follow / Unfollow Team ────────────────────────────────────────────────
 
-  async function handleJoin(team: TeamResponse) {
-    setJoiningTeam(team.id)
+  async function handleFollowTeam(team: TeamResponse) {
+    setFollowingTeam(team.id)
     try {
-      const updated = await teamApi.join(team.id)
+      const updated = await teamApi.follow(team.id)
       setIndependentTeams((prev) =>
-        prev.map((t) => (t.id === updated.id ? { ...updated, isMember: true } : t))
+        prev.map((t) => (t.id === updated.id ? { ...updated, isFollowing: true } : t))
       )
-      setMyTeams((prev) => [
-        ...prev.filter((t) => t.id !== updated.id),
-        { ...updated, isMember: true },
-      ])
-      showToast(`You joined ${team.name}!`, 'success')
+      showToast(`You are now following ${team.name}!`, 'success')
     } catch (e: any) {
-      showToast(e.message ?? 'Could not join team', 'error')
+      showToast(e.message ?? 'Could not follow team', 'error')
     } finally {
-      setJoiningTeam(null)
+      setFollowingTeam(null)
     }
   }
 
-  async function handleLeave(team: TeamResponse) {
-    setJoiningTeam(team.id)
+  async function handleUnfollowTeam(team: TeamResponse) {
+    setFollowingTeam(team.id)
     try {
-      await teamApi.leave(team.id)
+      const updated = await teamApi.unfollow(team.id)
       setIndependentTeams((prev) =>
-        prev.map((t) =>
-          t.id === team.id
-            ? { ...t, isMember: false, memberCount: Math.max(0, t.memberCount - 1) }
-            : t
-        )
+        prev.map((t) => (t.id === updated.id ? { ...updated, isFollowing: false } : t))
       )
-      setMyTeams((prev) => prev.filter((t) => t.id !== team.id))
-      showToast(`You left ${team.name}`, 'success')
+      showToast(`Unfollowed ${team.name}`, 'success')
     } catch (e: any) {
-      showToast(e.message ?? 'Could not leave team', 'error')
+      showToast(e.message ?? 'Could not unfollow team', 'error')
     } finally {
-      setJoiningTeam(null)
-    }
-  }
-
-  async function handleViewMembers(team: TeamResponse) {
-    setMembersDialog({ open: true, team, members: [], loading: true })
-    try {
-      const members = await teamApi.getMembers(team.id)
-      setMembersDialog((prev) => ({ ...prev, members, loading: false }))
-    } catch {
-      setMembersDialog((prev) => ({ ...prev, loading: false }))
+      setFollowingTeam(null)
     }
   }
 
@@ -513,7 +434,7 @@ export default function DiscoverPage() {
       return a.name.localeCompare(b.name)
     })
 
-  const joinedCount = independentTeams.filter((t) => t.isMember).length
+  const followingTeamCount = independentTeams.filter((t) => t.isFollowing).length
   const followingCount = departments.filter((d) => d.isFollowing).length
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
@@ -570,20 +491,6 @@ export default function DiscoverPage() {
               label="Independent Teams"
               value={independentTeams.length}
             />
-            {followingCount > 0 && (
-              <StatCard
-                icon={<UserCheck className="h-5 w-5 text-violet-400" />}
-                label="Depts Following"
-                value={followingCount}
-              />
-            )}
-            {joinedCount > 0 && (
-              <StatCard
-                icon={<BadgeCheck className="h-5 w-5 text-green-400" />}
-                label="Teams Joined"
-                value={joinedCount}
-              />
-            )}
           </div>
 
           {/* Tab switcher */}
@@ -708,10 +615,9 @@ export default function DiscoverPage() {
                     <TeamCard
                       key={team.id}
                       team={team}
-                      onJoin={handleJoin}
-                      onLeave={handleLeave}
-                      onViewMembers={handleViewMembers}
-                      joining={joiningTeam === team.id}
+                      onFollow={handleFollowTeam}
+                      onUnfollow={handleUnfollowTeam}
+                      following={followingTeam === team.id}
                     />
                   ))}
                 </div>
@@ -727,13 +633,16 @@ export default function DiscoverPage() {
                 <div className="overflow-hidden">
                   <div
                     className="flex gap-4 transition-transform duration-300 ease-out"
-                    style={{ transform: `translateX(-${currentUserIndex * 25}%)` }}
+                    style={{
+                      transform: `translateX(-${currentUserIndex * (100 / Math.min(users.length, 4))}%)`,
+                    }}
                   >
                     {users.map((user) => (
                       <Link
                         key={user.id}
                         href={`/profile/${user.id}`}
-                        className="w-1/4 flex-shrink-0"
+                        className="flex-shrink-0"
+                        style={{ width: `calc(${100 / Math.min(users.length, 4)}% - 12px)` }}
                       >
                         <div className="bg-background border-border hover:border-border/80 flex h-full cursor-pointer flex-col space-y-4 rounded-lg border p-4 transition-all duration-200 hover:shadow-md">
                           <div className="flex justify-center">
@@ -785,14 +694,18 @@ export default function DiscoverPage() {
                   <div className="mt-6 flex items-center justify-center gap-4">
                     <button
                       onClick={() =>
-                        setCurrentUserIndex((i) => (i - 1 + users.length) % users.length)
+                        setCurrentUserIndex(
+                          (i) => (i - 1 + Math.ceil(users.length / 4)) % Math.ceil(users.length / 4)
+                        )
                       }
                       className="bg-background border-border hover:bg-muted text-foreground rounded-full border p-2 transition-colors"
                     >
                       <ChevronLeft className="h-5 w-5" />
                     </button>
                     <button
-                      onClick={() => setCurrentUserIndex((i) => (i + 1) % users.length)}
+                      onClick={() =>
+                        setCurrentUserIndex((i) => (i + 1) % Math.ceil(users.length / 4))
+                      }
                       className="bg-background border-border hover:bg-muted text-foreground rounded-full border p-2 transition-colors"
                     >
                       <ChevronRight className="h-5 w-5" />
@@ -803,33 +716,6 @@ export default function DiscoverPage() {
             </div>
           )}
         </div>
-
-        {/* Members Dialog */}
-        <Dialog
-          open={membersDialog.open}
-          onOpenChange={(open) => !open && setMembersDialog((p) => ({ ...p, open: false }))}
-        >
-          <DialogContent className="flex max-h-[80vh] flex-col rounded-lg sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>{membersDialog.team?.name} Members</DialogTitle>
-            </DialogHeader>
-            <div className="min-h-0 flex-1 overflow-y-auto py-4">
-              {membersDialog.loading ? (
-                <div className="flex items-center justify-center py-10">
-                  <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
-                </div>
-              ) : membersDialog.members.length === 0 ? (
-                <p className="text-muted-foreground py-10 text-center text-sm">No members yet.</p>
-              ) : (
-                <div className="grid grid-cols-1 gap-3">
-                  {membersDialog.members.map((m) => (
-                    <div key={m.id}>{m.user ? <UserCard user={m} /> : null}</div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
 
         {/* Toast */}
         {toast && (

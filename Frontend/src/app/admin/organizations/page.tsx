@@ -52,7 +52,7 @@ import {
   Lock,
   Loader2,
   RefreshCw,
-  CheckCircle,
+  FolderCog,
   XCircle,
   Crown,
   UserCog,
@@ -809,11 +809,11 @@ export default function AdminOrganizationsPage() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-green-500/10 p-2">
-                <CheckCircle className="h-5 w-5 text-green-500" />
+                <FolderCog className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{departments.filter((d) => d.isActive).length}</p>
-                <p className="text-muted-foreground text-xs">Active Depts</p>
+                <p className="text-2xl font-bold">{projects.length}</p>
+                <p className="text-muted-foreground text-xs">Projects</p>
               </div>
             </div>
           </CardContent>
