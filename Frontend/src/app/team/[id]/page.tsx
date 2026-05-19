@@ -25,6 +25,11 @@ import {
   MoreVertical,
   Crown,
   LogOut,
+  FolderKanban,
+  ExternalLink,
+  Github,
+  CalendarDays,
+  Circle,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -37,11 +42,13 @@ import { Button } from '@/components/ui/button'
 import {
   teamApi,
   departmentApi,
+  projectApi,
   TeamResponse,
   DepartmentResponse,
   UserTeamResponse,
   UserResponse,
   PostResponse,
+  ProjectResponse,
   userApi,
 } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
@@ -1136,6 +1143,134 @@ function TeamMembersModal({ team, onClose }: TeamMembersModalProps) {
   )
 }
 
+// ── Project Status helpers ─────────────────────────────────────────────────────
+
+const PROJECT_STATUS_CONFIG = {
+  PLANNING: { label: 'Planning', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  IN_PROGRESS: { label: 'In Progress', color: 'text-amber-500', bg: 'bg-amber-500/10' },
+  ON_HOLD: { label: 'On Hold', color: 'text-orange-500', bg: 'bg-orange-500/10' },
+  COMPLETED: { label: 'Completed', color: 'text-green-600', bg: 'bg-green-500/10' },
+  CANCELLED: { label: 'Cancelled', color: 'text-destructive', bg: 'bg-destructive/10' },
+  ARCHIVED: { label: 'Archived', color: 'text-muted-foreground', bg: 'bg-muted' },
+} as const
+
+function ProjectSidebarCard({ project }: { project: ProjectResponse }) {
+  const status = PROJECT_STATUS_CONFIG[project.status] ?? PROJECT_STATUS_CONFIG.PLANNING
+
+  return (
+    <div className="border-border bg-muted/30 hover:bg-muted/60 group rounded-lg border p-3 transition-colors">
+      <div className="flex items-start gap-2.5">
+        {/* Avatar or icon */}
+        <div className="bg-muted border-border flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-md border">
+          {project.avatarUrl ? (
+            <img
+              src={project.avatarUrl}
+              alt={project.name}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <FolderKanban className="text-muted-foreground h-4 w-4" />
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-foreground truncate text-sm leading-tight font-semibold">
+            {project.name}
+          </p>
+
+          {/* Status badge */}
+          <span
+            className={`mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${status.bg} ${status.color}`}
+          >
+            <Circle className="h-1.5 w-1.5 fill-current" />
+            {status.label}
+          </span>
+
+          {/* Description */}
+          {project.description && (
+            <p className="text-muted-foreground mt-1.5 line-clamp-2 text-xs leading-relaxed">
+              {project.description}
+            </p>
+          )}
+
+          {/* Technologies */}
+          {project.technologies && project.technologies.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {project.technologies.slice(0, 3).map((tech) => (
+                <span
+                  key={tech}
+                  className="bg-primary/10 text-primary rounded px-1.5 py-0.5 text-[10px] font-medium"
+                >
+                  {tech}
+                </span>
+              ))}
+              {project.technologies.length > 3 && (
+                <span className="text-muted-foreground text-[10px]">
+                  +{project.technologies.length - 3} more
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Dates */}
+          {(project.startDate || project.endDate) && (
+            <div className="text-muted-foreground mt-2 flex items-center gap-1 text-[10px]">
+              <CalendarDays className="h-3 w-3 flex-shrink-0" />
+              <span>
+                {project.startDate
+                  ? new Date(project.startDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      year: 'numeric',
+                    })
+                  : '—'}
+                {project.endDate && (
+                  <>
+                    {' → '}
+                    {new Date(project.endDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+
+          {/* Links */}
+          {(project.repositoryUrl || project.projectUrl) && (
+            <div className="mt-2 flex items-center gap-2">
+              {project.repositoryUrl && (
+                <a
+                  href={project.repositoryUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[10px] transition-colors"
+                  title="Repository"
+                >
+                  <Github className="h-3 w-3" />
+                  Repo
+                </a>
+              )}
+              {project.projectUrl && (
+                <a
+                  href={project.projectUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[10px] transition-colors"
+                  title="Project URL"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Live
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TeamFeedPage() {
@@ -1153,6 +1288,7 @@ export default function TeamFeedPage() {
   const [followLoading, setFollowLoading] = useState(false)
   const [teamDepartment, setTeamDepartment] = useState<DepartmentResponse | null>(null)
   const [showFollowersModal, setShowFollowersModal] = useState(false)
+  const [teamProjects, setTeamProjects] = useState<ProjectResponse[]>([])
 
   // ── Post feed: fetches from API, resolves authors ─────────────────────────
   const { posts, usersMap, prependPost, removePost, updatePost } = usePostFeed({
@@ -1173,6 +1309,10 @@ export default function TeamFeedPage() {
             .then(setTeamDepartment)
             .catch(() => {})
         }
+        projectApi
+          .getByTeam(teamId)
+          .then(setTeamProjects)
+          .catch(() => {})
       } catch (e: any) {
         setError(e.message ?? 'Failed to load team')
       } finally {
@@ -1240,8 +1380,8 @@ export default function TeamFeedPage() {
 
   return (
     <AuthLayout>
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Team Header */}
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+        {/* Team Header — full width above the two-column layout */}
         <div className="bg-background mb-8 px-2">
           {/* Back Button */}
           {teamDepartment && (
@@ -1396,8 +1536,38 @@ export default function TeamFeedPage() {
           }}
         />
 
+        {/* Top Projects Section */}
+        <div className="mb-8">
+          <aside className="hidden lg:block">
+            <div className="border-border bg-background rounded-xl border p-4">
+              <div className="mb-4 flex items-center gap-2">
+                <FolderKanban className="text-primary h-4 w-4" />
+                <h3 className="text-foreground text-sm font-semibold">Projects</h3>
+                {teamProjects.length > 0 && (
+                  <span className="bg-primary/10 text-primary ml-auto rounded-full px-2 py-0.5 text-xs font-semibold">
+                    {teamProjects.length}
+                  </span>
+                )}
+              </div>
+
+              {teamProjects.length === 0 ? (
+                <div className="py-6 text-center">
+                  <FolderKanban className="text-muted-foreground/40 mx-auto mb-2 h-8 w-8" />
+                  <p className="text-muted-foreground text-xs">No projects assigned yet.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {teamProjects.map((project) => (
+                    <ProjectSidebarCard key={project.id} project={project} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+
         {/* Posts Feed */}
-        <div className="space-y-6">
+        <div className="min-w-0 flex-1 space-y-6">
           <CreatePost user={user} onPostCreate={handlePostCreate} teamId={teamId} />
           <div className="space-y-6">
             {posts.length === 0 ? (
