@@ -13,34 +13,41 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Globe, Lock, Paperclip, X, FileText, Image, Film, Music, File } from 'lucide-react'
+import { Globe, Lock, Paperclip, X, FileText, Image, Film, Music, File, Send } from 'lucide-react'
+import { Separator } from '@/components/ui/separator'
 
 // ── Type label helpers ────────────────────────────────────────────────────────
 
 const POST_TYPE_LABELS: Record<PostType, { label: string; color: string }> = {
   DISCUSSION: {
     label: 'Discussion',
-    color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+    color:
+      'bg-blue-50 text-blue-700 dark:bg-blue-950/30 dark:text-blue-300 border-blue-200 dark:border-blue-900',
   },
   ANNOUNCEMENT: {
     label: 'Announcement',
-    color: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+    color:
+      'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300 border-red-200 dark:border-red-900',
   },
   UPDATE: {
     label: 'Update',
-    color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+    color:
+      'bg-green-50 text-green-700 dark:bg-green-950/30 dark:text-green-300 border-green-200 dark:border-green-900',
   },
   QUESTION: {
     label: 'Question',
-    color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+    color:
+      'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300 border-amber-200 dark:border-amber-900',
   },
   EVENT: {
     label: 'Event',
-    color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
+    color:
+      'bg-purple-50 text-purple-700 dark:bg-purple-950/30 dark:text-purple-300 border-purple-200 dark:border-purple-900',
   },
   ACHIEVEMENT: {
     label: 'Achievement',
-    color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
+    color:
+      'bg-orange-50 text-orange-700 dark:bg-orange-950/30 dark:text-orange-300 border-orange-200 dark:border-orange-900',
   },
 }
 
@@ -177,164 +184,205 @@ export function CreatePost({
   const selectedVisibility = VISIBILITY_OPTIONS.find((o) => o.value === visibility)
 
   return (
-    <Card className="animate-fade-in mb-6 p-6">
-      <div className="flex gap-4">
-        {/* Avatar */}
-        {user.avatar ? (
-          <img
-            src={user.avatar}
-            alt={getFullName(user)}
-            className="h-12 w-12 flex-shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <div className="bg-primary/10 text-primary flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full font-bold">
-            {user.firstName?.[0]?.toUpperCase()}
-            {user.lastName?.[0]?.toUpperCase()}
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="flex-1">
-          <div
-            onClick={() => setIsExpanded(true)}
-            className="bg-muted hover:bg-muted/80 cursor-text rounded-full px-4 py-3 transition-colors dark:bg-slate-800 dark:hover:bg-slate-800/80"
-          >
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder={`What's on your mind, ${firstName}?`}
-              className="text-foreground placeholder-muted-foreground w-full resize-none bg-transparent focus:outline-none"
-              rows={isExpanded ? 4 : 1}
-              maxLength={5000}
+    <Card className="mt-3 mb-6 border-0 shadow-sm transition-shadow hover:shadow-md">
+      <div className="flex gap-4 p-6">
+        {/* Avatar Section */}
+        <div className="flex-shrink-0">
+          {user.avatar ? (
+            <img
+              src={user.avatar}
+              alt={getFullName(user)}
+              className="ring-primary/10 h-12 w-12 rounded-full object-cover ring-2"
             />
-          </div>
+          ) : (
+            <div className="bg-primary/10 text-primary ring-primary/10 flex h-12 w-12 items-center justify-center rounded-full font-semibold ring-2">
+              {user.firstName?.[0]?.toUpperCase()}
+              {user.lastName?.[0]?.toUpperCase()}
+            </div>
+          )}
+        </div>
 
-          {/* Pending files preview — shown even when collapsed */}
-          {pendingFiles.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {pendingFiles.map((file, i) => (
-                <div
-                  key={i}
-                  className="border-border bg-muted flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-800"
-                >
-                  {getFileIcon(file)}
-                  <span className="text-foreground max-w-[140px] truncate font-medium">
-                    {file.name}
-                  </span>
-                  <span className="text-muted-foreground">{formatBytes(file.size)}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeFile(i)}
-                    className="text-muted-foreground hover:text-destructive ml-1 transition-colors"
-                    aria-label={`Remove ${file.name}`}
-                  >
-                    <X size={12} />
-                  </button>
+        {/* Form Section */}
+        <form onSubmit={handleSubmit} className="flex-1">
+          {/* Textarea */}
+          <div className="space-y-4">
+            <div
+              onClick={() => setIsExpanded(true)}
+              className="bg-background border-input hover:border-ring/50 cursor-text rounded-lg border px-4 py-3 transition-all duration-200"
+            >
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder={`What's on your mind, ${firstName}?`}
+                className="text-foreground placeholder-muted-foreground w-full resize-none bg-transparent text-sm leading-relaxed focus:outline-none"
+                rows={isExpanded ? 4 : 1}
+                maxLength={5000}
+              />
+            </div>
+
+            {/* Pending Files Preview */}
+            {pendingFiles.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-muted-foreground text-xs font-medium">
+                  {pendingFiles.length} attachment{pendingFiles.length !== 1 ? 's' : ''}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {pendingFiles.map((file, i) => (
+                    <div
+                      key={i}
+                      className="border-border bg-muted/30 hover:bg-muted/50 group flex items-center gap-2 rounded-md border px-3 py-2 text-xs transition-colors"
+                    >
+                      <div className="flex-shrink-0">{getFileIcon(file)}</div>
+                      <span className="text-foreground max-w-[120px] truncate font-medium">
+                        {file.name}
+                      </span>
+                      <span className="text-muted-foreground text-xs">
+                        {formatBytes(file.size)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(i)}
+                        className="text-muted-foreground hover:text-destructive ml-1 opacity-0 transition-all group-hover:opacity-100"
+                        aria-label={`Remove ${file.name}`}
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            )}
 
-          {isExpanded && (
-            <div className="animate-slide-up mt-4 space-y-4">
-              {/* Controls row */}
-              <div className="flex flex-wrap items-center gap-3">
-                {/* Post type selector */}
-                <Select value={postType} onValueChange={(v) => setPostType(v as PostType)}>
-                  <SelectTrigger className="h-8 w-40 text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(POST_TYPE_LABELS) as PostType[]).map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {POST_TYPE_LABELS[t].label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {isExpanded && (
+              <div className="space-y-4">
+                {/* Separator */}
+                <Separator />
 
-                {/* Visibility selector — only PUBLIC / PRIVATE */}
-                <Select
-                  value={visibility}
-                  onValueChange={(v) => setVisibility(v as ClientPostVisibility)}
-                >
-                  <SelectTrigger className="h-8 w-36 text-sm">
-                    <span className="flex items-center gap-1.5">
-                      {selectedVisibility?.icon}
-                      {selectedVisibility?.label}
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {VISIBILITY_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        <span className="flex items-center gap-2">
-                          {o.icon}
-                          {o.label}
+                {/* Controls Section */}
+                <div className="space-y-3">
+                  {/* First Row: Post Type & Visibility */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Select value={postType} onValueChange={(v) => setPostType(v as PostType)}>
+                      <SelectTrigger className="bg-background h-9 w-auto text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(POST_TYPE_LABELS) as PostType[]).map((t) => (
+                          <SelectItem key={t} value={t}>
+                            {POST_TYPE_LABELS[t].label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select
+                      value={visibility}
+                      onValueChange={(v) => setVisibility(v as ClientPostVisibility)}
+                    >
+                      <SelectTrigger className="bg-background h-9 w-auto text-xs">
+                        <span className="flex items-center gap-1">
+                          {selectedVisibility?.icon}
+                          <span className="hidden sm:inline">{selectedVisibility?.label}</span>
                         </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {VISIBILITY_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            <span className="flex items-center gap-2 text-xs">
+                              {o.icon}
+                              {o.label}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
 
-                {/* Live preview badge */}
-                <Badge className={POST_TYPE_LABELS[postType].color + ' border-0'}>
-                  {POST_TYPE_LABELS[postType].label}
-                </Badge>
+                    {/* Badge Preview */}
+                    <Badge
+                      variant="outline"
+                      className={`${POST_TYPE_LABELS[postType].color} border-current text-xs font-medium`}
+                    >
+                      {POST_TYPE_LABELS[postType].label}
+                    </Badge>
 
-                {/* Attach file button */}
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={pendingFiles.length >= 10}
-                  className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 text-sm transition-colors disabled:opacity-40"
-                  title={pendingFiles.length >= 10 ? 'Maximum 10 files reached' : 'Attach a file'}
-                >
-                  <Paperclip size={15} />
-                  <span>
-                    {pendingFiles.length > 0 ? `${pendingFiles.length} file(s)` : 'Attach'}
-                  </span>
-                </button>
+                    {/* Character Counter */}
+                    <div className="text-muted-foreground ml-auto text-xs font-medium">
+                      {content.length}
+                      <span className="text-muted-foreground/60">/5000</span>
+                    </div>
+                  </div>
 
-                {/* Hidden native file input */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={handleFileChange}
-                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.csv"
-                />
+                  {/* File Attachment Button */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={pendingFiles.length >= 10}
+                      className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                      title={
+                        pendingFiles.length >= 10 ? 'Maximum 10 files reached' : 'Attach files'
+                      }
+                    >
+                      <Paperclip size={14} />
+                      <span className="hidden sm:inline">
+                        {pendingFiles.length > 0 ? `${pendingFiles.length} attached` : 'Attach'}
+                      </span>
+                    </button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={handleFileChange}
+                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.csv"
+                    />
+                  </div>
+                </div>
 
-                {/* Character counter */}
-                <span className="text-muted-foreground ml-auto text-xs">{content.length}/5000</span>
+                {/* Error Message */}
+                {error && (
+                  <div className="bg-destructive/5 border-destructive/20 rounded-md border px-3 py-2">
+                    <p className="text-destructive text-xs font-medium">{error}</p>
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setIsExpanded(false)
+                      setContent('')
+                      setError(null)
+                      setPendingFiles([])
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={!content.trim() || isSubmitting}
+                    size="sm"
+                    className="gap-2"
+                  >
+                    {isSubmitting ? (
+                      <span className="flex items-center gap-2">
+                        <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        {pendingFiles.length > 0 ? 'Uploading' : 'Posting'}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <Send size={14} />
+                        Post
+                      </span>
+                    )}
+                  </Button>
+                </div>
               </div>
-
-              {error && <p className="text-destructive text-sm">{error}</p>}
-
-              {/* Action buttons */}
-              <div className="flex items-center justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setIsExpanded(false)
-                    setContent('')
-                    setError(null)
-                    setPendingFiles([])
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={!content.trim() || isSubmitting}
-                  className="bg-primary hover:bg-primary/90 text-white"
-                >
-                  {isSubmitting ? (pendingFiles.length > 0 ? 'Uploading…' : 'Posting…') : 'Post'}
-                </Button>
-              </div>
-            </div>
-          )}
+            )}
+          </div>
         </form>
       </div>
     </Card>
