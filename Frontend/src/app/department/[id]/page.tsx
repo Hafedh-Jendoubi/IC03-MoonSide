@@ -1709,121 +1709,15 @@ export default function DepartmentFeedPage() {
   return (
     <AuthLayout>
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Cover Banner */}
-        <div className="relative mb-0 h-56 w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-400 to-slate-600">
-          {department.bannerUrl ? (
-            <img
-              src={department.bannerUrl}
-              alt={department.name}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="h-full w-full bg-gradient-to-br from-slate-400 to-slate-600" />
-          )}
-          <div className="absolute inset-0 bg-black/20" />
-        </div>
-
-        {/* Department Header */}
-        <div className="bg-background mb-8 flex items-end gap-6 px-2">
-          <div className="relative -mt-16 flex-shrink-0">
-            <div className="bg-muted flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-white shadow-lg dark:border-slate-800">
-              {department.avatarUrl ? (
-                <img
-                  src={department.avatarUrl}
-                  alt={department.name}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <Building2 className="text-foreground h-16 w-16" />
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-1 items-end justify-between pt-4 pb-2">
-            <div>
-              <h1 className="text-foreground text-3xl font-bold">{department.name}</h1>
-              {department.description && (
-                <p className="text-muted-foreground mt-1 text-sm">{department.description}</p>
-              )}
-              {department.manager && (
-                <p className="text-muted-foreground mt-2 text-xs">
-                  Led by {department.manager.firstName} {department.manager.lastName}
-                </p>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              {/* Follow / Unfollow */}
-              <button
-                onClick={handleFollow}
-                disabled={followLoading}
-                className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
-                  department.isFollowing
-                    ? 'border-primary text-primary hover:bg-primary/10'
-                    : 'border-border text-foreground hover:bg-muted'
-                }`}
-              >
-                {followLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : department.isFollowing ? (
-                  <BellOff className="h-4 w-4" />
-                ) : (
-                  <Bell className="h-4 w-4" />
-                )}
-                {department.isFollowing ? 'Following' : 'Follow'}
-                {department.followerCount > 0 && (
-                  <span
-                    role="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setShowFollowersModal(true)
-                    }}
-                    className="text-muted-foreground hover:text-primary cursor-pointer text-xs transition-colors"
-                  >
-                    ({department.followerCount})
-                  </span>
-                )}
-              </button>
-
-              {/* Manage Department */}
-              {showManageButton && (
-                <button
-                  onClick={() => setManageOpen(true)}
-                  className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
-                >
-                  <Settings className="h-4 w-4" />
-                  Manage Department
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Followers modal (for main page header area) */}
-        <UsersModal
-          open={showFollowersModal}
-          onOpenChange={setShowFollowersModal}
-          title="Followers"
-          fetchUsers={async () => {
-            const users = await departmentApi.getFollowers(deptId)
-            return users.map((u) => ({
-              id: u.id,
-              firstName: u.firstName,
-              lastName: u.lastName,
-              email: u.email,
-              avatar: u.avatar,
-              jobTitle: u.jobTitle,
-            }))
-          }}
-        />
-
-        {/* Grid */}
-        <div className="grid gap-8 lg:grid-cols-4">
-          {teams.length > 0 && (
-            <div className="lg:col-span-1">
-              <div className="border-border bg-background sticky top-4 rounded-lg border p-4">
+        {/* Responsive Grid Layout */}
+        <div className="flex flex-col gap-6 lg:flex-row">
+          {/* Left Column - Teams Section: Shows below department header on mobile, sidebar on large screens */}
+          <div className="order-1 w-full lg:order-1 lg:w-1/5 lg:flex-shrink-0">
+            {teams.length > 0 && (
+              <div className="border-border bg-background mb-6 rounded-lg border p-4 lg:sticky lg:top-4">
                 <h3 className="text-foreground mb-4 text-lg font-semibold">Teams</h3>
 
-                {/* Joined Teams Section - Show teams user is a member of */}
+                {/* Joined Teams Section */}
                 {teams.filter((t) => userTeamIds.includes(t.id)).length > 0 && (
                   <div className="mb-6">
                     <h4 className="mb-3 flex items-center gap-1.5 text-xs font-semibold tracking-wider text-green-600 uppercase dark:text-green-400">
@@ -1847,7 +1741,7 @@ export default function DepartmentFeedPage() {
                   </div>
                 )}
 
-                {/* Public Teams Section - excluding joined teams */}
+                {/* Public Teams Section */}
                 {teams.filter((t) => t.teamVisibility === 'PUBLIC' && !userTeamIds.includes(t.id))
                   .length > 0 && (
                   <div className="mb-6">
@@ -1871,7 +1765,7 @@ export default function DepartmentFeedPage() {
                   </div>
                 )}
 
-                {/* Private Teams Section - excluding joined teams */}
+                {/* Private Teams Section */}
                 {teams.filter((t) => t.teamVisibility === 'PRIVATE' && !userTeamIds.includes(t.id))
                   .length > 0 && (
                   <div>
@@ -1904,38 +1798,152 @@ export default function DepartmentFeedPage() {
                   </p>
                 )}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
-          <div className={`space-y-6 ${teams.length > 0 ? 'lg:col-span-3' : 'lg:col-span-4'}`}>
-            <CreatePost user={user} onPostCreate={handlePostCreate} departmentId={deptId} />
-            <div className="space-y-6">
-              {posts.length === 0 ? (
-                <div className="py-12 text-center">
-                  <div className="mb-4 text-6xl">📝</div>
-                  <h2 className="text-foreground mb-2 text-xl font-semibold">No posts yet</h2>
-                  <p className="text-muted-foreground">
-                    Be the first to share something with your department!
-                  </p>
-                </div>
+          {/* Middle Column - Main Content: Full width on small, 3/5 on large screens */}
+          <div className="order-2 w-full lg:order-2 lg:w-3/5 lg:flex-shrink-0">
+            {/* Cover Banner */}
+            <div className="relative mb-0 h-56 w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-400 to-slate-600">
+              {department.bannerUrl ? (
+                <img
+                  src={department.bannerUrl}
+                  alt={department.name}
+                  className="h-full w-full object-cover"
+                />
               ) : (
-                posts.map((post, index) => (
-                  <div
-                    key={post.id}
-                    style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
-                  >
-                    <PostCard
-                      post={post}
-                      currentUserId={user.id}
-                      usersMap={usersMap}
-                      onDelete={handlePostDelete}
-                      onUpdate={handlePostUpdate}
-                    />
-                  </div>
-                ))
+                <div className="h-full w-full bg-gradient-to-br from-slate-400 to-slate-600" />
               )}
+              <div className="absolute inset-0 bg-black/20" />
+            </div>
+
+            {/* Department Header */}
+            <div className="bg-background mb-8 flex items-end gap-6 px-2">
+              <div className="relative -mt-16 flex-shrink-0">
+                <div className="bg-muted flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-white shadow-lg dark:border-slate-800">
+                  {department.avatarUrl ? (
+                    <img
+                      src={department.avatarUrl}
+                      alt={department.name}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Building2 className="text-foreground h-16 w-16" />
+                  )}
+                </div>
+              </div>
+
+              <div className="flex flex-1 items-end justify-between pt-4 pb-2">
+                <div>
+                  <h1 className="text-foreground text-3xl font-bold">{department.name}</h1>
+                  {department.description && (
+                    <p className="text-muted-foreground mt-1 text-sm">{department.description}</p>
+                  )}
+                  {department.manager && (
+                    <p className="text-muted-foreground mt-2 text-xs">
+                      Led by {department.manager.firstName} {department.manager.lastName}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                  {/* Follow / Unfollow */}
+                  <button
+                    onClick={handleFollow}
+                    disabled={followLoading}
+                    className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
+                      department.isFollowing
+                        ? 'border-primary text-primary hover:bg-primary/10'
+                        : 'border-border text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {followLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : department.isFollowing ? (
+                      <BellOff className="h-4 w-4" />
+                    ) : (
+                      <Bell className="h-4 w-4" />
+                    )}
+                    {department.isFollowing ? 'Following' : 'Follow'}
+                    {department.followerCount > 0 && (
+                      <span
+                        role="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setShowFollowersModal(true)
+                        }}
+                        className="text-muted-foreground hover:text-primary cursor-pointer text-xs transition-colors"
+                      >
+                        ({department.followerCount})
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Manage Department */}
+                  {showManageButton && (
+                    <button
+                      onClick={() => setManageOpen(true)}
+                      className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
+                    >
+                      <Settings className="h-4 w-4" />
+                      Manage Department
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Followers modal */}
+            <UsersModal
+              open={showFollowersModal}
+              onOpenChange={setShowFollowersModal}
+              title="Followers"
+              fetchUsers={async () => {
+                const users = await departmentApi.getFollowers(deptId)
+                return users.map((u) => ({
+                  id: u.id,
+                  firstName: u.firstName,
+                  lastName: u.lastName,
+                  email: u.email,
+                  avatar: u.avatar,
+                  jobTitle: u.jobTitle,
+                }))
+              }}
+            />
+
+            {/* Create Post and Feed */}
+            <div className="space-y-6">
+              <CreatePost user={user} onPostCreate={handlePostCreate} departmentId={deptId} />
+              <div className="space-y-6">
+                {posts.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <div className="mb-4 text-6xl">📝</div>
+                    <h2 className="text-foreground mb-2 text-xl font-semibold">No posts yet</h2>
+                    <p className="text-muted-foreground">
+                      Be the first to share something with your department!
+                    </p>
+                  </div>
+                ) : (
+                  posts.map((post, index) => (
+                    <div
+                      key={post.id}
+                      style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
+                    >
+                      <PostCard
+                        post={post}
+                        currentUserId={user.id}
+                        usersMap={usersMap}
+                        onDelete={handlePostDelete}
+                        onUpdate={handlePostUpdate}
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           </div>
+
+          {/* Right Column - Hidden on all screen sizes (reserved for future) */}
+          <div className="order-3 hidden lg:block lg:w-1/5 lg:flex-shrink-0"></div>
         </div>
       </div>
 

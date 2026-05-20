@@ -1536,34 +1536,32 @@ export default function TeamFeedPage() {
           }}
         />
 
-        {/* Top Projects Section */}
+        {/* Projects Section - Responsive: visible on all screens */}
         <div className="mb-8">
-          <aside className="hidden lg:block">
-            <div className="border-border bg-background rounded-xl border p-4">
-              <div className="mb-4 flex items-center gap-2">
-                <FolderKanban className="text-primary h-4 w-4" />
-                <h3 className="text-foreground text-sm font-semibold">Projects</h3>
-                {teamProjects.length > 0 && (
-                  <span className="bg-primary/10 text-primary ml-auto rounded-full px-2 py-0.5 text-xs font-semibold">
-                    {teamProjects.length}
-                  </span>
-                )}
-              </div>
-
-              {teamProjects.length === 0 ? (
-                <div className="py-6 text-center">
-                  <FolderKanban className="text-muted-foreground/40 mx-auto mb-2 h-8 w-8" />
-                  <p className="text-muted-foreground text-xs">No projects assigned yet.</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {teamProjects.map((project) => (
-                    <ProjectSidebarCard key={project.id} project={project} />
-                  ))}
-                </div>
+          <div className="border-border bg-background rounded-xl border p-4">
+            <div className="mb-4 flex items-center gap-2">
+              <FolderKanban className="text-primary h-4 w-4" />
+              <h3 className="text-foreground text-sm font-semibold">Projects</h3>
+              {teamProjects.length > 0 && (
+                <span className="bg-primary/10 text-primary ml-auto rounded-full px-2 py-0.5 text-xs font-semibold">
+                  {teamProjects.length}
+                </span>
               )}
             </div>
-          </aside>
+
+            {teamProjects.length === 0 ? (
+              <div className="py-6 text-center">
+                <FolderKanban className="text-muted-foreground/40 mx-auto mb-2 h-8 w-8" />
+                <p className="text-muted-foreground text-xs">No projects assigned yet.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {teamProjects.map((project) => (
+                  <ProjectSidebarCard key={project.id} project={project} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Posts Feed */}
