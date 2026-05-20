@@ -126,9 +126,8 @@ function ManageTeamPanel({
 
   return (
     <div className="bg-background fixed inset-0 z-50 flex">
-      {/* Left Sidebar */}
-      <aside className="bg-muted/30 flex w-72 flex-shrink-0 flex-col border-r">
-        {/* Header */}
+      {/* Left Sidebar - Fixed width (same as Department: w-60) */}
+      <aside className="bg-muted/30 flex w-60 flex-shrink-0 flex-col border-r">
         <div className="flex items-center gap-3 border-b px-5 py-4">
           <div className="bg-muted flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border">
             {team.avatarUrl ? (
@@ -145,7 +144,6 @@ function ManageTeamPanel({
           </div>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 space-y-0.5 px-3 py-4">
           {navItems.map((item) => (
             <button
@@ -166,7 +164,6 @@ function ManageTeamPanel({
           ))}
         </nav>
 
-        {/* Back button */}
         <div className="border-t px-3 py-4">
           <button
             onClick={onClose}
@@ -178,17 +175,20 @@ function ManageTeamPanel({
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Main Content - Now using full width with responsive max-width for better readability (matches Department) */}
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-2xl px-8 py-8">
-          {section === 'general' && <GeneralSection team={team} user={user} onSaved={onSaved} />}
-          {section === 'members' && (
-            <MembersSection team={team} canKick={canKick} onMemberChange={onMemberChange} />
-          )}
-          {section === 'projects' && <TeamProjectsSection team={team} user={user} />}
-          {section === 'settings' && (
-            <SettingsSection team={team} onSaved={onSaved} onDeleted={onDeleted} />
-          )}
+        <div className="w-full px-4 py-8 md:px-8 lg:px-12 xl:px-16">
+          {/* For very large screens, add a max-width to maintain readability */}
+          <div className="mx-auto w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl">
+            {section === 'general' && <GeneralSection team={team} user={user} onSaved={onSaved} />}
+            {section === 'members' && (
+              <MembersSection team={team} canKick={canKick} onMemberChange={onMemberChange} />
+            )}
+            {section === 'projects' && <TeamProjectsSection team={team} user={user} />}
+            {section === 'settings' && (
+              <SettingsSection team={team} onSaved={onSaved} onDeleted={onDeleted} />
+            )}
+          </div>
         </div>
       </main>
     </div>
@@ -1242,13 +1242,7 @@ function TeamProjectsSection({ team, user }: { team: TeamResponse; user: User })
     }
     try {
       if (editingProject) {
-        // CEO can use the generic update; others use team-scoped endpoint
-        let updated: ProjectResponse
-        if (hasRole(user, 'CEO')) {
-          updated = await projectApi.update(editingProject.id, payload)
-        } else {
-          updated = await projectApi.update(editingProject.id, payload)
-        }
+        const updated = await projectApi.update(editingProject.id, payload)
         setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
       } else {
         const created = await projectApi.createForTeam(team.id, payload)
@@ -1464,7 +1458,7 @@ function TeamProjectsSection({ team, user }: { team: TeamResponse; user: User })
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="text-foreground text-sm leading-tight font-semibold">{p.name}</p>
                     <span
                       className={`rounded px-1.5 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.color}`}
@@ -1658,6 +1652,8 @@ function ProjectSidebarCard({ project }: { project: ProjectResponse }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function TeamFeedPage() {
   const params = useParams()
   const router = useRouter()
@@ -1765,217 +1761,252 @@ export default function TeamFeedPage() {
 
   return (
     <AuthLayout>
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Team Header — full width above the two-column layout */}
-        <div className="bg-background mb-8 px-2">
-          {/* Back Button */}
-          {teamDepartment && (
-            <Link
-              href={`/department/${team.departmentId}`}
-              className="text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-2 text-sm transition-colors hover:underline"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to {teamDepartment.name}
-            </Link>
-          )}
+      {/* REMOVED: mx-auto max-w-6xl - using full width like Department page */}
+      <div className="w-full px-4 py-8 sm:px-6 lg:px-8">
+        {/* Responsive Grid Layout - matches Department page structure */}
+        <div className="flex flex-col gap-6 lg:flex-row">
+          {/* Left Column - Projects Section (like Teams section in Department page) */}
+          <div className="order-1 w-full lg:order-1 lg:w-1/5 lg:flex-shrink-0">
+            <div className="border-border bg-background rounded-lg border p-4 lg:sticky lg:top-4">
+              <div className="mb-4 flex items-center gap-2">
+                <FolderKanban className="text-primary h-4 w-4" />
+                <h3 className="text-foreground text-sm font-semibold">Projects</h3>
+                {teamProjects.length > 0 && (
+                  <span className="bg-primary/10 text-primary ml-auto rounded-full px-2 py-0.5 text-xs font-semibold">
+                    {teamProjects.length}
+                  </span>
+                )}
+              </div>
 
-          {/* Cover Banner */}
-          <div className="from-primary/20 to-secondary/20 relative mb-0 h-48 overflow-hidden rounded-xl bg-gradient-to-r">
-            {team.bannerUrl ? (
-              <img src={team.bannerUrl} alt={team.name} className="h-full w-full object-cover" />
-            ) : (
-              <div className="from-primary/20 to-secondary/20 h-full w-full bg-gradient-to-r" />
-            )}
+              {teamProjects.length === 0 ? (
+                <div className="py-6 text-center">
+                  <FolderKanban className="text-muted-foreground/40 mx-auto mb-2 h-8 w-8" />
+                  <p className="text-muted-foreground text-xs">No projects assigned yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {teamProjects.map((project) => (
+                    <ProjectSidebarCard key={project.id} project={project} />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Team Info */}
-          <div className="flex items-end gap-6">
-            <div className="relative -mt-14 flex-shrink-0">
-              <div className="bg-muted flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-white shadow-lg dark:border-slate-800">
-                {team.avatarUrl ? (
+          {/* Middle Column - Main Content (Team Header + Posts Feed) */}
+          <div className="order-2 w-full lg:order-2 lg:min-w-0 lg:flex-1">
+            {/* Team Header - Matches Department Header layout */}
+            <div className="bg-background mb-6">
+              {/* Back Button (optional - above the banner) */}
+              {teamDepartment && (
+                <Link
+                  href={`/department/${team.departmentId}`}
+                  className="text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-2 text-sm transition-colors hover:underline"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to {teamDepartment.name}
+                </Link>
+              )}
+
+              {/* Cover Banner */}
+              <div className="relative mb-0 h-56 w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-400 to-slate-600">
+                {team.bannerUrl ? (
                   <img
-                    src={team.avatarUrl}
+                    src={team.bannerUrl}
                     alt={team.name}
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <Users className="text-foreground h-14 w-14" />
+                  <div className="h-full w-full bg-gradient-to-br from-slate-400 to-slate-600" />
                 )}
-              </div>
-            </div>
-
-            <div className="flex flex-1 items-end justify-between pt-4 pb-2">
-              <div>
-                <h1 className="text-foreground text-3xl font-bold">{team.name}</h1>
-                {team.description && (
-                  <p className="text-muted-foreground mt-1 text-sm">{team.description}</p>
-                )}
-                {team.lead && (
-                  <p className="text-muted-foreground mt-2 text-xs">
-                    Led by {team.lead.firstName} {team.lead.lastName}
-                  </p>
-                )}
-                <button
-                  onClick={() => {
-                    const pub = teamDepartment?.membersPublic ?? true
-                    const isLead = user?.id === team.leadId
-                    const isDeptLeader =
-                      hasRole(user, 'DEPARTMENT_LEADER') &&
-                      userManagedDeptIds.includes(team.departmentId)
-                    const isCEO = hasRole(user, 'CEO')
-                    if (pub || isLead || isDeptLeader || isCEO) {
-                      setMembersOpen(true)
-                    }
-                  }}
-                  className={`mt-1 flex items-center gap-1.5 text-xs transition-colors ${
-                    (teamDepartment?.membersPublic ?? true) ||
-                    user?.id === team.leadId ||
-                    hasRole(user, 'CEO') ||
-                    (hasRole(user, 'DEPARTMENT_LEADER') &&
-                      userManagedDeptIds.includes(team.departmentId))
-                      ? 'text-muted-foreground hover:text-primary hover:underline'
-                      : 'text-muted-foreground/50 cursor-not-allowed'
-                  }`}
-                  title={
-                    (teamDepartment?.membersPublic ?? true) ||
-                    user?.id === team.leadId ||
-                    hasRole(user, 'CEO') ||
-                    (hasRole(user, 'DEPARTMENT_LEADER') &&
-                      userManagedDeptIds.includes(team.departmentId))
-                      ? 'View members'
-                      : 'Member list is restricted to department members'
-                  }
-                >
-                  <Users className="h-3.5 w-3.5" />
-                  {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
-                  {!(teamDepartment?.membersPublic ?? true) &&
-                    !hasRole(user, 'CEO') &&
-                    user?.id !== team.leadId &&
-                    !(
-                      hasRole(user, 'DEPARTMENT_LEADER') &&
-                      userManagedDeptIds.includes(team.departmentId)
-                    ) && <Shield className="ml-0.5 h-3 w-3 opacity-60" />}
-                </button>
+                <div className="absolute inset-0 bg-black/20" />
               </div>
 
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                <button
-                  onClick={handleFollow}
-                  disabled={followLoading}
-                  className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
-                    team.isFollowing
-                      ? 'border-primary text-primary hover:bg-primary/10'
-                      : 'border-border text-foreground hover:bg-muted'
-                  }`}
-                >
-                  {followLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : team.isFollowing ? (
-                    <BellOff className="h-4 w-4" />
-                  ) : (
-                    <Bell className="h-4 w-4" />
-                  )}
-                  {team.isFollowing ? 'Following' : 'Follow'}
-                  {team.followerCount > 0 && (
-                    <span
-                      role="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setShowFollowersModal(true)
-                      }}
-                      className="text-muted-foreground hover:text-primary cursor-pointer text-xs transition-colors"
-                    >
-                      ({team.followerCount})
-                    </span>
-                  )}
-                </button>
+              {/* Team Header Info - Matches Department page structure */}
+              <div className="border-border border-b py-8">
+                <div className="px-4 sm:px-6 lg:px-8">
+                  <div className="flex flex-col gap-6 sm:flex-row sm:gap-8">
+                    {/* Avatar Section */}
+                    <div className="flex flex-shrink-0 justify-center sm:justify-start">
+                      <div className="bg-muted border-background flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 shadow-lg dark:border-slate-900">
+                        {team.avatarUrl ? (
+                          <img
+                            src={team.avatarUrl}
+                            alt={team.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Users className="text-foreground h-16 w-16" />
+                        )}
+                      </div>
+                    </div>
 
-                {showManageButton && (
-                  <button
-                    onClick={() => setManageOpen(true)}
-                    className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
-                  >
-                    <Settings className="h-4 w-4" />
-                    Manage Team
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+                    {/* Info Section */}
+                    <div className="flex flex-1 flex-col justify-center gap-3">
+                      <div>
+                        <h1 className="text-foreground text-3xl font-bold">{team.name}</h1>
+                        {team.description && (
+                          <p className="text-muted-foreground mt-2 line-clamp-2 text-sm">
+                            {team.description}
+                          </p>
+                        )}
+                        {team.lead && (
+                          <p className="text-muted-foreground mt-2 text-xs">
+                            Led by{' '}
+                            <span className="text-foreground font-medium">
+                              {team.lead.firstName} {team.lead.lastName}
+                            </span>
+                          </p>
+                        )}
+                      </div>
 
-        <UsersModal
-          open={showFollowersModal}
-          onOpenChange={setShowFollowersModal}
-          title="Followers"
-          fetchUsers={async () => {
-            const users = await teamApi.getFollowers(teamId)
-            return users.map((u) => ({
-              id: u.id,
-              firstName: u.firstName,
-              lastName: u.lastName,
-              email: u.email,
-              avatar: u.avatar,
-              jobTitle: u.jobTitle,
-            }))
-          }}
-        />
+                      {/* Action Buttons - Matches Department style */}
+                      <div className="flex flex-wrap items-center gap-2 pt-2">
+                        {/* Members button - styled like a button */}
+                        <button
+                          onClick={() => {
+                            const pub = teamDepartment?.membersPublic ?? true
+                            const isLead = user?.id === team.leadId
+                            const isDeptLeader =
+                              hasRole(user, 'DEPARTMENT_LEADER') &&
+                              userManagedDeptIds.includes(team.departmentId)
+                            const isCEO = hasRole(user, 'CEO')
+                            if (pub || isLead || isDeptLeader || isCEO) {
+                              setMembersOpen(true)
+                            }
+                          }}
+                          className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
+                            (teamDepartment?.membersPublic ?? true) ||
+                            user?.id === team.leadId ||
+                            hasRole(user, 'CEO') ||
+                            (hasRole(user, 'DEPARTMENT_LEADER') &&
+                              userManagedDeptIds.includes(team.departmentId))
+                              ? 'border-border text-foreground hover:bg-muted'
+                              : 'border-border/50 text-muted-foreground/50 cursor-not-allowed'
+                          }`}
+                          title={
+                            (teamDepartment?.membersPublic ?? true) ||
+                            user?.id === team.leadId ||
+                            hasRole(user, 'CEO') ||
+                            (hasRole(user, 'DEPARTMENT_LEADER') &&
+                              userManagedDeptIds.includes(team.departmentId))
+                              ? 'View members'
+                              : 'Member list is restricted to department members'
+                          }
+                        >
+                          <Users className="h-4 w-4" />
+                          <span>{team.memberCount} members</span>
+                          {!(teamDepartment?.membersPublic ?? true) &&
+                            !hasRole(user, 'CEO') &&
+                            user?.id !== team.leadId &&
+                            !(
+                              hasRole(user, 'DEPARTMENT_LEADER') &&
+                              userManagedDeptIds.includes(team.departmentId)
+                            ) && <Shield className="ml-0.5 h-3 w-3 opacity-60" />}
+                        </button>
 
-        {/* Projects Section - Responsive: visible on all screens */}
-        <div className="mb-8">
-          <div className="border-border bg-background rounded-xl border p-4">
-            <div className="mb-4 flex items-center gap-2">
-              <FolderKanban className="text-primary h-4 w-4" />
-              <h3 className="text-foreground text-sm font-semibold">Projects</h3>
-              {teamProjects.length > 0 && (
-                <span className="bg-primary/10 text-primary ml-auto rounded-full px-2 py-0.5 text-xs font-semibold">
-                  {teamProjects.length}
-                </span>
-              )}
-            </div>
+                        {/* Follow / Unfollow */}
+                        <button
+                          onClick={handleFollow}
+                          disabled={followLoading}
+                          className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all disabled:opacity-60 ${
+                            team.isFollowing
+                              ? 'border-primary bg-primary/5 text-primary hover:bg-primary/10'
+                              : 'border-border text-foreground hover:bg-muted'
+                          }`}
+                        >
+                          {followLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : team.isFollowing ? (
+                            <BellOff className="h-4 w-4" />
+                          ) : (
+                            <Bell className="h-4 w-4" />
+                          )}
+                          {team.isFollowing ? 'Following' : 'Follow'}
+                          {team.followerCount > 0 && (
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setShowFollowersModal(true)
+                              }}
+                              className="text-muted-foreground hover:text-primary cursor-pointer text-xs transition-colors"
+                            >
+                              ({team.followerCount})
+                            </span>
+                          )}
+                        </button>
 
-            {teamProjects.length === 0 ? (
-              <div className="py-6 text-center">
-                <FolderKanban className="text-muted-foreground/40 mx-auto mb-2 h-8 w-8" />
-                <p className="text-muted-foreground text-xs">No projects assigned yet.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {teamProjects.map((project) => (
-                  <ProjectSidebarCard key={project.id} project={project} />
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Posts Feed */}
-        <div className="min-w-0 flex-1 space-y-6">
-          <CreatePost user={user} onPostCreate={handlePostCreate} teamId={teamId} />
-          <div className="space-y-6">
-            {posts.length === 0 ? (
-              <div className="py-12 text-center">
-                <div className="mb-4 text-6xl">📝</div>
-                <h2 className="text-foreground mb-2 text-xl font-semibold">No posts yet</h2>
-                <p className="text-muted-foreground">
-                  Be the first to share something with your team!
-                </p>
-              </div>
-            ) : (
-              posts.map((post, index) => (
-                <div key={post.id} style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}>
-                  <PostCard
-                    post={post}
-                    currentUserId={user.id}
-                    usersMap={usersMap}
-                    onDelete={removePost}
-                    onUpdate={updatePost}
-                    currentLeadTeamId={team?.leadId === user.id ? team.id : null}
-                  />
+                        {/* Manage Team */}
+                        {showManageButton && (
+                          <button
+                            onClick={() => setManageOpen(true)}
+                            className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all hover:opacity-85"
+                          >
+                            <Settings className="h-4 w-4" />
+                            <span className="hidden sm:inline">Manage Team</span>
+                            <span className="sm:hidden">Manage</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              ))
-            )}
+              </div>
+            </div>
+
+            {/* Followers modal */}
+            <UsersModal
+              open={showFollowersModal}
+              onOpenChange={setShowFollowersModal}
+              title="Followers"
+              fetchUsers={async () => {
+                const users = await teamApi.getFollowers(teamId)
+                return users.map((u) => ({
+                  id: u.id,
+                  firstName: u.firstName,
+                  lastName: u.lastName,
+                  email: u.email,
+                  avatar: u.avatar,
+                  jobTitle: u.jobTitle,
+                }))
+              }}
+            />
+
+            {/* Create Post and Feed */}
+            <div className="space-y-6">
+              <CreatePost user={user} onPostCreate={handlePostCreate} teamId={teamId} />
+              <div className="space-y-6">
+                {posts.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <div className="mb-4 text-6xl">📝</div>
+                    <h2 className="text-foreground mb-2 text-xl font-semibold">No posts yet</h2>
+                    <p className="text-muted-foreground">
+                      Be the first to share something with your team!
+                    </p>
+                  </div>
+                ) : (
+                  posts.map((post, index) => (
+                    <div
+                      key={post.id}
+                      style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
+                    >
+                      <PostCard
+                        post={post}
+                        currentUserId={user.id}
+                        usersMap={usersMap}
+                        onDelete={removePost}
+                        onUpdate={updatePost}
+                        currentLeadTeamId={team?.leadId === user.id ? team.id : null}
+                      />
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
+
+          {/* Right Column - Hidden on all screen sizes (reserved for future) */}
+          <div className="order-3 hidden lg:block lg:w-1/5 lg:flex-shrink-0"></div>
         </div>
       </div>
 
