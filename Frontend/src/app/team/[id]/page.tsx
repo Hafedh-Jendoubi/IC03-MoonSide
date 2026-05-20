@@ -1767,7 +1767,7 @@ export default function TeamFeedPage() {
         <div className="flex flex-col gap-6 lg:flex-row">
           {/* Left Column - Projects Section (like Teams section in Department page) */}
           <div className="order-1 w-full lg:order-1 lg:w-1/5 lg:flex-shrink-0">
-            <div className="border-border bg-background rounded-lg border p-4 lg:sticky lg:top-4">
+            <div className="border-border bg-background z-10 mb-6 rounded-lg border p-4 lg:sticky lg:top-20">
               <div className="mb-4 flex items-center gap-2">
                 <FolderKanban className="text-primary h-4 w-4" />
                 <h3 className="text-foreground text-sm font-semibold">Projects</h3>

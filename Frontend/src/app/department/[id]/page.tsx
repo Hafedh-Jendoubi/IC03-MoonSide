@@ -2160,7 +2160,7 @@ export default function DepartmentFeedPage() {
           {/* Left Column - Teams Section */}
           <div className="order-1 w-full lg:order-1 lg:w-1/5 lg:flex-shrink-0">
             {teams.length > 0 && (
-              <div className="border-border bg-background mb-6 rounded-lg border p-4 lg:sticky lg:top-4">
+              <div className="border-border bg-background z-10 mb-6 rounded-lg border p-4 lg:sticky lg:top-20">
                 <h3 className="text-foreground mb-4 text-lg font-semibold">Teams</h3>
 
                 {/* Joined Teams Section */}
