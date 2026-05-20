@@ -116,6 +116,7 @@ export function CreatePost({
 
   // Attachment state
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({}) // Track progress per file
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const firstName = user.firstName || getFullName(user).split(' ')[0]
@@ -139,6 +140,7 @@ export function CreatePost({
 
     setIsSubmitting(true)
     setError(null)
+    setUploadProgress({}) // Reset progress
 
     try {
       const { postApi, attachmentApi } = await import('@/lib/api')
@@ -154,9 +156,19 @@ export function CreatePost({
       }
       const created = await postApi.create(req)
 
-      // 2. Upload attachments (in parallel, best-effort)
+      // 2. Upload attachments with progress tracking
       if (pendingFiles.length > 0) {
-        await Promise.allSettled(pendingFiles.map((f) => attachmentApi.upload(created.id, f)))
+        const uploadPromises = pendingFiles.map((file) =>
+          attachmentApi.upload(created.id, file, (progress) => {
+            // Update progress for this specific file
+            setUploadProgress((prev) => ({
+              ...prev,
+              [file.name]: progress,
+            }))
+          })
+        )
+
+        await Promise.allSettled(uploadPromises)
         // Re-fetch the post so the returned object includes attachment data
         try {
           const withAttachments = await postApi.getById(created.id)
@@ -173,6 +185,7 @@ export function CreatePost({
       setIsExpanded(false)
       setPostType('DISCUSSION')
       setPendingFiles([])
+      setUploadProgress({})
     } catch (err) {
       console.error('Failed to create post:', err)
       setError('Failed to publish post. Please try again.')
@@ -226,29 +239,51 @@ export function CreatePost({
                 <p className="text-muted-foreground text-xs font-medium">
                   {pendingFiles.length} attachment{pendingFiles.length !== 1 ? 's' : ''}
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  {pendingFiles.map((file, i) => (
-                    <div
-                      key={i}
-                      className="border-border bg-muted/30 hover:bg-muted/50 group flex items-center gap-2 rounded-md border px-3 py-2 text-xs transition-colors"
-                    >
-                      <div className="flex-shrink-0">{getFileIcon(file)}</div>
-                      <span className="text-foreground max-w-[120px] truncate font-medium">
-                        {file.name}
-                      </span>
-                      <span className="text-muted-foreground text-xs">
-                        {formatBytes(file.size)}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => removeFile(i)}
-                        className="text-muted-foreground hover:text-destructive ml-1 opacity-0 transition-all group-hover:opacity-100"
-                        aria-label={`Remove ${file.name}`}
+                <div className="space-y-2">
+                  {pendingFiles.map((file, i) => {
+                    const progress = uploadProgress[file.name] ?? 0
+                    const isUploading = isSubmitting && progress > 0 && progress < 100
+                    return (
+                      <div
+                        key={i}
+                        className="border-border bg-muted/30 hover:bg-muted/50 group flex flex-col gap-2 rounded-md border px-3 py-2 transition-colors"
                       >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
+                        <div className="flex items-center gap-2">
+                          <div className="flex-shrink-0">{getFileIcon(file)}</div>
+                          <span className="text-foreground max-w-[120px] truncate text-xs font-medium">
+                            {file.name}
+                          </span>
+                          <span className="text-muted-foreground text-xs">
+                            {formatBytes(file.size)}
+                          </span>
+                          {isUploading && (
+                            <span className="text-primary ml-auto text-xs font-medium">
+                              {Math.round(progress)}%
+                            </span>
+                          )}
+                          {!isUploading && (
+                            <button
+                              type="button"
+                              onClick={() => removeFile(i)}
+                              disabled={isSubmitting}
+                              className="text-muted-foreground hover:text-destructive ml-auto opacity-0 transition-all group-hover:opacity-100 disabled:opacity-50"
+                              aria-label={`Remove ${file.name}`}
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                        {isUploading && (
+                          <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+                            <div
+                              className="bg-primary h-full transition-all duration-300"
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
