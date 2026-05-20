@@ -30,6 +30,8 @@ import {
   Github,
   CalendarDays,
   Circle,
+  Plus,
+  Pencil,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -49,6 +51,8 @@ import {
   UserResponse,
   PostResponse,
   ProjectResponse,
+  ProjectRequest,
+  ProjectStatus,
   userApi,
 } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
@@ -90,7 +94,7 @@ function canAssignMember(
 
 // ── Manage Team Panel ─────────────────────────────────────────────────────────
 
-type ManageSection = 'general' | 'members' | 'settings'
+type ManageSection = 'general' | 'members' | 'projects' | 'settings'
 
 interface ManageTeamPanelProps {
   team: TeamResponse
@@ -116,6 +120,7 @@ function ManageTeamPanel({
   const navItems: { id: ManageSection; label: string; icon: React.ReactNode }[] = [
     { id: 'general', label: 'General', icon: <LayoutDashboard className="h-4 w-4" /> },
     { id: 'members', label: 'Members', icon: <Users className="h-4 w-4" /> },
+    { id: 'projects', label: 'Projects', icon: <FolderKanban className="h-4 w-4" /> },
     { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
   ]
 
@@ -180,6 +185,7 @@ function ManageTeamPanel({
           {section === 'members' && (
             <MembersSection team={team} canKick={canKick} onMemberChange={onMemberChange} />
           )}
+          {section === 'projects' && <TeamProjectsSection team={team} user={user} />}
           {section === 'settings' && (
             <SettingsSection team={team} onSaved={onSaved} onDeleted={onDeleted} />
           )}
@@ -1139,6 +1145,385 @@ function TeamMembersModal({ team, onClose }: TeamMembersModalProps) {
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Team Projects Section (Manage Panel) ─────────────────────────────────────
+
+const PROJECT_STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
+  { value: 'PLANNING', label: 'Planning' },
+  { value: 'IN_PROGRESS', label: 'In Progress' },
+  { value: 'ON_HOLD', label: 'On Hold' },
+  { value: 'COMPLETED', label: 'Completed' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'ARCHIVED', label: 'Archived' },
+]
+
+function TeamProjectsSection({ team, user }: { team: TeamResponse; user: User }) {
+  const [projects, setProjects] = useState<ProjectResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingProject, setEditingProject] = useState<ProjectResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Form state
+  const [formName, setFormName] = useState('')
+  const [formDescription, setFormDescription] = useState('')
+  const [formStatus, setFormStatus] = useState<ProjectStatus>('PLANNING')
+  const [formTechnologies, setFormTechnologies] = useState('')
+  const [formRepoUrl, setFormRepoUrl] = useState('')
+  const [formProjectUrl, setFormProjectUrl] = useState('')
+  const [formStartDate, setFormStartDate] = useState('')
+  const [formEndDate, setFormEndDate] = useState('')
+
+  const canManage =
+    hasRole(user, 'CEO') ||
+    (hasRole(user, 'TEAM_LEADER') && team.leadId === user.id) ||
+    hasRole(user, 'DEPARTMENT_LEADER')
+
+  useEffect(() => {
+    projectApi
+      .getByTeam(team.id)
+      .then(setProjects)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [team.id])
+
+  function openCreate() {
+    setEditingProject(null)
+    setFormName('')
+    setFormDescription('')
+    setFormStatus('PLANNING')
+    setFormTechnologies('')
+    setFormRepoUrl('')
+    setFormProjectUrl('')
+    setFormStartDate('')
+    setFormEndDate('')
+    setError(null)
+    setShowForm(true)
+  }
+
+  function openEdit(p: ProjectResponse) {
+    setEditingProject(p)
+    setFormName(p.name)
+    setFormDescription(p.description ?? '')
+    setFormStatus(p.status)
+    setFormTechnologies((p.technologies ?? []).join(', '))
+    setFormRepoUrl(p.repositoryUrl ?? '')
+    setFormProjectUrl(p.projectUrl ?? '')
+    setFormStartDate(p.startDate ?? '')
+    setFormEndDate(p.endDate ?? '')
+    setError(null)
+    setShowForm(true)
+  }
+
+  async function handleSave() {
+    if (!formName.trim()) return
+    setSaving(true)
+    setError(null)
+    const payload: ProjectRequest = {
+      name: formName.trim(),
+      description: formDescription.trim() || undefined,
+      status: formStatus,
+      technologies: formTechnologies
+        ? formTechnologies
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : [],
+      repositoryUrl: formRepoUrl.trim() || undefined,
+      projectUrl: formProjectUrl.trim() || undefined,
+      startDate: formStartDate || undefined,
+      endDate: formEndDate || undefined,
+      teamIds: [team.id],
+    }
+    try {
+      if (editingProject) {
+        // CEO can use the generic update; others use team-scoped endpoint
+        let updated: ProjectResponse
+        if (hasRole(user, 'CEO')) {
+          updated = await projectApi.update(editingProject.id, payload)
+        } else {
+          updated = await projectApi.update(editingProject.id, payload)
+        }
+        setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      } else {
+        const created = await projectApi.createForTeam(team.id, payload)
+        setProjects((prev) => [created, ...prev])
+      }
+      setShowForm(false)
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to save project')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete(p: ProjectResponse) {
+    setDeletingId(p.id)
+    try {
+      await projectApi.delete(p.id)
+      setProjects((prev) => prev.filter((x) => x.id !== p.id))
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to delete project')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-foreground text-2xl font-bold">Projects</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Manage projects assigned to this team.
+          </p>
+        </div>
+        {canManage && !showForm && (
+          <button
+            onClick={openCreate}
+            className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90"
+          >
+            <Plus className="h-4 w-4" />
+            New Project
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-destructive/10 text-destructive border-destructive/20 rounded-lg border px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Create / Edit form */}
+      {showForm && (
+        <div className="bg-muted/20 space-y-4 rounded-xl border p-5">
+          <h3 className="text-foreground text-sm font-semibold">
+            {editingProject ? 'Edit Project' : 'New Project'}
+          </h3>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Project Name *
+              </label>
+              <input
+                type="text"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                placeholder="e.g. Customer Portal v2"
+                maxLength={120}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="text-foreground mb-1 block text-xs font-medium">Description</label>
+              <textarea
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                rows={3}
+                maxLength={1000}
+                placeholder="What is this project about?"
+                className="border-border bg-background text-foreground focus:ring-primary w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">Status</label>
+              <select
+                value={formStatus}
+                onChange={(e) => setFormStatus(e.target.value as ProjectStatus)}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              >
+                {PROJECT_STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Technologies (comma-separated)
+              </label>
+              <input
+                type="text"
+                value={formTechnologies}
+                onChange={(e) => setFormTechnologies(e.target.value)}
+                placeholder="e.g. React, Spring Boot, MongoDB"
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Repository URL
+              </label>
+              <input
+                type="url"
+                value={formRepoUrl}
+                onChange={(e) => setFormRepoUrl(e.target.value)}
+                placeholder="https://github.com/org/repo"
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">Project URL</label>
+              <input
+                type="url"
+                value={formProjectUrl}
+                onChange={(e) => setFormProjectUrl(e.target.value)}
+                placeholder="https://myapp.example.com"
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">Start Date</label>
+              <input
+                type="date"
+                value={formStartDate}
+                onChange={(e) => setFormStartDate(e.target.value)}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">End Date</label>
+              <input
+                type="date"
+                value={formEndDate}
+                onChange={(e) => setFormEndDate(e.target.value)}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 border-t pt-3">
+            <button
+              onClick={() => setShowForm(false)}
+              disabled={saving}
+              className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !formName.trim()}
+              className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {saving ? 'Saving…' : editingProject ? 'Save Changes' : 'Create Project'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Project list */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+        </div>
+      ) : projects.length === 0 && !showForm ? (
+        <div className="rounded-xl border border-dashed py-14 text-center">
+          <FolderKanban className="text-muted-foreground/40 mx-auto mb-3 h-10 w-10" />
+          <p className="text-foreground text-sm font-medium">No projects yet</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            {canManage
+              ? 'Click "New Project" to create one.'
+              : 'No projects assigned to this team.'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {projects.map((p) => {
+            const cfg = PROJECT_STATUS_CONFIG[p.status] ?? PROJECT_STATUS_CONFIG.PLANNING
+            return (
+              <div
+                key={p.id}
+                className="bg-background flex items-start gap-4 rounded-xl border p-4"
+              >
+                <div className="bg-muted mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border">
+                  {p.avatarUrl ? (
+                    <img
+                      src={p.avatarUrl}
+                      alt={p.name}
+                      className="h-full w-full rounded-lg object-cover"
+                    />
+                  ) : (
+                    <FolderKanban className="text-muted-foreground h-4 w-4" />
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-foreground text-sm leading-tight font-semibold">{p.name}</p>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.color}`}
+                    >
+                      {cfg.label}
+                    </span>
+                  </div>
+                  {p.description && (
+                    <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
+                      {p.description}
+                    </p>
+                  )}
+                  {p.technologies && p.technologies.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {p.technologies.slice(0, 4).map((t) => (
+                        <span
+                          key={t}
+                          className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                      {p.technologies.length > 4 && (
+                        <span className="text-muted-foreground text-xs">
+                          +{p.technologies.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {canManage && (
+                  <div className="flex flex-shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => openEdit(p)}
+                      className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition-colors"
+                      title="Edit"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p)}
+                      disabled={deletingId === p.id}
+                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg p-1.5 transition-colors disabled:opacity-50"
+                      title="Delete"
+                    >
+                      {deletingId === p.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

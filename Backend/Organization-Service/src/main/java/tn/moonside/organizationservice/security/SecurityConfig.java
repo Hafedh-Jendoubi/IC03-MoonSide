@@ -39,6 +39,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/search").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/{teamId}").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/{teamId}/members").authenticated()
+                .requestMatchers(HttpMethod.GET, "/organizations/teams/{teamId}/projects").authenticated()
 
                 // ── User self-service ─────────────────────────────────────────
                 .requestMatchers(HttpMethod.POST, "/organizations/teams/{teamId}/join").authenticated()
@@ -54,6 +55,14 @@ public class SecurityConfig {
                 // ── Assign member (Team Leader, Dept Leader, HR, CEO) ─────────
                 .requestMatchers(HttpMethod.POST, "/organizations/teams/{teamId}/assign/{userId}")
                     .hasAnyRole("CEO", "TEAM_LEADER", "DEPARTMENT_LEADER", "HUMAN_RESOURCES")
+
+                // ── Team-level project creation (Team Leader, Dept Leader, CEO)
+                .requestMatchers(HttpMethod.POST, "/organizations/teams/{teamId}/projects")
+                    .hasAnyRole("CEO", "TEAM_LEADER", "DEPARTMENT_LEADER")
+
+                // ── Department-level project creation (Dept Leader, CEO) ──────
+                .requestMatchers(HttpMethod.POST, "/organizations/departments/{deptId}/projects")
+                    .hasAnyRole("CEO", "DEPARTMENT_LEADER")
 
                 // ── CEO-only mutations ──────────────────────────────────────
                 .requestMatchers(HttpMethod.POST,   "/organizations/departments/**").hasRole("CEO")

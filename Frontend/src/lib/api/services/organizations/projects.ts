@@ -14,6 +14,7 @@ export const projectApi = {
 
   getById: (id: string) => apiFetch<ProjectResponse>(`/organizations/projects/${id}`),
 
+  /** CEO-only: create from the back-office (full control). */
   create: (data: ProjectRequest) =>
     apiFetch<ProjectResponse>('/organizations/projects', {
       method: 'POST',
@@ -27,4 +28,34 @@ export const projectApi = {
     }),
 
   delete: (id: string) => apiFetch<void>(`/organizations/projects/${id}`, { method: 'DELETE' }),
+
+  // ── Team self-service ───────────────────────────────────────────────────────
+
+  /**
+   * Team Leader (or CEO / Dept Leader of that team) creates a project that is
+   * automatically assigned to the given team.
+   */
+  createForTeam: (teamId: string, data: ProjectRequest) =>
+    apiFetch<ProjectResponse>(`/organizations/teams/${teamId}/projects`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // ── Department project creation ─────────────────────────────────────────────
+
+  /**
+   * Returns all projects whose responsible teams belong to this department.
+   */
+  getByDepartment: (deptId: string) =>
+    apiFetch<ProjectResponse[]>(`/organizations/departments/${deptId}/projects`),
+
+  /**
+   * Department Leader (or CEO) creates a project and assigns it to a team
+   * inside the given department.  The selected teamId must be in request.teamIds.
+   */
+  createForDepartment: (deptId: string, data: ProjectRequest) =>
+    apiFetch<ProjectResponse>(`/organizations/departments/${deptId}/projects`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 }
