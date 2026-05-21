@@ -44,11 +44,11 @@ export function PostFeed({
     loadingMore,
     error,
     hasMore,
-    loadMore,
     refresh,
     prependPost,
     removePost,
     updatePost,
+    sentinelRef,
   } = usePostFeed({ scope, currentUser })
 
   const handlePostCreate = (post: PostResponse) => {
@@ -107,18 +107,15 @@ export function PostFeed({
             ))}
           </div>
 
+          {/* Infinite scroll sentinel */}
           {hasMore && (
-            <div className="flex justify-center pt-4">
-              <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-                {loadingMore ? (
-                  <>
-                    <Loader2 size={16} className="mr-2 animate-spin" />
-                    Loading…
-                  </>
-                ) : (
-                  'Load more'
-                )}
-              </Button>
+            <div ref={sentinelRef} className="flex justify-center py-6">
+              {loadingMore && (
+                <div className="flex items-center gap-2">
+                  <Loader2 size={18} className="text-muted-foreground animate-spin" />
+                  <span className="text-muted-foreground text-sm">Loading more posts…</span>
+                </div>
+              )}
             </div>
           )}
         </>

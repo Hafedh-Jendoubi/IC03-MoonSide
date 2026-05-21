@@ -1672,7 +1672,16 @@ export default function TeamFeedPage() {
   const [teamProjects, setTeamProjects] = useState<ProjectResponse[]>([])
 
   // ── Post feed: fetches from API, resolves authors ─────────────────────────
-  const { posts, usersMap, prependPost, removePost, updatePost } = usePostFeed({
+  const {
+    posts,
+    usersMap,
+    prependPost,
+    removePost,
+    updatePost,
+    hasMore,
+    loadingMore,
+    sentinelRef,
+  } = usePostFeed({
     scope: { type: 'team', teamId },
     currentUser: user,
   })
@@ -1985,21 +1994,37 @@ export default function TeamFeedPage() {
                     </p>
                   </div>
                 ) : (
-                  posts.map((post, index) => (
-                    <div
-                      key={post.id}
-                      style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
-                    >
-                      <PostCard
-                        post={post}
-                        currentUserId={user.id}
-                        usersMap={usersMap}
-                        onDelete={removePost}
-                        onUpdate={updatePost}
-                        currentLeadTeamId={team?.leadId === user.id ? team.id : null}
-                      />
-                    </div>
-                  ))
+                  <>
+                    {posts.map((post, index) => (
+                      <div
+                        key={post.id}
+                        style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
+                      >
+                        <PostCard
+                          post={post}
+                          currentUserId={user.id}
+                          usersMap={usersMap}
+                          onDelete={removePost}
+                          onUpdate={updatePost}
+                          currentLeadTeamId={team?.leadId === user.id ? team.id : null}
+                        />
+                      </div>
+                    ))}
+
+                    {/* Infinite scroll sentinel */}
+                    {hasMore && (
+                      <div ref={sentinelRef} className="flex justify-center py-6">
+                        {loadingMore && (
+                          <div className="flex items-center gap-2">
+                            <Loader2 size={18} className="text-muted-foreground animate-spin" />
+                            <span className="text-muted-foreground text-sm">
+                              Loading more posts…
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

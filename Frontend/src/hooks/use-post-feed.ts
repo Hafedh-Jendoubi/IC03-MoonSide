@@ -29,9 +29,11 @@ interface UseFeedResult {
   prependPost: (post: PostResponse) => void
   removePost: (postId: string) => void
   updatePost: (updated: PostResponse) => void
+  /** Attach this ref to a sentinel element at the bottom of the list to trigger infinite scroll. */
+  sentinelRef: (node: HTMLDivElement | null) => void
 }
 
-export function usePostFeed({ scope, pageSize = 20, currentUser }: UseFeedOptions): UseFeedResult {
+export function usePostFeed({ scope, pageSize = 5, currentUser }: UseFeedOptions): UseFeedResult {
   const [posts, setPosts] = useState<PostResponse[]>([])
   const [usersMap, setUsersMap] = useState<Record<string, User>>({})
   const [page, setPage] = useState(0)
@@ -42,6 +44,10 @@ export function usePostFeed({ scope, pageSize = 20, currentUser }: UseFeedOption
 
   // Track resolved IDs to avoid redundant fetches
   const resolvedIds = useRef<Set<string>>(new Set())
+  // Guard against concurrent loadMore calls
+  const loadingMoreRef = useRef(false)
+  const pageRef = useRef(0)
+  const totalPagesRef = useRef(1)
 
   // Seed current user immediately
   useEffect(() => {
@@ -69,27 +75,23 @@ export function usePostFeed({ scope, pageSize = 20, currentUser }: UseFeedOption
 
   const fetchPage = useCallback(
     async (pageNum: number) => {
-      try {
-        let data: PageResponse<PostResponse>
+      let data: PageResponse<PostResponse>
 
-        switch (scope.type) {
-          case 'team':
-            data = await postApi.getByTeam(scope.teamId, pageNum, pageSize)
-            break
-          case 'department':
-            data = await postApi.getByDepartment(scope.departmentId, pageNum, pageSize)
-            break
-          case 'author':
-            data = await postApi.getByAuthor(scope.authorId, pageNum, pageSize)
-            break
-          default:
-            data = await postApi.getFeed(pageNum, pageSize)
-        }
-
-        return data
-      } catch (err) {
-        throw err
+      switch (scope.type) {
+        case 'team':
+          data = await postApi.getByTeam(scope.teamId, pageNum, pageSize)
+          break
+        case 'department':
+          data = await postApi.getByDepartment(scope.departmentId, pageNum, pageSize)
+          break
+        case 'author':
+          data = await postApi.getByAuthor(scope.authorId, pageNum, pageSize)
+          break
+        default:
+          data = await postApi.getFeed(pageNum, pageSize)
       }
+
+      return data
     },
     [scope, pageSize]
   )
@@ -101,6 +103,7 @@ export function usePostFeed({ scope, pageSize = 20, currentUser }: UseFeedOption
         setError(null)
       } else {
         setLoadingMore(true)
+        loadingMoreRef.current = true
       }
 
       try {
@@ -111,7 +114,9 @@ export function usePostFeed({ scope, pageSize = 20, currentUser }: UseFeedOption
           setPosts((prev) => [...prev, ...data.content])
         }
         setTotalPages(data.totalPages)
+        totalPagesRef.current = data.totalPages
         setPage(pageNum)
+        pageRef.current = pageNum
         await resolveAuthors(data.content)
       } catch (err) {
         console.error('Failed to load posts:', err)
@@ -119,6 +124,7 @@ export function usePostFeed({ scope, pageSize = 20, currentUser }: UseFeedOption
       } finally {
         setLoading(false)
         setLoadingMore(false)
+        loadingMoreRef.current = false
       }
     },
     [fetchPage, resolveAuthors]
@@ -128,21 +134,45 @@ export function usePostFeed({ scope, pageSize = 20, currentUser }: UseFeedOption
   useEffect(() => {
     setPosts([])
     setPage(0)
+    pageRef.current = 0
     setTotalPages(1)
+    totalPagesRef.current = 1
     resolvedIds.current = currentUser ? new Set([currentUser.id]) : new Set()
     loadPage(0)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope.type, (scope as any).teamId, (scope as any).departmentId, (scope as any).authorId])
 
   const loadMore = useCallback(() => {
-    if (!loadingMore && page + 1 < totalPages) {
-      loadPage(page + 1)
+    if (!loadingMoreRef.current && pageRef.current + 1 < totalPagesRef.current) {
+      loadPage(pageRef.current + 1)
     }
-  }, [loadingMore, page, totalPages, loadPage])
+  }, [loadPage])
+
+  // ── Infinite scroll via IntersectionObserver ─────────────────────────────
+  const observerRef = useRef<IntersectionObserver | null>(null)
+
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (observerRef.current) observerRef.current.disconnect()
+      if (!node) return
+
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting) {
+            loadMore()
+          }
+        },
+        { rootMargin: '200px' }
+      )
+      observerRef.current.observe(node)
+    },
+    [loadMore]
+  )
 
   const refresh = useCallback(() => {
     setPosts([])
     setPage(0)
+    pageRef.current = 0
     loadPage(0)
   }, [loadPage])
 
@@ -161,7 +191,6 @@ export function usePostFeed({ scope, pageSize = 20, currentUser }: UseFeedOption
     setPosts((prev) => prev.filter((p) => p.id !== postId))
   }, [])
 
-  /** Replace a post in the feed with an updated version returned by the server. */
   const updatePost = useCallback((updated: PostResponse) => {
     setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
   }, [])
@@ -178,5 +207,6 @@ export function usePostFeed({ scope, pageSize = 20, currentUser }: UseFeedOption
     prependPost,
     removePost,
     updatePost,
+    sentinelRef,
   }
 }

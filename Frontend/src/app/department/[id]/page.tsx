@@ -64,6 +64,7 @@ import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
 import { User, hasRole } from '@/lib/types'
 import { UsersModal } from '@/components/users-modal'
+import { usePostFeed } from '@/hooks/use-post-feed'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -2005,8 +2006,6 @@ export default function DepartmentFeedPage() {
 
   const [department, setDepartment] = useState<DepartmentResponse | null>(null)
   const [teams, setTeams] = useState<TeamResponse[]>([])
-  const [posts, setPosts] = useState<PostResponse[]>([])
-  const [usersMap, setUsersMap] = useState<Record<string, User>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [manageOpen, setManageOpen] = useState(false)
@@ -2015,54 +2014,33 @@ export default function DepartmentFeedPage() {
   const [userTeamIds, setUserTeamIds] = useState<string[]>([])
   const [showFollowersModal, setShowFollowersModal] = useState(false)
 
+  // ── Post feed (paginated, infinite scroll) ────────────────────────────────
+  const {
+    posts,
+    usersMap,
+    loading: postsLoading,
+    loadingMore: postsLoadingMore,
+    hasMore: postsHasMore,
+    prependPost,
+    removePost,
+    updatePost,
+    sentinelRef,
+  } = usePostFeed({
+    scope: { type: 'department', departmentId: deptId },
+    currentUser: user,
+  })
+
   useEffect(() => {
     if (!deptId) return
     const loadData = async () => {
       try {
         setLoading(true)
-        const [dept, allTeams, postsPage] = await Promise.all([
+        const [dept, allTeams] = await Promise.all([
           departmentApi.getById(deptId),
           teamApi.getByDepartment(deptId),
-          postApi.getByDepartment(deptId, 0, 50),
         ])
         setDepartment(dept)
         setTeams(allTeams)
-        setPosts(postsPage.content || [])
-
-        // Fetch user data for all post authors
-        const authorIds = new Set(postsPage.content?.map((p) => p.authorId) || [])
-        const users: Record<string, User> = {}
-
-        // Fetch each user
-        const userPromises = Array.from(authorIds).map((id) =>
-          userApi
-            .getById(id)
-            .then((userData) => {
-              users[id] = {
-                id: userData.id,
-                roles: userData.roles,
-                permissions: userData.permissions,
-                email: userData.email,
-                firstName: userData.firstName,
-                lastName: userData.lastName,
-                birthDate: userData.birthDate,
-                phoneNumber: userData.phoneNumber,
-                jobTitle: userData.jobTitle,
-                bio: userData.bio,
-                avatar: userData.avatar,
-                active: userData.active,
-                mustChangePassword: userData.mustChangePassword,
-                lastLogin: userData.lastLogin,
-                createdAt: userData.createdAt,
-                updatedAt: userData.updatedAt,
-              }
-            })
-            .catch(() => {
-              /* silently ignore */
-            })
-        )
-        await Promise.all(userPromises)
-        setUsersMap(users)
 
         // derive which teams the current user is a member of (lead counts too)
         if (user) {
@@ -2079,19 +2057,15 @@ export default function DepartmentFeedPage() {
 
   const handlePostCreate = (post: PostResponse) => {
     if (!user) return
-    setPosts((prev) => [post, ...prev])
-    // Ensure the author (current user) is in the map so the post card renders the name immediately
-    if (!usersMap[user.id]) {
-      setUsersMap((prev) => ({ ...prev, [user.id]: user }))
-    }
+    prependPost(post)
   }
 
   const handlePostDelete = (postId: string) => {
-    setPosts((prev) => prev.filter((p) => p.id !== postId))
+    removePost(postId)
   }
 
   const handlePostUpdate = (updated: PostResponse) => {
-    setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+    updatePost(updated)
   }
 
   const handleLike = () => {
@@ -2367,7 +2341,12 @@ export default function DepartmentFeedPage() {
             <div className="space-y-6">
               <CreatePost user={user} onPostCreate={handlePostCreate} departmentId={deptId} />
               <div className="space-y-6">
-                {posts.length === 0 ? (
+                {postsLoading ? (
+                  <div className="flex flex-col items-center gap-4 py-16">
+                    <Loader2 className="text-primary h-8 w-8 animate-spin" />
+                    <p className="text-muted-foreground text-sm">Loading posts…</p>
+                  </div>
+                ) : posts.length === 0 ? (
                   <div className="py-12 text-center">
                     <div className="mb-4 text-6xl">📝</div>
                     <h2 className="text-foreground mb-2 text-xl font-semibold">No posts yet</h2>
@@ -2376,20 +2355,36 @@ export default function DepartmentFeedPage() {
                     </p>
                   </div>
                 ) : (
-                  posts.map((post, index) => (
-                    <div
-                      key={post.id}
-                      style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
-                    >
-                      <PostCard
-                        post={post}
-                        currentUserId={user.id}
-                        usersMap={usersMap}
-                        onDelete={handlePostDelete}
-                        onUpdate={handlePostUpdate}
-                      />
-                    </div>
-                  ))
+                  <>
+                    {posts.map((post, index) => (
+                      <div
+                        key={post.id}
+                        style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
+                      >
+                        <PostCard
+                          post={post}
+                          currentUserId={user.id}
+                          usersMap={usersMap}
+                          onDelete={handlePostDelete}
+                          onUpdate={handlePostUpdate}
+                        />
+                      </div>
+                    ))}
+
+                    {/* Infinite scroll sentinel */}
+                    {postsHasMore && (
+                      <div ref={sentinelRef} className="flex justify-center py-6">
+                        {postsLoadingMore && (
+                          <div className="flex items-center gap-2">
+                            <Loader2 size={18} className="text-muted-foreground animate-spin" />
+                            <span className="text-muted-foreground text-sm">
+                              Loading more posts…
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

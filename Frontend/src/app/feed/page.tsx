@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { AuthLayout } from '@/components/auth-layout'
 import { CreatePost } from '@/components/create-post'
@@ -18,6 +18,8 @@ type OriginLabel = { kind: 'department' | 'team'; name: string }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 5
+
 export default function FeedPage() {
   const { user } = useAuth()
 
@@ -30,18 +32,26 @@ export default function FeedPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Refs to avoid stale closures in the IntersectionObserver callback
+  const loadingMoreRef = useRef(false)
+  const pageRef = useRef(0)
+  const totalPagesRef = useRef(1)
+  const observerRef = useRef<IntersectionObserver | null>(null)
+
   // ── Origin resolution (dept / team names) ─────────────────────────────────
 
   const resolveOrigins = useCallback(
-    async (newPosts: PostResponse[]) => {
+    async (newPosts: PostResponse[], currentOriginsMap: Record<string, OriginLabel>) => {
       const missingDepts = [
         ...new Set(
-          newPosts.map((p) => p.departmentId).filter((id): id is string => !!id && !originsMap[id])
+          newPosts
+            .map((p) => p.departmentId)
+            .filter((id): id is string => !!id && !currentOriginsMap[id])
         ),
       ]
       const missingTeams = [
         ...new Set(
-          newPosts.map((p) => p.teamId).filter((id): id is string => !!id && !originsMap[id])
+          newPosts.map((p) => p.teamId).filter((id): id is string => !!id && !currentOriginsMap[id])
         ),
       ]
 
@@ -64,40 +74,45 @@ export default function FeedPage() {
 
       setOriginsMap((prev) => ({ ...prev, ...updates }))
     },
-    [originsMap]
+    []
   )
 
   // ── Author resolution ──────────────────────────────────────────────────────
 
-  const resolveAuthors = useCallback(
-    async (newPosts: PostResponse[]) => {
-      const missing = [...new Set(newPosts.map((p) => p.authorId).filter((id) => !usersMap[id]))]
-      if (missing.length === 0) return
+  const resolvedIdsRef = useRef<Set<string>>(new Set())
 
-      const results = await Promise.allSettled(missing.map((id) => userApi.getById(id)))
-      const updates: Record<string, User> = {}
-      results.forEach((r, i) => {
-        if (r.status === 'fulfilled') updates[missing[i]] = r.value as User
-      })
-      setUsersMap((prev) => ({ ...prev, ...updates }))
-    },
-    [usersMap]
-  )
+  const resolveAuthors = useCallback(async (newPosts: PostResponse[]) => {
+    const missing = [
+      ...new Set(newPosts.map((p) => p.authorId).filter((id) => !resolvedIdsRef.current.has(id))),
+    ]
+    if (missing.length === 0) return
+
+    missing.forEach((id) => resolvedIdsRef.current.add(id))
+
+    const results = await Promise.allSettled(missing.map((id) => userApi.getById(id)))
+    const updates: Record<string, User> = {}
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') updates[missing[i]] = r.value as User
+    })
+    setUsersMap((prev) => ({ ...prev, ...updates }))
+  }, [])
 
   // ── Data loading ───────────────────────────────────────────────────────────
 
   const loadFeed = useCallback(
-    async (pageNum = 0) => {
+    async (pageNum: number, currentOriginsMap: Record<string, OriginLabel>) => {
       try {
         if (pageNum === 0) {
           setLoading(true)
           setPosts([])
+          resolvedIdsRef.current = user ? new Set([user.id]) : new Set()
         } else {
           setLoadingMore(true)
+          loadingMoreRef.current = true
         }
         setError(null)
 
-        const data = await postApi.getFollowingFeed(pageNum, 20)
+        const data = await postApi.getFollowingFeed(pageNum, PAGE_SIZE)
 
         if (pageNum === 0) {
           setPosts(data.content)
@@ -106,23 +121,58 @@ export default function FeedPage() {
         }
 
         setTotalPages(data.totalPages)
+        totalPagesRef.current = data.totalPages
         setPage(pageNum)
-        await Promise.all([resolveAuthors(data.content), resolveOrigins(data.content)])
+        pageRef.current = pageNum
+
+        await Promise.all([
+          resolveAuthors(data.content),
+          resolveOrigins(data.content, currentOriginsMap),
+        ])
       } catch (err) {
         console.error('Failed to load feed:', err)
         setError('Could not load posts. Please try again.')
       } finally {
         setLoading(false)
         setLoadingMore(false)
+        loadingMoreRef.current = false
       }
     },
-    [resolveAuthors, resolveOrigins]
+    [resolveAuthors, resolveOrigins, user]
   )
 
+  // Initial load
   useEffect(() => {
-    loadFeed(0)
+    loadFeed(0, {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // ── Infinite scroll sentinel ───────────────────────────────────────────────
+
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (observerRef.current) observerRef.current.disconnect()
+      if (!node) return
+
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          if (
+            entries[0].isIntersecting &&
+            !loadingMoreRef.current &&
+            pageRef.current + 1 < totalPagesRef.current
+          ) {
+            setOriginsMap((currentOriginsMap) => {
+              loadFeed(pageRef.current + 1, currentOriginsMap)
+              return currentOriginsMap
+            })
+          }
+        },
+        { rootMargin: '200px' }
+      )
+      observerRef.current.observe(node)
+    },
+    [loadFeed]
+  )
 
   // ── Post lifecycle ─────────────────────────────────────────────────────────
 
@@ -150,6 +200,8 @@ export default function FeedPage() {
 
   if (!user) return null
 
+  const hasMore = page + 1 < totalPages
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
@@ -165,7 +217,7 @@ export default function FeedPage() {
         ) : error ? (
           <div className="py-12 text-center">
             <p className="text-muted-foreground mb-4">{error}</p>
-            <Button variant="outline" onClick={() => loadFeed(0)}>
+            <Button variant="outline" onClick={() => loadFeed(0, {})}>
               <RefreshCw size={16} className="mr-2" /> Retry
             </Button>
           </div>
@@ -191,18 +243,15 @@ export default function FeedPage() {
 
             {posts.length === 0 && <FollowingEmptyState />}
 
-            {page + 1 < totalPages && (
-              <div className="mt-8 flex justify-center">
-                <Button variant="outline" onClick={() => loadFeed(page + 1)} disabled={loadingMore}>
-                  {loadingMore ? (
-                    <>
-                      <Loader2 size={16} className="mr-2 animate-spin" />
-                      Loading…
-                    </>
-                  ) : (
-                    'Load more'
-                  )}
-                </Button>
+            {/* Infinite scroll sentinel */}
+            {hasMore && (
+              <div ref={sentinelRef} className="flex justify-center py-6">
+                {loadingMore && (
+                  <div className="flex items-center gap-2">
+                    <Loader2 size={18} className="text-muted-foreground animate-spin" />
+                    <span className="text-muted-foreground text-sm">Loading more posts…</span>
+                  </div>
+                )}
               </div>
             )}
           </>
