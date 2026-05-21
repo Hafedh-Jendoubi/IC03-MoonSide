@@ -8,6 +8,7 @@ import tn.moonside.postservice.enums.TypePosts;
 import tn.moonside.postservice.enums.VisibilityType;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Document(collection = "posts")
 @Data
@@ -19,19 +20,15 @@ public class Post {
     @Id
     private String id;
 
-    /** ID of the user who authored the post (from user-service). */
     @Indexed
     private String authorId;
 
-    /** Optional: ID of the team this post belongs to. */
     @Indexed
     private String teamId;
 
-    /** Optional: ID of the department this post belongs to. */
     @Indexed
     private String departmentId;
 
-    /** ID of the last user who edited the post. */
     private String updatedBy;
 
     private String content;
@@ -50,6 +47,17 @@ public class Post {
 
     @Builder.Default
     private int viewCount = 0;
+
+    // ── Survey fields ──────────────────────────────────────────────────────────
+    /** Title/question shown at the top of a SURVEY post. */
+    private String surveyQuestion;
+
+    /** Ordered list of voting options. Only populated when postType == SURVEY. */
+    private List<SurveyOption> surveyOptions;
+
+    /** Whether the survey is still accepting votes. */
+    @Builder.Default
+    private boolean surveyOpen = true;
 
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

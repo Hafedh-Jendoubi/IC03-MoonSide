@@ -31,4 +31,7 @@ public class PostResponse {
     private LocalDateTime createdAt;
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime updatedAt;
+
+    // ── Survey fields (null when postType != SURVEY) ───────────────────────────
+    private SurveyResponse survey;
 }

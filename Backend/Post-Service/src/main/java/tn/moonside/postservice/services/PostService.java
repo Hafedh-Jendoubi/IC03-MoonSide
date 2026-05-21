@@ -4,12 +4,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tn.moonside.postservice.clients.OrganizationClient;
 import tn.moonside.postservice.dtos.requests.PostRequest;
 import tn.moonside.postservice.dtos.responses.*;
 import tn.moonside.postservice.entities.*;
+import tn.moonside.postservice.enums.TypePosts;
 import tn.moonside.postservice.enums.VisibilityType;
 import tn.moonside.postservice.repositories.*;
 
@@ -27,30 +30,41 @@ public class PostService {
     private final AttachmentRepository attachmentRepository;
     private final ReactionRepository reactionRepository;
     private final ReactionTypeRepository reactionTypeRepository;
+    private final SurveyVoteRepository surveyVoteRepository;
     private final OrganizationClient organizationClient;
+    private final SurveyService surveyService;
 
     /* ── Create ───────────────────────────────────────────────────────────── */
 
     public PostResponse createPost(PostRequest req, String authorId) {
-        /*
-         * Visibility derivation rules:
-         *  - teamId present       → TEAM_ONLY
-         *  - departmentId present → DEPARTMENT_ONLY
-         *  - Otherwise            → client-supplied value (PUBLIC / PRIVATE)
-         */
         VisibilityType resolvedVisibility = resolveVisibility(req);
 
-        Post post = Post.builder()
+        Post.PostBuilder builder = Post.builder()
                 .authorId(authorId)
                 .teamId(req.getTeamId())
                 .departmentId(req.getDepartmentId())
-                .content(req.getContent())
+                .content(req.getContent() != null ? req.getContent() : "")
                 .postType(req.getPostType())
                 .postVisibility(resolvedVisibility)
                 .isPinned(req.isPinned())
-                .isAIGenerated(req.isAIGenerated())
-                .build();
-        return toResponse(postRepository.save(post));
+                .isAIGenerated(req.isAIGenerated());
+
+        if (req.getPostType() == TypePosts.SURVEY) {
+            if (req.getSurveyQuestion() == null || req.getSurveyQuestion().isBlank()) {
+                throw new IllegalArgumentException("Survey question is required");
+            }
+            if (req.getSurveyOptions() == null || req.getSurveyOptions().size() < 2) {
+                throw new IllegalArgumentException("Survey must have at least 2 options");
+            }
+            if (req.getSurveyOptions().size() > 10) {
+                throw new IllegalArgumentException("Survey can have at most 10 options");
+            }
+            builder.surveyQuestion(req.getSurveyQuestion())
+                   .surveyOptions(surveyService.buildOptions(req.getSurveyOptions()))
+                   .surveyOpen(true);
+        }
+
+        return toResponse(postRepository.save(builder.build()), authorId);
     }
 
     /* ── Read ─────────────────────────────────────────────────────────────── */
@@ -59,116 +73,69 @@ public class PostService {
         Post post = findPost(postId);
         post.setViewCount(post.getViewCount() + 1);
         postRepository.save(post);
-        return toResponse(post);
+        String requesterId = currentUserId();
+        return toResponse(post, requesterId);
     }
 
-    /** Global public feed (no follow filtering). */
     public Page<PostResponse> getPublicFeed(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        String requesterId = currentUserId();
         return postRepository
                 .findByPostVisibilityIn(List.of(VisibilityType.PUBLIC), pageable)
-                .map(this::toResponse);
+                .map(p -> toResponse(p, requesterId));
     }
 
-    /**
-     * Personalised feed for the authenticated user.
-     *
-     * <p>Rules:</p>
-     * <ul>
-     *   <li>Fetches explicit follows <em>and</em> implicit membership from
-     *       Organization-Service in a single HTTP call.</li>
-     *   <li>A user automatically sees posts from:
-     *     <ol>
-     *       <li>Departments they explicitly follow.</li>
-     *       <li>Teams they explicitly follow.</li>
-     *       <li>Teams they are a <strong>member</strong> of (joined / assigned).</li>
-     *       <li>Departments that contain a team they are a member of —
-     *           even if the user never pressed "follow" on that department.</li>
-     *     </ol>
-     *   </li>
-     *   <li>Visibility rules: PUBLIC, DEPARTMENT_ONLY, and TEAM_ONLY posts are
-     *       included; PRIVATE posts are never surfaced.</li>
-     *   <li>If the user has no follows and no memberships, returns an empty page.</li>
-     * </ul>
-     *
-     * @param userId the authenticated user's ID (extracted from JWT by the controller)
-     * @param page   zero-based page index
-     * @param size   maximum items per page
-     */
     public Page<PostResponse> getFollowingFeed(String userId, int page, int size) {
-        // 1. Resolve follows + memberships (single HTTP call to org-service)
         OrganizationClient.UserFollows follows = organizationClient.getUserFollows();
 
-        // 2. Merge explicit follows with implicit membership — deduplicate in stream
         List<String> allDeptIds = Stream.concat(
                         follows.departmentIds().stream(),
                         follows.memberDepartmentIds().stream())
-                .distinct()
-                .toList();
+                .distinct().toList();
 
         List<String> allTeamIds = Stream.concat(
                         follows.teamIds().stream(),
                         follows.memberTeamIds().stream())
-                .distinct()
-                .toList();
+                .distinct().toList();
 
-        log.debug(
-            "Building feed for user={}: followedDepts={}, memberDepts={} → totalDepts={} | "
-          + "followedTeams={}, memberTeams={} → totalTeams={}",
-            userId,
-            follows.departmentIds().size(), follows.memberDepartmentIds().size(), allDeptIds.size(),
-            follows.teamIds().size(),       follows.memberTeamIds().size(),       allTeamIds.size());
-
-        // 3. Nothing to show → return empty page immediately
         if (allDeptIds.isEmpty() && allTeamIds.isEmpty()) {
             return Page.empty(PageRequest.of(page, size));
         }
 
-        // 4. Query MongoDB for posts belonging to any of the resolved departments OR teams
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-
         List<VisibilityType> allowedVisibilities = List.of(
-                VisibilityType.PUBLIC,
-                VisibilityType.DEPARTMENT_ONLY,
-                VisibilityType.TEAM_ONLY
-        );
+                VisibilityType.PUBLIC, VisibilityType.DEPARTMENT_ONLY, VisibilityType.TEAM_ONLY);
 
-        // Guard: MongoDB $in: [] matches nothing, which is what we want —
-        // but we use a sentinel to keep the query intent explicit.
         List<String> deptIds = allDeptIds.isEmpty() ? List.of("__no_dept__") : allDeptIds;
         List<String> teamIds = allTeamIds.isEmpty() ? List.of("__no_team__") : allTeamIds;
 
         return postRepository
                 .findFollowingFeed(deptIds, teamIds, allowedVisibilities, pageable)
-                .map(this::toResponse);
+                .map(p -> toResponse(p, userId));
     }
 
     public Page<PostResponse> getByAuthor(String authorId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return postRepository.findByAuthorId(authorId, pageable).map(this::toResponse);
+        String requesterId = currentUserId();
+        return postRepository.findByAuthorId(authorId, pageable).map(p -> toResponse(p, requesterId));
     }
 
-    /**
-     * Returns all posts for a team: TEAM_ONLY and PUBLIC posts linked to this team.
-     */
     public Page<PostResponse> getByTeam(String teamId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        String requesterId = currentUserId();
         return postRepository
                 .findByTeamIdAndPostVisibilityIn(teamId,
                         List.of(VisibilityType.PUBLIC, VisibilityType.TEAM_ONLY), pageable)
-                .map(this::toResponse);
+                .map(p -> toResponse(p, requesterId));
     }
 
-    /**
-     * Returns all posts for a department: DEPARTMENT_ONLY and PUBLIC posts linked
-     * to this department.
-     */
     public Page<PostResponse> getByDepartment(String departmentId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        String requesterId = currentUserId();
         return postRepository
                 .findByDepartmentIdAndPostVisibilityIn(departmentId,
                         List.of(VisibilityType.PUBLIC, VisibilityType.DEPARTMENT_ONLY), pageable)
-                .map(this::toResponse);
+                .map(p -> toResponse(p, requesterId));
     }
 
     /* ── Update ───────────────────────────────────────────────────────────── */
@@ -177,14 +144,14 @@ public class PostService {
         Post post = findPost(postId);
         assertCanEdit(post, requesterId, roles, "edit");
 
-        post.setContent(req.getContent());
+        post.setContent(req.getContent() != null ? req.getContent() : post.getContent());
         post.setPostType(req.getPostType());
         PostRequest contextualReq = buildContextualRequest(req, post);
         post.setPostVisibility(resolveVisibility(contextualReq));
         post.setPinned(req.isPinned());
         post.setUpdatedBy(requesterId);
         post.setUpdatedAt(LocalDateTime.now());
-        return toResponse(postRepository.save(post));
+        return toResponse(postRepository.save(post), requesterId);
     }
 
     /* ── Delete ───────────────────────────────────────────────────────────── */
@@ -197,6 +164,7 @@ public class PostService {
         commentRepository.deleteByPostId(postId);
         attachmentRepository.deleteByPostId(postId);
         reactionRepository.deleteByReactableTypeAndReactableId("POST", postId);
+        surveyVoteRepository.deleteByPostId(postId);
         postRepository.delete(post);
     }
 
@@ -211,7 +179,6 @@ public class PostService {
         boolean isCeo         = roles != null && roles.contains("CEO");
 
         if (isCeo) return;
-
         if (isTeamLeader && post.getTeamId() != null) {
             if (organizationClient.isTeamLead(post.getTeamId(), requesterId)) return;
         }
@@ -230,12 +197,8 @@ public class PostService {
     /* ── Visibility derivation ────────────────────────────────────────────── */
 
     private VisibilityType resolveVisibility(PostRequest req) {
-        if (req.getTeamId() != null && !req.getTeamId().isBlank()) {
-            return VisibilityType.TEAM_ONLY;
-        }
-        if (req.getDepartmentId() != null && !req.getDepartmentId().isBlank()) {
-            return VisibilityType.DEPARTMENT_ONLY;
-        }
+        if (req.getTeamId() != null && !req.getTeamId().isBlank()) return VisibilityType.TEAM_ONLY;
+        if (req.getDepartmentId() != null && !req.getDepartmentId().isBlank()) return VisibilityType.DEPARTMENT_ONLY;
         return req.getPostVisibility() != null ? req.getPostVisibility() : VisibilityType.PUBLIC;
     }
 
@@ -247,9 +210,14 @@ public class PostService {
 
     /* ── Mapping ──────────────────────────────────────────────────────────── */
 
-    private PostResponse toResponse(Post post) {
+    private PostResponse toResponse(Post post, String requesterId) {
         List<AttachmentResponse> attachments = attachmentRepository.findByPostId(post.getId())
                 .stream().map(this::toAttachmentResponse).toList();
+
+        SurveyResponse survey = null;
+        if (post.getPostType() == TypePosts.SURVEY && requesterId != null) {
+            survey = surveyService.buildSurveyResponse(post, requesterId);
+        }
 
         return PostResponse.builder()
                 .id(post.getId())
@@ -266,6 +234,7 @@ public class PostService {
                 .commentCount(commentRepository.countByPostId(post.getId()))
                 .reactionCount(reactionRepository.countByReactableTypeAndReactableId("POST", post.getId()))
                 .attachments(attachments)
+                .survey(survey)
                 .createdAt(post.getCreatedAt())
                 .updatedAt(post.getUpdatedAt())
                 .build();
@@ -286,9 +255,10 @@ public class PostService {
                 .orElseThrow(() -> new IllegalArgumentException("Post not found: " + postId));
     }
 
-    private void assertOwner(String ownerId, String requesterId, String action) {
-        if (!ownerId.equals(requesterId)) {
-            throw new AccessDeniedException("You are not allowed to " + action + " this post");
-        }
+    private String currentUserId() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return null;
+        Object principal = auth.getPrincipal();
+        return principal instanceof String s ? s : null;
     }
 }

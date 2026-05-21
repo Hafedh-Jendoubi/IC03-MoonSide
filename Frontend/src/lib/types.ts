@@ -98,6 +98,7 @@ export type PostType =
   | 'DISCUSSION'
   | 'EVENT'
   | 'ACHIEVEMENT'
+  | 'SURVEY'
 
 /**
  * Visibility values that can appear on a PostResponse from the server.

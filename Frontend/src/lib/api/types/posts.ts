@@ -5,6 +5,7 @@ export type PostType =
   | 'DISCUSSION'
   | 'EVENT'
   | 'ACHIEVEMENT'
+  | 'SURVEY'
 
 export type PostVisibility = 'PUBLIC' | 'PRIVATE' | 'TEAM_ONLY' | 'DEPARTMENT_ONLY' | 'DRAFT'
 export type ClientPostVisibility = 'PUBLIC' | 'PRIVATE'
@@ -23,6 +24,22 @@ export interface AttachmentResponse {
   uploadedAt: string
 }
 
+export interface SurveyOptionResponse {
+  id: string
+  text: string
+  voteCount: number
+  percentage: number
+}
+
+export interface SurveyResponse {
+  postId: string
+  surveyQuestion: string
+  options: SurveyOptionResponse[]
+  totalVotes: number
+  surveyOpen: boolean
+  userVotedOptionId: string | null
+}
+
 export interface PostResponse {
   id: string
   authorId: string
@@ -38,18 +55,22 @@ export interface PostResponse {
   commentCount: number
   reactionCount: number
   attachments: AttachmentResponse[]
+  survey: SurveyResponse | null
   createdAt: string
   updatedAt: string
 }
 
 export interface PostRequest {
-  content: string
+  content?: string
   postType?: PostType
   postVisibility?: ClientPostVisibility
   teamId?: string
   departmentId?: string
   isPinned?: boolean
   isAIGenerated?: boolean
+  // Survey-specific
+  surveyQuestion?: string
+  surveyOptions?: string[]
 }
 
 export interface CommentResponse {
@@ -99,4 +120,8 @@ export interface ReactionSummaryResponse {
 
 export interface ReactionRequest {
   reactionTypeCode: string
+}
+
+export interface SurveyVoteRequest {
+  optionId: string
 }

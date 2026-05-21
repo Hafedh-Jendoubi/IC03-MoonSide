@@ -6,5 +6,6 @@ public enum TypePosts {
     QUESTION,
     DISCUSSION,
     EVENT,
-    ACHIEVEMENT
+    ACHIEVEMENT,
+    SURVEY
 }

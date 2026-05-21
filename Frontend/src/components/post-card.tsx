@@ -6,13 +6,15 @@ import {
   PostResponse,
   AttachmentResponse,
   CommentResponse,
+  SurveyResponse,
   commentApi,
   reactionApi,
   userApi,
   postApi,
   attachmentApi,
+  surveyApi,
 } from '@/lib/api'
-import { User, getFullName, PostType, ROLE, hasRole } from '@/lib/types'
+import { User, getFullName, PostType, ROLE } from '@/lib/types'
 import {
   Heart,
   ThumbsUp,
@@ -28,6 +30,9 @@ import {
   X,
   Check,
   CornerDownRight,
+  BarChart2,
+  Users,
+  CheckCircle2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -69,6 +74,132 @@ const POST_TYPE_STYLES: Record<PostType, { label: string; color: string }> = {
     label: 'Achievement',
     color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
   },
+  SURVEY: {
+    label: 'Survey',
+    color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',
+  },
+}
+
+// ── SurveyPanel ───────────────────────────────────────────────────────────────
+
+function SurveyPanel({ postId, initialSurvey }: { postId: string; initialSurvey: SurveyResponse }) {
+  const [survey, setSurvey] = useState<SurveyResponse>(initialSurvey)
+  const [voting, setVoting] = useState<string | null>(null) // optionId being voted
+  const [error, setError] = useState<string | null>(null)
+
+  const hasVoted = !!survey.userVotedOptionId
+  const isClosed = !survey.surveyOpen
+
+  const handleVote = async (optionId: string) => {
+    if (voting || isClosed) return
+    setVoting(optionId)
+    setError(null)
+    try {
+      const updated = await surveyApi.vote(postId, { optionId })
+      setSurvey(updated)
+    } catch (e: any) {
+      console.error('Vote failed:', e)
+      setError('Could not record your vote. Please try again.')
+    } finally {
+      setVoting(null)
+    }
+  }
+
+  const showResults = hasVoted || isClosed
+
+  return (
+    <div className="my-4 space-y-3 rounded-xl border border-teal-200 bg-teal-50/40 p-4 dark:border-teal-800/40 dark:bg-teal-900/10">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <BarChart2 size={16} className="shrink-0 text-teal-600 dark:text-teal-400" />
+        <p className="text-foreground leading-snug font-semibold">{survey.surveyQuestion}</p>
+      </div>
+
+      {/* Options */}
+      <div className="space-y-2">
+        {survey.options.map((opt) => {
+          const isMyVote = survey.userVotedOptionId === opt.id
+          const isLoading = voting === opt.id
+
+          if (showResults) {
+            // Results bar view
+            return (
+              <div key={opt.id} className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-foreground flex items-center gap-1.5 font-medium">
+                    {isMyVote && (
+                      <CheckCircle2
+                        size={14}
+                        className="shrink-0 text-teal-600 dark:text-teal-400"
+                      />
+                    )}
+                    {opt.text}
+                  </span>
+                  <span className="text-muted-foreground text-xs tabular-nums">
+                    {opt.percentage.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-teal-100 dark:bg-teal-900/30">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isMyVote ? 'bg-teal-500 dark:bg-teal-400' : 'bg-teal-300 dark:bg-teal-700'
+                    }`}
+                    style={{ width: `${opt.percentage}%` }}
+                  />
+                </div>
+              </div>
+            )
+          }
+
+          // Voting button view
+          return (
+            <button
+              key={opt.id}
+              onClick={() => handleVote(opt.id)}
+              disabled={!!voting}
+              className={`w-full rounded-lg border px-4 py-2.5 text-left text-sm font-medium transition-all ${
+                isLoading
+                  ? 'border-teal-400 bg-teal-100 text-teal-700 dark:border-teal-600 dark:bg-teal-900/30 dark:text-teal-300'
+                  : 'border-border text-foreground bg-white hover:border-teal-400 hover:bg-teal-50 dark:bg-slate-800 dark:hover:border-teal-600 dark:hover:bg-teal-900/20'
+              } disabled:cursor-not-allowed disabled:opacity-70`}
+            >
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" />
+                  Voting…
+                </span>
+              ) : (
+                opt.text
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between pt-1">
+        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          <Users size={12} />
+          <span>
+            {survey.totalVotes} {survey.totalVotes === 1 ? 'vote' : 'votes'}
+          </span>
+        </div>
+        {isClosed && (
+          <span className="text-muted-foreground text-xs font-medium italic">Survey closed</span>
+        )}
+        {hasVoted && !isClosed && (
+          <button
+            onClick={() => setSurvey((s) => ({ ...s, userVotedOptionId: null }))}
+            className="text-xs text-teal-600 hover:underline dark:text-teal-400"
+          >
+            Change vote
+          </button>
+        )}
+      </div>
+
+      {error && <p className="text-destructive text-xs">{error}</p>}
+    </div>
+  )
 }
 
 // ── Reaction types ─────────────────────────────────────────────────────────────
@@ -83,7 +214,7 @@ const REACTION_TYPES = [
 
 type ReactionCode = (typeof REACTION_TYPES)[number]['code']
 
-// ── ReactionPicker (floating emoji bar) ────────────────────────────────────────
+// ── ReactionPicker ─────────────────────────────────────────────────────────────
 
 function ReactionPicker({
   onSelect,
@@ -126,7 +257,7 @@ function ReactionPicker({
   )
 }
 
-// ── ReactionButton (post & comment shared) ─────────────────────────────────────
+// ── ReactionButton ─────────────────────────────────────────────────────────────
 
 function ReactionButton({
   reactionCode,
@@ -151,27 +282,16 @@ function ReactionButton({
   const handlePressEnd = () => {
     if (holdTimer.current) clearTimeout(holdTimer.current)
   }
-
   const handleClick = () => {
     if (showPicker) return
-    // quick click: toggle LIKE or remove existing
-    if (active) {
-      onReact(active.code) // toggles off
-    } else {
-      onReact('LIKE')
-    }
-  }
-
-  const handleSelect = (code: ReactionCode) => {
-    onReact(code)
+    active ? onReact(active.code) : onReact('LIKE')
   }
 
   if (size === 'comment') {
-    // Compact inline style for comments
     return (
       <div ref={containerRef} className="relative inline-flex items-center">
         {showPicker && (
-          <ReactionPicker onSelect={handleSelect} onClose={() => setShowPicker(false)} />
+          <ReactionPicker onSelect={(c) => onReact(c)} onClose={() => setShowPicker(false)} />
         )}
         <button
           onMouseDown={handlePressStart}
@@ -189,11 +309,10 @@ function ReactionButton({
     )
   }
 
-  // Post size — full button
   return (
     <div ref={containerRef} className="relative">
       {showPicker && (
-        <ReactionPicker onSelect={handleSelect} onClose={() => setShowPicker(false)} />
+        <ReactionPicker onSelect={(c) => onReact(c)} onClose={() => setShowPicker(false)} />
       )}
       <Button
         variant="ghost"
@@ -228,7 +347,6 @@ function formatTime(dateStr: string): string {
   const normalized = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z'
   const d = new Date(normalized)
   if (isNaN(d.getTime())) return dateStr
-
   const now = new Date()
   const diffMs = Math.max(0, now.getTime() - d.getTime())
   const diffMins = Math.floor(diffMs / 60_000)
@@ -236,19 +354,13 @@ function formatTime(dateStr: string): string {
   const diffDays = Math.floor(diffMs / 86_400_000)
   const diffMonths = Math.floor(diffDays / 30.44)
   const diffYears = Math.floor(diffDays / 365.25)
-
   if (diffMins < 1) return 'just now'
   if (diffMins < 60) return `${diffMins}m ago`
   if (diffHours < 24) return `${diffHours}h ago`
   if (diffDays < 30) return `${diffDays}d ago`
-
-  if (diffYears < 1) {
-    return `${diffMonths}mo ago`
-  }
-
-  const remainingMonths = diffMonths - diffYears * 12
-  if (remainingMonths === 0) return `${diffYears}y ago`
-  return `${diffYears}y ${remainingMonths}mo ago`
+  if (diffYears < 1) return `${diffMonths}mo ago`
+  const rem = diffMonths - diffYears * 12
+  return rem === 0 ? `${diffYears}y ago` : `${diffYears}y ${rem}mo ago`
 }
 
 // ── fetchReactors ─────────────────────────────────────────────────────────────
@@ -291,13 +403,12 @@ function UserAvatar({
 }) {
   const sizeClass =
     size === 'xs' ? 'h-6 w-6 text-[10px]' : size === 'sm' ? 'h-8 w-8 text-xs' : 'h-12 w-12 text-sm'
-  if (!user) {
+  if (!user)
     return (
       <div
         className={`${sizeClass} bg-muted flex-shrink-0 animate-pulse rounded-full dark:bg-slate-700`}
       />
     )
-  }
   const name = getFullName(user)
   const avatar = user.avatar ? (
     <img
@@ -313,7 +424,6 @@ function UserAvatar({
       {user.lastName?.[0]?.toUpperCase()}
     </div>
   )
-
   if (clickable && user.id) {
     return (
       <Link
@@ -324,7 +434,6 @@ function UserAvatar({
       </Link>
     )
   }
-
   return avatar
 }
 
@@ -352,17 +461,13 @@ function useCommentAuthors(seedMap: Record<string, User>) {
   const resolveAuthors = useCallback(async (authorIds: string[]) => {
     const missing = [...new Set(authorIds)].filter((id) => !fetchedIds.current.has(id))
     if (missing.length === 0) return
-
     missing.forEach((id) => fetchedIds.current.add(id))
-
     const results = await Promise.allSettled(missing.map((id) => userApi.getById(id)))
     const updates: Record<string, User> = {}
     results.forEach((r, i) => {
       if (r.status === 'fulfilled') updates[missing[i]] = r.value as User
     })
-    if (Object.keys(updates).length > 0) {
-      setLocalMap((prev) => ({ ...prev, ...updates }))
-    }
+    if (Object.keys(updates).length > 0) setLocalMap((prev) => ({ ...prev, ...updates }))
   }, [])
 
   return { localMap, resolveAuthors }
@@ -390,11 +495,9 @@ function ReplyInput({
   const [text, setText] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!text.trim() || submitting) return
@@ -412,7 +515,6 @@ function ReplyInput({
       setSubmitting(false)
     }
   }
-
   return (
     <form onSubmit={handleSubmit} className="mt-2 flex items-center gap-2">
       <UserAvatar user={usersMap[currentUserId]} size={depth >= 2 ? 'xs' : 'sm'} />
@@ -447,7 +549,7 @@ function ReplyInput({
   )
 }
 
-// ── CommentRow (recursive) ────────────────────────────────────────────────────
+// ── CommentRow ────────────────────────────────────────────────────────────────
 
 interface CommentRowProps {
   comment: CommentResponse
@@ -478,22 +580,16 @@ function CommentRow({
 }: CommentRowProps) {
   const author = usersMap[comment.authorId]
   const isOwn = comment.authorId === currentUserId
-
   const isTeamLeader = currentUserRoles.includes(ROLE.TEAM_LEADER)
   const isDeptLeader =
     currentUserRoles.includes(ROLE.DEPARTMENT_LEADER) ||
     currentUserRoles.includes('DEPARTMENT_MANAGER')
   const isCeo = currentUserRoles.includes(ROLE.CEO)
-
-  // Same scoping rule as PostCard: only allow edit on comments in the
-  // specific team the user leads, not on any team post.
   const isLeaderOfThisTeam =
     isTeamLeader && !!currentLeadTeamId && post.teamId === currentLeadTeamId
-
   const canEdit =
     isOwn || isCeo || isLeaderOfThisTeam || (isDeptLeader && (!!post.departmentId || !!post.teamId))
 
-  // Reaction state
   const [likeCount, setLikeCount] = useState(comment.reactionCount)
   const [reactionCode, setReactionCode] = useState<ReactionCode | null>(null)
   const [showReactorsModal, setShowReactorsModal] = useState(false)
@@ -508,12 +604,9 @@ function CommentRow({
       .catch(() => {})
   }, [postId, comment.id])
 
-  // Edit state
   const [isEditing, setIsEditing] = useState(false)
   const [editContent, setEditContent] = useState(comment.content)
   const [saving, setSaving] = useState(false)
-
-  // Reply state
   const [showReplyInput, setShowReplyInput] = useState(false)
   const [replies, setReplies] = useState<CommentResponse[]>([])
   const [replyCount, setReplyCount] = useState(comment.replyCount)
@@ -521,9 +614,7 @@ function CommentRow({
   const [loadingReplies, setLoadingReplies] = useState(false)
   const [repliesLoaded, setRepliesLoaded] = useState(false)
 
-  // Limit visual indentation depth to avoid layout issues
   const avatarSize: 'sm' | 'xs' = depth >= 1 ? 'xs' : 'sm'
-  const indentClass = depth >= 3 ? '' : '' // CSS handles the margin
 
   const loadReplies = useCallback(async () => {
     if (loadingReplies || repliesLoaded) return
@@ -548,9 +639,7 @@ function CommentRow({
   const handleReact = async (code: ReactionCode) => {
     try {
       const prev = reactionCode
-      const res = await reactionApi.reactToComment(postId, comment.id, {
-        reactionTypeCode: code,
-      })
+      const res = await reactionApi.reactToComment(postId, comment.id, { reactionTypeCode: code })
       if (res) {
         setReactionCode(code)
         if (!prev) setLikeCount((c) => c + 1)
@@ -559,7 +648,7 @@ function CommentRow({
         setLikeCount((c) => Math.max(0, c - 1))
       }
     } catch (e) {
-      console.error('Failed to react to comment:', e)
+      console.error(e)
     }
   }
 
@@ -568,7 +657,7 @@ function CommentRow({
       await commentApi.deleteComment(postId, comment.id)
       onDeleted(comment.id)
     } catch (e) {
-      console.error('Failed to delete comment:', e)
+      console.error(e)
     }
   }
 
@@ -582,7 +671,7 @@ function CommentRow({
       onUpdated(updated)
       setIsEditing(false)
     } catch (e) {
-      console.error('Failed to update comment:', e)
+      console.error(e)
     } finally {
       setSaving(false)
     }
@@ -597,23 +686,12 @@ function CommentRow({
     await resolveAuthors([reply.authorId])
   }
 
-  const handleReplyDeleted = (id: string) => {
-    setReplies((prev) => prev.filter((r) => r.id !== id))
-    setReplyCount((c) => Math.max(0, c - 1))
-  }
-
-  const handleReplyUpdated = (updated: CommentResponse) => {
-    setReplies((prev) => prev.map((r) => (r.id === updated.id ? updated : r)))
-  }
-
   return (
     <div
       className={`flex gap-2 ${depth > 0 ? 'border-border ml-8 border-l pl-3 dark:border-slate-700' : ''}`}
     >
       <UserAvatar user={author} size={avatarSize} clickable />
-
       <div className="min-w-0 flex-1">
-        {/* Bubble */}
         <div className="bg-muted rounded-2xl px-4 py-3 dark:bg-slate-800">
           <div className="flex items-center justify-between gap-2">
             {author ? (
@@ -642,7 +720,7 @@ function CommentRow({
                   )}
                   {isOwn && (
                     <>
-                      {canEdit && <DropdownMenuSeparator />}
+                      <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
                         onClick={handleDelete}
@@ -656,7 +734,6 @@ function CommentRow({
               </DropdownMenu>
             )}
           </div>
-
           {isEditing ? (
             <div className="mt-2 space-y-2">
               <textarea
@@ -695,38 +772,31 @@ function CommentRow({
             <p className="text-foreground mt-1 text-sm leading-relaxed">{comment.content}</p>
           )}
         </div>
-
-        {/* Action row */}
         <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-3 pl-3 text-xs">
           <span>{formatTime(comment.createdAt)}</span>
-
           <ReactionButton
             reactionCode={reactionCode}
             reactionCount={likeCount}
             onReact={handleReact}
             size="comment"
           />
-
           {likeCount > 0 && (
             <button
               onClick={() => setShowReactorsModal(true)}
               className="hover:text-primary -ml-2 transition-colors"
-              title="See who reacted"
             >
               ({likeCount})
             </button>
           )}
-
           <UsersModal
             open={showReactorsModal}
             onOpenChange={setShowReactorsModal}
             title="Reactions"
             fetchUsers={async () => {
-              const reactions = await reactionApi.getCommentReactors(postId, comment.id)
-              return fetchReactors(reactions)
+              const r = await reactionApi.getCommentReactors(postId, comment.id)
+              return fetchReactors(r)
             }}
           />
-
           <button
             onClick={() => setShowReplyInput((s) => !s)}
             className="hover:text-primary flex items-center gap-1 font-medium transition-colors"
@@ -734,7 +804,6 @@ function CommentRow({
             <CornerDownRight size={12} />
             Reply
           </button>
-
           {replyCount > 0 && (
             <button
               onClick={toggleReplies}
@@ -744,11 +813,8 @@ function CommentRow({
               {showReplies ? 'Hide' : 'View'} {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
             </button>
           )}
-
           {comment.isEdited && <span className="italic">edited</span>}
         </div>
-
-        {/* Reply input */}
         {showReplyInput && (
           <ReplyInput
             postId={postId}
@@ -760,8 +826,6 @@ function CommentRow({
             depth={depth}
           />
         )}
-
-        {/* Nested replies */}
         {showReplies && (
           <div className="mt-3 space-y-3">
             {loadingReplies ? (
@@ -779,8 +843,11 @@ function CommentRow({
                   currentUserId={currentUserId}
                   currentUserRoles={currentUserRoles}
                   post={post}
-                  onDeleted={handleReplyDeleted}
-                  onUpdated={handleReplyUpdated}
+                  onDeleted={(id) => {
+                    setReplies((p) => p.filter((r) => r.id !== id))
+                    setReplyCount((c) => Math.max(0, c - 1))
+                  }}
+                  onUpdated={(u) => setReplies((p) => p.map((r) => (r.id === u.id ? u : r)))}
                   resolveAuthors={resolveAuthors}
                   depth={depth + 1}
                   currentLeadTeamId={currentLeadTeamId}
@@ -802,12 +869,6 @@ interface PostCardProps {
   usersMap: Record<string, User>
   onDelete?: (postId: string) => void
   onUpdate?: (updated: PostResponse) => void
-  /**
-   * The ID of the team that the current user leads, if any.
-   * When provided, team-leader edit authority is scoped to posts belonging
-   * to exactly this team. Pass null / undefined on feeds and pages where
-   * team-lead context is unknown.
-   */
   currentLeadTeamId?: string | null
 }
 
@@ -830,9 +891,7 @@ export function PostCard({
   const [loadingComments, setLoadingComments] = useState(false)
   const [newComment, setNewComment] = useState('')
   const [submittingComment, setSubmittingComment] = useState(false)
-
   const [attachments, setAttachments] = useState<AttachmentResponse[]>(post.attachments ?? [])
-
   const [isEditingPost, setIsEditingPost] = useState(false)
   const [editPostContent, setEditPostContent] = useState(post.content)
   const [savingPost, setSavingPost] = useState(false)
@@ -844,25 +903,16 @@ export function PostCard({
     currentUserRoles.includes(ROLE.DEPARTMENT_LEADER) ||
     currentUserRoles.includes('DEPARTMENT_MANAGER')
   const isCeo = currentUserRoles.includes(ROLE.CEO)
-
-  // A team leader may only edit posts that belong to the specific team they lead.
-  // currentLeadTeamId is undefined/null on feeds and department pages where we
-  // don't know which team the user leads, so the button is hidden there.
   const isLeaderOfThisTeam =
     isTeamLeader && !!currentLeadTeamId && post.teamId === currentLeadTeamId
-
   const canEditPost =
     isOwn || isCeo || isLeaderOfThisTeam || (isDeptLeader && (!!post.departmentId || !!post.teamId))
-
-  const canDeletePost =
-    isOwn || isCeo || isLeaderOfThisTeam || (isDeptLeader && (!!post.departmentId || !!post.teamId))
+  const canDeletePost = canEditPost
 
   const seedMap = currentUser ? { ...usersMap, [currentUser.id]: currentUser } : usersMap
   const { localMap: commentUsersMap, resolveAuthors } = useCommentAuthors(seedMap)
-
   const author = commentUsersMap[post.authorId]
 
-  // Load attachments on mount (the feed may return a trimmed post object)
   useEffect(() => {
     if (post.attachments && post.attachments.length > 0) {
       setAttachments(post.attachments)
@@ -892,7 +942,7 @@ export function PostCard({
       setComments(page.content)
       await resolveAuthors(page.content.map((c) => c.authorId))
     } catch (e) {
-      console.error('Failed to load comments:', e)
+      console.error(e)
     } finally {
       setLoadingComments(false)
     }
@@ -915,7 +965,7 @@ export function PostCard({
         setReactionCount((c) => Math.max(0, c - 1))
       }
     } catch (e) {
-      console.error('Failed to react to post:', e)
+      console.error(e)
     }
   }
 
@@ -924,7 +974,7 @@ export function PostCard({
       await postApi.delete(post.id)
       onDelete?.(post.id)
     } catch (e) {
-      console.error('Failed to delete post:', e)
+      console.error(e)
     }
   }
 
@@ -944,7 +994,7 @@ export function PostCard({
       onUpdate?.(updated)
       setIsEditingPost(false)
     } catch (e) {
-      console.error('Failed to update post:', e)
+      console.error(e)
     } finally {
       setSavingPost(false)
     }
@@ -961,19 +1011,10 @@ export function PostCard({
       setNewComment('')
       await resolveAuthors([comment.authorId])
     } catch (e) {
-      console.error('Failed to add comment:', e)
+      console.error(e)
     } finally {
       setSubmittingComment(false)
     }
-  }
-
-  const handleCommentDeleted = (commentId: string) => {
-    setComments((prev) => prev.filter((c) => c.id !== commentId))
-    setCommentCount((c) => Math.max(0, c - 1))
-  }
-
-  const handleCommentUpdated = (updated: CommentResponse) => {
-    setComments((prev) => prev.map((c) => (c.id === updated.id ? updated : c)))
   }
 
   const typeStyle = POST_TYPE_STYLES[post.postType] ?? POST_TYPE_STYLES.DISCUSSION
@@ -1004,7 +1045,6 @@ export function PostCard({
             )}
             <p className="text-muted-foreground text-xs">{formatTime(post.createdAt)}</p>
           </div>
-
           {(canEditPost || canDeletePost) && !isEditingPost && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -1021,7 +1061,7 @@ export function PostCard({
                 )}
                 {canDeletePost && (
                   <>
-                    {canEditPost && <DropdownMenuSeparator />}
+                    <DropdownMenuSeparator />
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
                       onClick={handleDelete}
@@ -1071,7 +1111,17 @@ export function PostCard({
           </div>
         </div>
       ) : (
-        <p className="text-foreground mb-4 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+        <>
+          {post.content && (
+            <p className="text-foreground mb-2 leading-relaxed whitespace-pre-wrap">
+              {post.content}
+            </p>
+          )}
+          {/* Survey panel — renders below content for SURVEY posts */}
+          {post.postType === 'SURVEY' && post.survey && (
+            <SurveyPanel postId={post.id} initialSurvey={post.survey} />
+          )}
+        </>
       )}
 
       {/* Attachments */}
@@ -1139,7 +1189,6 @@ export function PostCard({
       {/* Comment section */}
       {showComments && (
         <div className="border-border mt-2 border-t pt-4 dark:border-slate-700">
-          {/* Add top-level comment */}
           <form onSubmit={handleAddComment} className="mb-4 flex items-center gap-3">
             <UserAvatar user={commentUsersMap[currentUserId]} size="sm" />
             <div className="flex flex-1 items-center gap-2">
@@ -1160,8 +1209,6 @@ export function PostCard({
               </Button>
             </div>
           </form>
-
-          {/* Comments list */}
           {loadingComments ? (
             <div className="space-y-3">
               {[1, 2].map((i) => (
@@ -1184,8 +1231,11 @@ export function PostCard({
                   currentUserId={currentUserId}
                   currentUserRoles={currentUserRoles}
                   post={post}
-                  onDeleted={handleCommentDeleted}
-                  onUpdated={handleCommentUpdated}
+                  onDeleted={(id) => {
+                    setComments((p) => p.filter((x) => x.id !== id))
+                    setCommentCount((c) => Math.max(0, c - 1))
+                  }}
+                  onUpdated={(u) => setComments((p) => p.map((x) => (x.id === u.id ? u : x)))}
                   resolveAuthors={resolveAuthors}
                   depth={0}
                   currentLeadTeamId={currentLeadTeamId}

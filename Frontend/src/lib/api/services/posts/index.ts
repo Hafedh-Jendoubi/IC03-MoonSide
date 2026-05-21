@@ -9,22 +9,15 @@ import type {
   ReactionResponse,
   ReactionSummaryResponse,
   ReactionRequest,
+  SurveyResponse,
+  SurveyVoteRequest,
 } from '../../types/posts'
 import type { PageResponse } from '../../types/common'
 
 export const postApi = {
-  /**
-   * Global public feed — all PUBLIC posts, newest first.
-   * Not personalised.
-   */
   getFeed: (page = 0, size = 20) =>
     apiFetch<PageResponse<PostResponse>>(`/posts/feed?page=${page}&size=${size}`),
 
-  /**
-   * Personalised following feed.
-   * Returns posts from the departments and teams the authenticated user follows,
-   * ordered by newest first. Returns an empty page when the user follows nothing.
-   */
   getFollowingFeed: (page = 0, size = 20) =>
     apiFetch<PageResponse<PostResponse>>(`/posts/feed/following?page=${page}&size=${size}`),
 
@@ -51,6 +44,14 @@ export const postApi = {
     }),
 
   delete: (postId: string) => apiFetch<void>(`/posts/${postId}`, { method: 'DELETE' }),
+}
+
+export const surveyApi = {
+  vote: (postId: string, data: SurveyVoteRequest) =>
+    apiFetch<SurveyResponse>(`/posts/${postId}/survey/vote`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 }
 
 export const commentApi = {
