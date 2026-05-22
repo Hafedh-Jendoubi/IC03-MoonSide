@@ -1,5 +1,6 @@
 // Posts service
 export { attachmentApi } from './attachments'
+export { savedPostApi } from './posts'
 import { apiFetch } from '../../client'
 import type {
   PostResponse,

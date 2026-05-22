@@ -19,7 +19,14 @@ export { auditApi } from './services/audit'
 export { departmentApi } from './services/organizations/departments'
 export { teamApi } from './services/organizations/teams'
 export { projectApi } from './services/organizations/projects'
-export { postApi, surveyApi, commentApi, reactionApi, attachmentApi } from './services/posts'
+export {
+  postApi,
+  surveyApi,
+  savedPostApi,
+  commentApi,
+  reactionApi,
+  attachmentApi,
+} from './services/posts'
 
 // Re-export core utilities
 export { tokenStorage, apiFetch } from './client'

@@ -46,3 +46,11 @@ export const surveyApi = {
       body: JSON.stringify(data),
     }),
 }
+
+export const savedPostApi = {
+  getSaved: () => apiFetch<PostResponse[]>('/posts/saved'),
+
+  save: (postId: string) => apiFetch<void>(`/posts/saved/${postId}`, { method: 'POST' }),
+
+  unsave: (postId: string) => apiFetch<void>(`/posts/saved/${postId}`, { method: 'DELETE' }),
+}

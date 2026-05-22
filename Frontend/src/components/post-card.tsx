@@ -13,6 +13,7 @@ import {
   postApi,
   attachmentApi,
   surveyApi,
+  savedPostApi,
 } from '@/lib/api'
 import { User, getFullName, PostType, ROLE } from '@/lib/types'
 import {
@@ -23,6 +24,8 @@ import {
   MoreHorizontal,
   Trash2,
   Pin,
+  Bookmark,
+  BookmarkCheck,
   ChevronDown,
   ChevronUp,
   Send,
@@ -895,6 +898,9 @@ export function PostCard({
   const [isEditingPost, setIsEditingPost] = useState(false)
   const [editPostContent, setEditPostContent] = useState(post.content)
   const [savingPost, setSavingPost] = useState(false)
+  const [isPinned, setIsPinned] = useState(post.isPinned)
+  const [isSaved, setIsSaved] = useState(false)
+  const [savingPostAction, setSavingPostAction] = useState(false)
 
   const currentUserRoles: string[] = currentUser?.roles ?? []
   const isOwn = post.authorId === currentUserId
@@ -908,6 +914,7 @@ export function PostCard({
   const canEditPost =
     isOwn || isCeo || isLeaderOfThisTeam || (isDeptLeader && (!!post.departmentId || !!post.teamId))
   const canDeletePost = canEditPost
+  const canPinPost = isOwn || isTeamLeader || isDeptLeader || isCeo
 
   const seedMap = currentUser ? { ...usersMap, [currentUser.id]: currentUser } : usersMap
   const { localMap: commentUsersMap, resolveAuthors } = useCommentAuthors(seedMap)
@@ -933,6 +940,51 @@ export function PostCard({
       })
       .catch(() => {})
   }, [post.id])
+
+  useEffect(() => {
+    savedPostApi
+      .getSaved()
+      .then((saved) => {
+        setIsSaved(saved.some((p) => p.id === post.id))
+      })
+      .catch(() => {})
+  }, [post.id])
+
+  const handleToggleSave = async () => {
+    if (savingPostAction) return
+    setSavingPostAction(true)
+    try {
+      if (isSaved) {
+        await savedPostApi.unsave(post.id)
+        setIsSaved(false)
+      } else {
+        await savedPostApi.save(post.id)
+        setIsSaved(true)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSavingPostAction(false)
+    }
+  }
+
+  const handleTogglePin = async () => {
+    try {
+      const updated = await postApi.update(post.id, {
+        content: post.content,
+        postType: post.postType,
+        postVisibility: post.postVisibility as 'PUBLIC' | 'PRIVATE',
+        teamId: post.teamId ?? undefined,
+        departmentId: post.departmentId ?? undefined,
+        isPinned: !isPinned,
+        isAIGenerated: post.isAIGenerated,
+      })
+      setIsPinned(updated.isPinned)
+      onUpdate?.(updated)
+    } catch (e) {
+      console.error(e)
+    }
+  }
 
   const loadComments = useCallback(async () => {
     if (loadingComments) return
@@ -1037,7 +1089,7 @@ export function PostCard({
               ) : (
                 <p className="text-foreground font-semibold">Unknown user</p>
               )}
-              {post.isPinned && <Pin size={12} className="text-primary shrink-0" />}
+              {isPinned && <Pin size={12} className="text-primary shrink-0" />}
               <Badge className={`${typeStyle.color} border-0 text-xs`}>{typeStyle.label}</Badge>
             </div>
             {author?.jobTitle && (
@@ -1045,7 +1097,7 @@ export function PostCard({
             )}
             <p className="text-muted-foreground text-xs">{formatTime(post.createdAt)}</p>
           </div>
-          {(canEditPost || canDeletePost) && !isEditingPost && (
+          {!isEditingPost && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
@@ -1059,6 +1111,25 @@ export function PostCard({
                     Edit post
                   </DropdownMenuItem>
                 )}
+                {canPinPost && (
+                  <DropdownMenuItem onClick={handleTogglePin}>
+                    <Pin size={14} className="mr-2" />
+                    {isPinned ? 'Unpin post' : 'Pin post'}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={handleToggleSave} disabled={savingPostAction}>
+                  {isSaved ? (
+                    <>
+                      <BookmarkCheck size={14} className="text-primary mr-2" />
+                      Unsave post
+                    </>
+                  ) : (
+                    <>
+                      <Bookmark size={14} className="mr-2" />
+                      Save post
+                    </>
+                  )}
+                </DropdownMenuItem>
                 {canDeletePost && (
                   <>
                     <DropdownMenuSeparator />
