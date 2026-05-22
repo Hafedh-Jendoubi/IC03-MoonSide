@@ -7,7 +7,18 @@ import { useAuth } from '@/lib/auth-context'
 import { canAccessBackOffice, getFullName } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Home, Mail, Bell, Search, LogOut, Settings, User, Shield, Compass } from 'lucide-react'
+import {
+  Home,
+  Mail,
+  Bell,
+  Search,
+  LogOut,
+  Settings,
+  User,
+  Shield,
+  Compass,
+  Bookmark,
+} from 'lucide-react'
 import { Notification } from '@/lib/types'
 
 export function Navbar() {
@@ -210,6 +221,15 @@ export function Navbar() {
                         >
                           <Settings size={16} />
                           Settings
+                        </button>
+                      </Link>
+                      <Link href="/saved">
+                        <button
+                          onClick={() => setIsDropdownOpen(false)}
+                          className="text-foreground hover:bg-muted flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors"
+                        >
+                          <Bookmark size={16} />
+                          Saved Posts
                         </button>
                       </Link>
                       {canAccessBackOffice(user) && (

@@ -2390,8 +2390,76 @@ export default function DepartmentFeedPage() {
             </div>
           </div>
 
-          {/* Right Column - Hidden on all screen sizes (reserved for future) */}
-          <div className="order-3 hidden lg:block lg:w-1/5 lg:flex-shrink-0"></div>
+          {/* Right Column - Pinned Posts */}
+          <div className="order-3 hidden lg:block lg:w-1/5 lg:flex-shrink-0">
+            {posts.filter((p) => p.isPinned).length > 0 && (
+              <div className="border-border bg-background sticky top-20 rounded-lg border p-4">
+                <div className="mb-4 flex items-center gap-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-primary"
+                  >
+                    <line x1="12" y1="17" x2="12" y2="22" />
+                    <path d="M5 17H19V13L21 8H3L5 13V17Z" />
+                    <line x1="12" y1="8" x2="12" y2="3" />
+                  </svg>
+                  <h3 className="text-foreground text-sm font-semibold">Pinned Posts</h3>
+                </div>
+                <div className="space-y-3">
+                  {posts
+                    .filter((p) => p.isPinned)
+                    .map((post) => {
+                      const author =
+                        usersMap[post.authorId] ?? (user?.id === post.authorId ? user : null)
+                      return (
+                        <div
+                          key={post.id}
+                          className="border-border hover:bg-muted/40 rounded-lg border p-3 transition-colors"
+                        >
+                          <div className="mb-1.5 flex items-center gap-2">
+                            <div className="bg-muted h-6 w-6 flex-shrink-0 overflow-hidden rounded-full border">
+                              {author && 'avatar' in author && author.avatar ? (
+                                <img
+                                  src={author.avatar as string}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center">
+                                  <span className="text-muted-foreground text-[9px] font-bold">
+                                    {author ? (author.firstName?.[0] ?? '?').toUpperCase() : '?'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-foreground truncate text-xs font-medium">
+                              {author ? `${author.firstName} ${author.lastName}` : 'Unknown'}
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground line-clamp-3 text-xs leading-relaxed">
+                            {post.content}
+                          </p>
+                          <p className="text-muted-foreground/60 mt-1.5 text-[10px]">
+                            {new Date(post.createdAt).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </p>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
