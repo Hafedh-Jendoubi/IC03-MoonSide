@@ -4,20 +4,37 @@ import { useState, useEffect } from 'react'
 import { Loader2, Bookmark, BookmarkX } from 'lucide-react'
 import { AuthLayout } from '@/components/auth-layout'
 import { PostCard } from '@/components/post-card'
-import { savedPostApi } from '@/lib/api'
+import { savedPostApi, userApi } from '@/lib/api'
 import { useAuth } from '@/lib/auth-context'
 import { PostResponse } from '@/lib/api'
+import type { User } from '@/lib/types'
 
 export default function SavedPostsPage() {
   const { user } = useAuth()
   const [posts, setPosts] = useState<PostResponse[]>([])
+  const [usersMap, setUsersMap] = useState<Record<string, User>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     savedPostApi
       .getSaved()
-      .then(setPosts)
+      .then(async (savedPosts) => {
+        setPosts(savedPosts)
+
+        // Fetch all unique post authors so PostCard can display their names
+        const authorIds = [...new Set(savedPosts.map((p) => p.authorId).filter(Boolean))]
+        if (authorIds.length > 0) {
+          const results = await Promise.allSettled(authorIds.map((id) => userApi.getById(id)))
+          const map: Record<string, User> = {}
+          results.forEach((result, i) => {
+            if (result.status === 'fulfilled') {
+              map[authorIds[i]] = result.value as User
+            }
+          })
+          setUsersMap(map)
+        }
+      })
       .catch((e: any) => setError(e.message ?? 'Failed to load saved posts'))
       .finally(() => setLoading(false))
   }, [])
@@ -72,7 +89,7 @@ export default function SavedPostsPage() {
                 key={post.id}
                 post={post}
                 currentUserId={user.id}
-                usersMap={{}}
+                usersMap={usersMap}
                 onDelete={handleUnsave}
                 onUpdate={(updated) =>
                   setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))

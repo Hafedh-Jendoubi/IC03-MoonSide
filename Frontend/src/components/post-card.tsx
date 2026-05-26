@@ -915,11 +915,20 @@ export function PostCard({
   const canEditPost =
     isOwn || isCeo || isLeaderOfThisTeam || (isDeptLeader && (!!post.departmentId || !!post.teamId))
   const canDeletePost = canEditPost
-  const canPinPost = isOwn || isTeamLeader || isDeptLeader || isCeo
+  const canPinPost = isTeamLeader || isDeptLeader || isCeo
 
   const seedMap = currentUser ? { ...usersMap, [currentUser.id]: currentUser } : usersMap
   const { localMap: commentUsersMap, resolveAuthors } = useCommentAuthors(seedMap)
   const author = commentUsersMap[post.authorId]
+
+  // Ensure the post's own author is always resolved (e.g. on the Saved Posts page
+  // where usersMap starts empty and no comment-load triggers resolveAuthors).
+  useEffect(() => {
+    if (post.authorId && !commentUsersMap[post.authorId]) {
+      resolveAuthors([post.authorId])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.authorId])
 
   useEffect(() => {
     if (post.attachments && post.attachments.length > 0) {
@@ -958,6 +967,7 @@ export function PostCard({
       if (isSaved) {
         await savedPostApi.unsave(post.id)
         setIsSaved(false)
+        onDelete?.(post.id)
       } else {
         await savedPostApi.save(post.id)
         setIsSaved(true)
@@ -1098,54 +1108,52 @@ export function PostCard({
             )}
             <p className="text-muted-foreground text-xs">{formatTime(post.createdAt)}</p>
           </div>
-          {(canEditPost || canDeletePost) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                  <MoreHorizontal size={16} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {canEditPost && (
-                  <DropdownMenuItem onClick={() => setIsEditingPost(true)}>
-                    <Pencil size={14} className="mr-2" />
-                    Edit post
-                  </DropdownMenuItem>
-                )}
-                {canPinPost && (
-                  <DropdownMenuItem onClick={handleTogglePin}>
-                    <Pin size={14} className="mr-2" />
-                    {isPinned ? 'Unpin post' : 'Pin post'}
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuItem onClick={handleToggleSave} disabled={savingPostAction}>
-                  {isSaved ? (
-                    <>
-                      <BookmarkCheck size={14} className="text-primary mr-2" />
-                      Unsave post
-                    </>
-                  ) : (
-                    <>
-                      <Bookmark size={14} className="mr-2" />
-                      Save post
-                    </>
-                  )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                <MoreHorizontal size={16} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {canEditPost && (
+                <DropdownMenuItem onClick={() => setIsEditingPost(true)}>
+                  <Pencil size={14} className="mr-2" />
+                  Edit post
                 </DropdownMenuItem>
-                {canDeletePost && (
+              )}
+              {canPinPost && (
+                <DropdownMenuItem onClick={handleTogglePin}>
+                  <Pin size={14} className="mr-2" />
+                  {isPinned ? 'Unpin post' : 'Pin post'}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={handleToggleSave} disabled={savingPostAction}>
+                {isSaved ? (
                   <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive"
-                      onClick={handleDelete}
-                    >
-                      <Trash2 size={14} className="mr-2" />
-                      Delete post
-                    </DropdownMenuItem>
+                    <BookmarkCheck size={14} className="text-primary mr-2" />
+                    Unsave post
+                  </>
+                ) : (
+                  <>
+                    <Bookmark size={14} className="mr-2" />
+                    Save post
                   </>
                 )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+              </DropdownMenuItem>
+              {canDeletePost && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onClick={handleDelete}
+                  >
+                    <Trash2 size={14} className="mr-2" />
+                    Delete post
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
