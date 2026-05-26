@@ -901,6 +901,11 @@ export function PostCard({
   const [savingPost, setSavingPost] = useState(false)
   const [isPinned, setIsPinned] = useState(post.isPinned)
   const [isSaved, setIsSaved] = useState(false)
+
+  // Sync local isPinned state whenever the post prop changes (e.g. after re-sort from parent)
+  useEffect(() => {
+    setIsPinned(post.isPinned)
+  }, [post.isPinned])
   const [savingPostAction, setSavingPostAction] = useState(false)
 
   const currentUserRoles: string[] = currentUser?.roles ?? []
@@ -1075,227 +1080,248 @@ export function PostCard({
   const typeStyle = POST_TYPE_STYLES[post.postType] ?? POST_TYPE_STYLES.DISCUSSION
 
   return (
-    <div className="border-border animate-slide-up bg-background rounded-xl border p-6 shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-900">
-      {/* Header */}
-      <div className="mb-4 flex items-start gap-4">
-        <UserAvatar user={author} clickable />
-        <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              {author ? (
-                <Link
-                  href={`/profile/${author.id}`}
-                  className="text-foreground font-semibold hover:underline"
-                >
-                  {getFullName(author)}
-                </Link>
-              ) : (
-                <p className="text-foreground font-semibold">Unknown user</p>
-              )}
-              {post.isPinned && <Pin size={12} className="text-primary shrink-0" />}
-              <Badge className={`${typeStyle.color} border-0 text-xs`}>{typeStyle.label}</Badge>
-            </div>
-            {author?.jobTitle && (
-              <p className="text-muted-foreground truncate text-sm">{author.jobTitle}</p>
-            )}
-            <p className="text-muted-foreground text-xs">{formatTime(post.createdAt)}</p>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
-                <MoreHorizontal size={16} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {canEditPost && (
-                <DropdownMenuItem onClick={() => setIsEditingPost(true)}>
-                  <Pencil size={14} className="mr-2" />
-                  Edit post
-                </DropdownMenuItem>
-              )}
-              {canPinPost && (
-                <DropdownMenuItem onClick={handleTogglePin}>
-                  <Pin size={14} className="mr-2" />
-                  {isPinned ? 'Unpin post' : 'Pin post'}
-                </DropdownMenuItem>
-              )}
-              <DropdownMenuItem onClick={handleToggleSave} disabled={savingPostAction}>
-                {isSaved ? (
-                  <>
-                    <BookmarkCheck size={14} className="text-primary mr-2" />
-                    Unsave post
-                  </>
+    <div
+      className={`border-border animate-slide-up bg-background rounded-xl border shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-900 ${isPinned ? 'border-amber-400/60 ring-1 ring-amber-400/30 dark:border-amber-500/40 dark:ring-amber-500/20' : ''}`}
+    >
+      {/* Pinned banner */}
+      {isPinned && (
+        <div className="flex items-center gap-2 rounded-t-xl border-b border-amber-200/60 bg-amber-50 px-4 py-2 dark:border-amber-700/30 dark:bg-amber-900/20">
+          <Pin
+            size={12}
+            className="shrink-0 fill-amber-500 text-amber-600 dark:fill-amber-400 dark:text-amber-400"
+          />
+          <span className="text-xs font-semibold tracking-wide text-amber-700 uppercase dark:text-amber-400">
+            Pinned Post
+          </span>
+        </div>
+      )}
+      <div className="p-6">
+        {/* Header */}
+        <div className="mb-4 flex items-start gap-4">
+          <UserAvatar user={author} clickable />
+          <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                {author ? (
+                  <Link
+                    href={`/profile/${author.id}`}
+                    className="text-foreground font-semibold hover:underline"
+                  >
+                    {getFullName(author)}
+                  </Link>
                 ) : (
+                  <p className="text-foreground font-semibold">Unknown user</p>
+                )}
+                <Badge className={`${typeStyle.color} border-0 text-xs`}>{typeStyle.label}</Badge>
+              </div>
+              {author?.jobTitle && (
+                <p className="text-muted-foreground truncate text-sm">{author.jobTitle}</p>
+              )}
+              <p className="text-muted-foreground text-xs">{formatTime(post.createdAt)}</p>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                  <MoreHorizontal size={16} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canEditPost && (
+                  <DropdownMenuItem onClick={() => setIsEditingPost(true)}>
+                    <Pencil size={14} className="mr-2" />
+                    Edit post
+                  </DropdownMenuItem>
+                )}
+                {canPinPost && (
+                  <DropdownMenuItem onClick={handleTogglePin}>
+                    <Pin size={14} className="mr-2" />
+                    {isPinned ? 'Unpin post' : 'Pin post'}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={handleToggleSave} disabled={savingPostAction}>
+                  {isSaved ? (
+                    <>
+                      <BookmarkCheck size={14} className="text-primary mr-2" />
+                      Unsave post
+                    </>
+                  ) : (
+                    <>
+                      <Bookmark size={14} className="mr-2" />
+                      Save post
+                    </>
+                  )}
+                </DropdownMenuItem>
+                {canDeletePost && (
                   <>
-                    <Bookmark size={14} className="mr-2" />
-                    Save post
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={handleDelete}
+                    >
+                      <Trash2 size={14} className="mr-2" />
+                      Delete post
+                    </DropdownMenuItem>
                   </>
                 )}
-              </DropdownMenuItem>
-              {canDeletePost && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onClick={handleDelete}
-                  >
-                    <Trash2 size={14} className="mr-2" />
-                    Delete post
-                  </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      </div>
 
-      {/* Edit Post Modal */}
-      {isEditingPost && (
-        <EditPostModal
-          post={post}
-          onClose={() => setIsEditingPost(false)}
-          onSaved={(updated) => {
-            onUpdate?.(updated)
-            setAttachments(updated.attachments ?? [])
+        {/* Edit Post Modal */}
+        {isEditingPost && (
+          <EditPostModal
+            post={post}
+            onClose={() => setIsEditingPost(false)}
+            onSaved={(updated) => {
+              onUpdate?.(updated)
+              setAttachments(updated.attachments ?? [])
+            }}
+          />
+        )}
+
+        {/* Content */}
+        <>
+          {post.content && (
+            <p className="text-foreground mb-2 leading-relaxed whitespace-pre-wrap">
+              {post.content}
+            </p>
+          )}
+          {/* Survey panel — renders below content for SURVEY posts */}
+          {post.postType === 'SURVEY' && post.survey && (
+            <SurveyPanel postId={post.id} initialSurvey={post.survey} />
+          )}
+        </>
+
+        {/* Attachments */}
+        <AttachmentGallery attachments={attachments} />
+
+        {/* Stats bar */}
+        <div className="text-muted-foreground border-border flex items-center gap-6 border-t border-b py-2.5 text-sm dark:border-slate-700">
+          <button
+            onClick={() => reactionCount > 0 && setShowReactorsModal(true)}
+            className={
+              reactionCount > 0 ? 'hover:text-foreground transition-colors' : 'cursor-default'
+            }
+          >
+            {reactionCount} {reactionCount === 1 ? 'reaction' : 'reactions'}
+          </button>
+          <button onClick={toggleComments} className="hover:text-foreground transition-colors">
+            {commentCount} {commentCount === 1 ? 'comment' : 'comments'}
+          </button>
+        </div>
+
+        <UsersModal
+          open={showReactorsModal}
+          onOpenChange={setShowReactorsModal}
+          title="Reactions"
+          fetchUsers={async () => {
+            const reactions = await reactionApi.getPostReactors(post.id)
+            return fetchReactors(reactions)
           }}
         />
-      )}
 
-      {/* Content */}
-      <>
-        {post.content && (
-          <p className="text-foreground mb-2 leading-relaxed whitespace-pre-wrap">{post.content}</p>
-        )}
-        {/* Survey panel — renders below content for SURVEY posts */}
-        {post.postType === 'SURVEY' && post.survey && (
-          <SurveyPanel postId={post.id} initialSurvey={post.survey} />
-        )}
-      </>
-
-      {/* Attachments */}
-      <AttachmentGallery attachments={attachments} />
-
-      {/* Stats bar */}
-      <div className="text-muted-foreground border-border flex items-center gap-6 border-t border-b py-2.5 text-sm dark:border-slate-700">
-        <button
-          onClick={() => reactionCount > 0 && setShowReactorsModal(true)}
-          className={
-            reactionCount > 0 ? 'hover:text-foreground transition-colors' : 'cursor-default'
-          }
-        >
-          {reactionCount} {reactionCount === 1 ? 'reaction' : 'reactions'}
-        </button>
-        <button onClick={toggleComments} className="hover:text-foreground transition-colors">
-          {commentCount} {commentCount === 1 ? 'comment' : 'comments'}
-        </button>
-      </div>
-
-      <UsersModal
-        open={showReactorsModal}
-        onOpenChange={setShowReactorsModal}
-        title="Reactions"
-        fetchUsers={async () => {
-          const reactions = await reactionApi.getPostReactors(post.id)
-          return fetchReactors(reactions)
-        }}
-      />
-
-      {/* Action buttons */}
-      <div className="my-3 flex items-center gap-1">
-        <ReactionButton
-          reactionCode={activeReaction}
-          reactionCount={reactionCount}
-          onReact={handleReact}
-          size="post"
-        />
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={toggleComments}
-          className="text-muted-foreground flex items-center gap-2"
-        >
-          <MessageCircle size={18} />
-          Comment
-        </Button>
-        <Button variant="ghost" size="sm" className="text-muted-foreground flex items-center gap-2">
-          <Share2 size={18} />
-          Share
-        </Button>
-        {commentCount > 0 && (
+        {/* Action buttons */}
+        <div className="my-3 flex items-center gap-1">
+          <ReactionButton
+            reactionCode={activeReaction}
+            reactionCount={reactionCount}
+            onReact={handleReact}
+            size="post"
+          />
           <Button
             variant="ghost"
             size="sm"
             onClick={toggleComments}
-            className="text-muted-foreground ml-auto flex items-center gap-1 text-xs"
+            className="text-muted-foreground flex items-center gap-2"
           >
-            {showComments ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-            {showComments ? 'Hide' : 'Show'} comments
+            <MessageCircle size={18} />
+            Comment
           </Button>
-        )}
-      </div>
-
-      {/* Comment section */}
-      {showComments && (
-        <div className="border-border mt-2 border-t pt-4 dark:border-slate-700">
-          <form onSubmit={handleAddComment} className="mb-4 flex items-center gap-3">
-            <UserAvatar user={commentUsersMap[currentUserId]} size="sm" />
-            <div className="flex flex-1 items-center gap-2">
-              <input
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                placeholder="Write a comment…"
-                maxLength={2000}
-                className="bg-muted text-foreground placeholder-muted-foreground focus:ring-primary/30 flex-1 rounded-full px-4 py-2 text-sm focus:ring-2 focus:outline-none dark:bg-slate-800"
-              />
-              <Button
-                type="submit"
-                size="icon"
-                disabled={!newComment.trim() || submittingComment}
-                className="h-8 w-8 shrink-0"
-              >
-                <Send size={14} />
-              </Button>
-            </div>
-          </form>
-          {loadingComments ? (
-            <div className="space-y-3">
-              {[1, 2].map((i) => (
-                <div key={i} className="flex gap-3">
-                  <div className="bg-muted h-8 w-8 animate-pulse rounded-full dark:bg-slate-700" />
-                  <div className="flex-1 space-y-2">
-                    <div className="bg-muted h-14 animate-pulse rounded-2xl dark:bg-slate-700" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {comments.map((c) => (
-                <CommentRow
-                  key={c.id}
-                  comment={c}
-                  postId={post.id}
-                  usersMap={commentUsersMap}
-                  currentUserId={currentUserId}
-                  currentUserRoles={currentUserRoles}
-                  post={post}
-                  onDeleted={(id) => {
-                    setComments((p) => p.filter((x) => x.id !== id))
-                    setCommentCount((c) => Math.max(0, c - 1))
-                  }}
-                  onUpdated={(u) => setComments((p) => p.map((x) => (x.id === u.id ? u : x)))}
-                  resolveAuthors={resolveAuthors}
-                  depth={0}
-                  currentLeadTeamId={currentLeadTeamId}
-                />
-              ))}
-              {comments.length === 0 && (
-                <p className="text-muted-foreground text-center text-sm">No comments yet.</p>
-              )}
-            </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground flex items-center gap-2"
+          >
+            <Share2 size={18} />
+            Share
+          </Button>
+          {commentCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleComments}
+              className="text-muted-foreground ml-auto flex items-center gap-1 text-xs"
+            >
+              {showComments ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {showComments ? 'Hide' : 'Show'} comments
+            </Button>
           )}
         </div>
-      )}
+
+        {/* Comment section */}
+        {showComments && (
+          <div className="border-border mt-2 border-t pt-4 dark:border-slate-700">
+            <form onSubmit={handleAddComment} className="mb-4 flex items-center gap-3">
+              <UserAvatar user={commentUsersMap[currentUserId]} size="sm" />
+              <div className="flex flex-1 items-center gap-2">
+                <input
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Write a comment…"
+                  maxLength={2000}
+                  className="bg-muted text-foreground placeholder-muted-foreground focus:ring-primary/30 flex-1 rounded-full px-4 py-2 text-sm focus:ring-2 focus:outline-none dark:bg-slate-800"
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!newComment.trim() || submittingComment}
+                  className="h-8 w-8 shrink-0"
+                >
+                  <Send size={14} />
+                </Button>
+              </div>
+            </form>
+            {loadingComments ? (
+              <div className="space-y-3">
+                {[1, 2].map((i) => (
+                  <div key={i} className="flex gap-3">
+                    <div className="bg-muted h-8 w-8 animate-pulse rounded-full dark:bg-slate-700" />
+                    <div className="flex-1 space-y-2">
+                      <div className="bg-muted h-14 animate-pulse rounded-2xl dark:bg-slate-700" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {comments.map((c) => (
+                  <CommentRow
+                    key={c.id}
+                    comment={c}
+                    postId={post.id}
+                    usersMap={commentUsersMap}
+                    currentUserId={currentUserId}
+                    currentUserRoles={currentUserRoles}
+                    post={post}
+                    onDeleted={(id) => {
+                      setComments((p) => p.filter((x) => x.id !== id))
+                      setCommentCount((c) => Math.max(0, c - 1))
+                    }}
+                    onUpdated={(u) => setComments((p) => p.map((x) => (x.id === u.id ? u : x)))}
+                    resolveAuthors={resolveAuthors}
+                    depth={0}
+                    currentLeadTeamId={currentLeadTeamId}
+                  />
+                ))}
+                {comments.length === 0 && (
+                  <p className="text-muted-foreground text-center text-sm">No comments yet.</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

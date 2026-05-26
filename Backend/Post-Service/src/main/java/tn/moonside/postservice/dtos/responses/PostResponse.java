@@ -5,6 +5,7 @@ import tn.moonside.postservice.enums.TypePosts;
 import tn.moonside.postservice.enums.VisibilityType;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -21,7 +22,9 @@ public class PostResponse {
     private String content;
     private TypePosts postType;
     private VisibilityType postVisibility;
+    @JsonProperty("isPinned")
     private boolean isPinned;
+    @JsonProperty("isAIGenerated")
     private boolean isAIGenerated;
     private int viewCount;
     private long commentCount;
