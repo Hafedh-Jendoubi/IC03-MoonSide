@@ -49,6 +49,7 @@ import {
 import { useAuth } from '@/lib/auth-context'
 import { UsersModal, ModalUser } from '@/components/users-modal'
 import { AttachmentGallery } from '@/components/attachment-gallery'
+import { EditPostModal } from '@/components/edit-post-modal'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -1089,7 +1090,7 @@ export function PostCard({
               ) : (
                 <p className="text-foreground font-semibold">Unknown user</p>
               )}
-              {isPinned && <Pin size={12} className="text-primary shrink-0" />}
+              {post.isPinned && <Pin size={12} className="text-primary shrink-0" />}
               <Badge className={`${typeStyle.color} border-0 text-xs`}>{typeStyle.label}</Badge>
             </div>
             {author?.jobTitle && (
@@ -1097,7 +1098,7 @@ export function PostCard({
             )}
             <p className="text-muted-foreground text-xs">{formatTime(post.createdAt)}</p>
           </div>
-          {!isEditingPost && (
+          {(canEditPost || canDeletePost) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
@@ -1148,52 +1149,28 @@ export function PostCard({
         </div>
       </div>
 
-      {/* Content */}
-      {isEditingPost ? (
-        <div className="mb-4 space-y-2">
-          <textarea
-            value={editPostContent}
-            onChange={(e) => setEditPostContent(e.target.value)}
-            maxLength={5000}
-            rows={5}
-            className="bg-muted text-foreground placeholder-muted-foreground focus:ring-primary/30 w-full rounded-xl px-4 py-3 text-sm leading-relaxed focus:ring-2 focus:outline-none dark:bg-slate-800"
-            autoFocus
-          />
-          <div className="flex justify-end gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setEditPostContent(post.content)
-                setIsEditingPost(false)
-              }}
-            >
-              <X size={14} className="mr-1" />
-              Cancel
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleEditPostSave}
-              disabled={!editPostContent.trim() || savingPost}
-            >
-              <Check size={14} className="mr-1" />
-              Save
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <>
-          {post.content && (
-            <p className="text-foreground mb-2 leading-relaxed whitespace-pre-wrap">
-              {post.content}
-            </p>
-          )}
-          {/* Survey panel — renders below content for SURVEY posts */}
-          {post.postType === 'SURVEY' && post.survey && (
-            <SurveyPanel postId={post.id} initialSurvey={post.survey} />
-          )}
-        </>
+      {/* Edit Post Modal */}
+      {isEditingPost && (
+        <EditPostModal
+          post={post}
+          onClose={() => setIsEditingPost(false)}
+          onSaved={(updated) => {
+            onUpdate?.(updated)
+            setAttachments(updated.attachments ?? [])
+          }}
+        />
       )}
+
+      {/* Content */}
+      <>
+        {post.content && (
+          <p className="text-foreground mb-2 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+        )}
+        {/* Survey panel — renders below content for SURVEY posts */}
+        {post.postType === 'SURVEY' && post.survey && (
+          <SurveyPanel postId={post.id} initialSurvey={post.survey} />
+        )}
+      </>
 
       {/* Attachments */}
       <AttachmentGallery attachments={attachments} />

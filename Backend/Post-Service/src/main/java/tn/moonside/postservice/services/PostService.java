@@ -151,6 +151,27 @@ public class PostService {
         post.setPinned(req.isPinned());
         post.setUpdatedBy(requesterId);
         post.setUpdatedAt(LocalDateTime.now());
+
+        // ── Survey fields ─────────────────────────────────────────────────────
+        if (req.getPostType() == TypePosts.SURVEY) {
+            if (req.getSurveyQuestion() != null) {
+                post.setSurveyQuestion(req.getSurveyQuestion());
+            }
+            if (req.getSurveyOptions() != null && !req.getSurveyOptions().isEmpty()) {
+                List<SurveyOption> existing = post.getSurveyOptions() != null
+                        ? post.getSurveyOptions() : new java.util.ArrayList<>();
+                List<SurveyOption> updatedOptions = new java.util.ArrayList<>();
+                for (int i = 0; i < req.getSurveyOptions().size(); i++) {
+                    String text = req.getSurveyOptions().get(i);
+                    SurveyOption opt = (i < existing.size()) ? existing.get(i) : new SurveyOption();
+                    if (opt.getId() == null) opt.setId(java.util.UUID.randomUUID().toString());
+                    opt.setText(text);
+                    updatedOptions.add(opt);
+                }
+                post.setSurveyOptions(updatedOptions);
+            }
+        }
+
         return toResponse(postRepository.save(post), requesterId);
     }
 
