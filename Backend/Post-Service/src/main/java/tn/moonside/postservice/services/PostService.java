@@ -8,6 +8,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import tn.moonside.postservice.audit.AuditClient;
+import tn.moonside.postservice.audit.PostAuditAction;
 import tn.moonside.postservice.clients.OrganizationClient;
 import tn.moonside.postservice.dtos.requests.PostRequest;
 import tn.moonside.postservice.dtos.responses.*;
@@ -33,6 +35,7 @@ public class PostService {
     private final SurveyVoteRepository surveyVoteRepository;
     private final OrganizationClient organizationClient;
     private final SurveyService surveyService;
+    private final AuditClient auditClient;
 
     /* ── Create ───────────────────────────────────────────────────────────── */
 
@@ -64,7 +67,15 @@ public class PostService {
                    .surveyOpen(true);
         }
 
-        return toResponse(postRepository.save(builder.build()), authorId);
+        Post saved = postRepository.save(builder.build());
+
+        auditClient.log(authorId, saved.getId(), "POST", PostAuditAction.POST_CREATED,
+                "Post created with visibility '" + resolvedVisibility + "'" +
+                (req.getTeamId() != null ? " in team '" + req.getTeamId() + "'" : "") +
+                (req.getDepartmentId() != null ? " in department '" + req.getDepartmentId() + "'" : ""),
+                true, null, toJson(saved));
+
+        return toResponse(saved, authorId);
     }
 
     /* ── Read ─────────────────────────────────────────────────────────────── */
@@ -121,7 +132,6 @@ public class PostService {
     }
 
     public Page<PostResponse> getByTeam(String teamId, int page, int size) {
-        // Pinned posts float to the top; within each group newest first
         Pageable pageable = PageRequest.of(page, size,
                 Sort.by(Sort.Direction.DESC, "isPinned")
                     .and(Sort.by(Sort.Direction.DESC, "createdAt")));
@@ -133,7 +143,6 @@ public class PostService {
     }
 
     public Page<PostResponse> getByDepartment(String departmentId, int page, int size) {
-        // Pinned posts float to the top; within each group newest first
         Pageable pageable = PageRequest.of(page, size,
                 Sort.by(Sort.Direction.DESC, "isPinned")
                     .and(Sort.by(Sort.Direction.DESC, "createdAt")));
@@ -149,6 +158,8 @@ public class PostService {
     public PostResponse updatePost(String postId, PostRequest req, String requesterId, List<String> roles) {
         Post post = findPost(postId);
         assertCanEdit(post, requesterId, roles, "edit");
+
+        String oldJson = toJson(post);
 
         post.setContent(req.getContent() != null ? req.getContent() : post.getContent());
         post.setPostType(req.getPostType());
@@ -178,23 +189,33 @@ public class PostService {
             }
         }
 
-        return toResponse(postRepository.save(post), requesterId);
+        Post saved = postRepository.save(post);
+
+        auditClient.log(requesterId, postId, "POST", PostAuditAction.POST_UPDATED,
+                "Post updated by user '" + requesterId + "'",
+                true, oldJson, toJson(saved));
+
+        return toResponse(saved, requesterId);
     }
 
     /* ── Pin / Unpin ──────────────────────────────────────────────────────── */
 
-    /**
-     * Toggles the {@code isPinned} flag on a post and returns the updated response.
-     * Only privileged users (author, team leader of that team, dept manager, CEO)
-     * are allowed — same guard as updatePost.
-     */
     public PostResponse togglePin(String postId, String requesterId, List<String> roles) {
         Post post = findPost(postId);
         assertCanEdit(post, requesterId, roles, "pin/unpin");
-        post.setPinned(!post.isPinned());
+        boolean wasPinned = post.isPinned();
+        post.setPinned(!wasPinned);
         post.setUpdatedBy(requesterId);
         post.setUpdatedAt(LocalDateTime.now());
-        return toResponse(postRepository.save(post), requesterId);
+
+        Post saved = postRepository.save(post);
+
+        String action = wasPinned ? PostAuditAction.POST_UNPINNED : PostAuditAction.POST_PINNED;
+        auditClient.log(requesterId, postId, "POST", action,
+                "Post " + (wasPinned ? "unpinned" : "pinned") + " by user '" + requesterId + "'",
+                true, null, null);
+
+        return toResponse(saved, requesterId);
     }
 
     /* ── Delete ───────────────────────────────────────────────────────────── */
@@ -204,11 +225,17 @@ public class PostService {
         Post post = findPost(postId);
         assertCanEdit(post, requesterId, roles, "delete");
 
+        String oldJson = toJson(post);
+
         commentRepository.deleteByPostId(postId);
         attachmentRepository.deleteByPostId(postId);
         reactionRepository.deleteByReactableTypeAndReactableId("POST", postId);
         surveyVoteRepository.deleteByPostId(postId);
         postRepository.delete(post);
+
+        auditClient.log(requesterId, postId, "POST", PostAuditAction.POST_DELETED,
+                "Post deleted by user '" + requesterId + "'",
+                true, oldJson, null);
     }
 
     /* ── Authorization ────────────────────────────────────────────────────── */
@@ -303,5 +330,15 @@ public class PostService {
         if (auth == null) return null;
         Object principal = auth.getPrincipal();
         return principal instanceof String s ? s : null;
+    }
+
+    private String toJson(Post post) {
+        try {
+            return new com.fasterxml.jackson.databind.ObjectMapper()
+                    .findAndRegisterModules()
+                    .writeValueAsString(post);
+        } catch (Exception e) {
+            return post.toString();
+        }
     }
 }

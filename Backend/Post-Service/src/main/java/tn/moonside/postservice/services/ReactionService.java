@@ -1,7 +1,10 @@
 package tn.moonside.postservice.services;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import tn.moonside.postservice.audit.AuditClient;
+import tn.moonside.postservice.audit.PostAuditAction;
 import tn.moonside.postservice.dtos.requests.ReactionRequest;
 import tn.moonside.postservice.dtos.responses.ReactionResponse;
 import tn.moonside.postservice.dtos.responses.ReactionSummaryResponse;
@@ -17,10 +20,12 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ReactionService {
 
     private final ReactionRepository reactionRepository;
     private final ReactionTypeRepository reactionTypeRepository;
+    private final AuditClient auditClient;
 
     /**
      * Toggle reaction: if the user already has the same reaction, remove it.
@@ -40,11 +45,26 @@ public class ReactionService {
             if (r.getReactionTypeId().equals(reactionType.getId())) {
                 // Same reaction → remove (toggle off)
                 reactionRepository.delete(r);
+
+                auditClient.log(userId, reactableId, reactableType, PostAuditAction.REACTION_REMOVED,
+                        "Reaction '" + req.getReactionTypeCode() + "' removed from " +
+                        reactableType.toLowerCase() + " '" + reactableId + "'",
+                        true, req.getReactionTypeCode(), null);
+
                 return null;
             }
             // Different reaction → switch
+            String oldCode = reactionTypeRepository.findById(r.getReactionTypeId())
+                    .map(ReactionType::getCode).orElse(r.getReactionTypeId());
             r.setReactionTypeId(reactionType.getId());
-            return toResponse(reactionRepository.save(r), reactionType);
+            ReactionResponse response = toResponse(reactionRepository.save(r), reactionType);
+
+            auditClient.log(userId, reactableId, reactableType, PostAuditAction.REACTION_CHANGED,
+                    "Reaction changed from '" + oldCode + "' to '" + req.getReactionTypeCode() +
+                    "' on " + reactableType.toLowerCase() + " '" + reactableId + "'",
+                    true, oldCode, req.getReactionTypeCode());
+
+            return response;
         }
 
         // New reaction
@@ -54,7 +74,14 @@ public class ReactionService {
                 .reactableType(reactableType)
                 .reactableId(reactableId)
                 .build();
-        return toResponse(reactionRepository.save(reaction), reactionType);
+        ReactionResponse response = toResponse(reactionRepository.save(reaction), reactionType);
+
+        auditClient.log(userId, reactableId, reactableType, PostAuditAction.REACTION_ADDED,
+                "Reaction '" + req.getReactionTypeCode() + "' added to " +
+                reactableType.toLowerCase() + " '" + reactableId + "'",
+                true, null, req.getReactionTypeCode());
+
+        return response;
     }
 
     public ReactionSummaryResponse getSummary(String reactableType, String reactableId, String currentUserId) {
@@ -89,7 +116,7 @@ public class ReactionService {
                         .map(rt -> toResponse(r, rt))
                         .orElse(null))
                 .filter(r -> r != null)
-                .collect(java.util.stream.Collectors.toList());
+                .collect(Collectors.toList());
     }
 
     private ReactionResponse toResponse(Reaction r, ReactionType rt) {

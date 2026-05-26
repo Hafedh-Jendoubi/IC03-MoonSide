@@ -1,9 +1,12 @@
 package tn.moonside.postservice.services;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import tn.moonside.postservice.audit.AuditClient;
+import tn.moonside.postservice.audit.PostAuditAction;
 import tn.moonside.postservice.clients.OrganizationClient;
 import tn.moonside.postservice.dtos.requests.CommentRequest;
 import tn.moonside.postservice.dtos.responses.CommentResponse;
@@ -18,12 +21,14 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CommentService {
 
     private final CommentRepository commentRepository;
     private final PostRepository postRepository;
     private final ReactionRepository reactionRepository;
     private final OrganizationClient organizationClient;
+    private final AuditClient auditClient;
 
     public CommentResponse addComment(String postId, CommentRequest req, String authorId) {
         if (!postRepository.existsById(postId)) {
@@ -39,7 +44,14 @@ public class CommentService {
                 .postVisibility(req.getPostVisibility())
                 .parentId(req.getParentId())
                 .build();
-        return toResponse(commentRepository.save(comment));
+        Comment saved = commentRepository.save(comment);
+
+        auditClient.log(authorId, saved.getId(), "COMMENT", PostAuditAction.COMMENT_ADDED,
+                "Comment added on post '" + postId + "'" +
+                (req.getParentId() != null ? " as reply to comment '" + req.getParentId() + "'" : ""),
+                true, null, saved.getContent());
+
+        return toResponse(saved);
     }
 
     public Page<CommentResponse> getTopLevelComments(String postId, int page, int size) {
@@ -77,19 +89,35 @@ public class CommentService {
                                          String requesterId, List<String> roles) {
         Comment comment = findComment(commentId);
         assertCanEdit(comment, requesterId, roles);
+
+        String oldContent = comment.getContent();
+
         comment.setContent(req.getContent());
         comment.setEdited(true);
         comment.setUpdatedAt(LocalDateTime.now());
-        return toResponse(commentRepository.save(comment));
+        Comment saved = commentRepository.save(comment);
+
+        auditClient.log(requesterId, commentId, "COMMENT", PostAuditAction.COMMENT_UPDATED,
+                "Comment updated by user '" + requesterId + "' on post '" + comment.getPostId() + "'",
+                true, oldContent, saved.getContent());
+
+        return toResponse(saved);
     }
 
     public void deleteComment(String commentId, String requesterId) {
         Comment comment = findComment(commentId);
         assertOwner(comment.getAuthorId(), requesterId);
+
+        String postId = comment.getPostId();
+
         // Cascade-delete all nested replies
         deleteRepliesRecursively(commentId);
         reactionRepository.deleteByReactableTypeAndReactableId("COMMENT", commentId);
         commentRepository.delete(comment);
+
+        auditClient.log(requesterId, commentId, "COMMENT", PostAuditAction.COMMENT_DELETED,
+                "Comment deleted by user '" + requesterId + "' on post '" + postId + "'",
+                true, comment.getContent(), null);
     }
 
     // ── Authorization ─────────────────────────────────────────────────────────
