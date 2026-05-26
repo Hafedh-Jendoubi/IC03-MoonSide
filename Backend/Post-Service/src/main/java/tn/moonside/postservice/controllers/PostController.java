@@ -106,6 +106,14 @@ public class PostController {
                 postService.updatePost(postId, req, userId, extractRoles())));
     }
 
+    @PatchMapping("/{postId}/pin")
+    public ResponseEntity<ApiResponse<PostResponse>> togglePin(
+            @PathVariable String postId,
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                postService.togglePin(postId, userId, extractRoles()), "Post pin status updated"));
+    }
+
     @DeleteMapping("/{postId}")
     public ResponseEntity<ApiResponse<Void>> deletePost(
             @PathVariable String postId,

@@ -36,6 +36,9 @@ export const postApi = {
       body: JSON.stringify(data),
     }),
 
+  togglePin: (postId: string) =>
+    apiFetch<PostResponse>(`/posts/${postId}/pin`, { method: 'PATCH' }),
+
   delete: (postId: string) => apiFetch<void>(`/posts/${postId}`, { method: 'DELETE' }),
 }
 

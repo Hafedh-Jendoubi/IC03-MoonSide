@@ -121,19 +121,25 @@ public class PostService {
     }
 
     public Page<PostResponse> getByTeam(String teamId, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // Pinned posts float to the top; within each group newest first
+        Pageable pageable = PageRequest.of(page, size,
+                Sort.by(Sort.Direction.DESC, "isPinned")
+                    .and(Sort.by(Sort.Direction.DESC, "createdAt")));
         String requesterId = currentUserId();
         return postRepository
-                .findByTeamIdAndPostVisibilityIn(teamId,
+                .findByTeamIdAndPostVisibilityInSorted(teamId,
                         List.of(VisibilityType.PUBLIC, VisibilityType.TEAM_ONLY), pageable)
                 .map(p -> toResponse(p, requesterId));
     }
 
     public Page<PostResponse> getByDepartment(String departmentId, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        // Pinned posts float to the top; within each group newest first
+        Pageable pageable = PageRequest.of(page, size,
+                Sort.by(Sort.Direction.DESC, "isPinned")
+                    .and(Sort.by(Sort.Direction.DESC, "createdAt")));
         String requesterId = currentUserId();
         return postRepository
-                .findByDepartmentIdAndPostVisibilityIn(departmentId,
+                .findByDepartmentIdAndPostVisibilityInSorted(departmentId,
                         List.of(VisibilityType.PUBLIC, VisibilityType.DEPARTMENT_ONLY), pageable)
                 .map(p -> toResponse(p, requesterId));
     }
@@ -172,6 +178,22 @@ public class PostService {
             }
         }
 
+        return toResponse(postRepository.save(post), requesterId);
+    }
+
+    /* ── Pin / Unpin ──────────────────────────────────────────────────────── */
+
+    /**
+     * Toggles the {@code isPinned} flag on a post and returns the updated response.
+     * Only privileged users (author, team leader of that team, dept manager, CEO)
+     * are allowed — same guard as updatePost.
+     */
+    public PostResponse togglePin(String postId, String requesterId, List<String> roles) {
+        Post post = findPost(postId);
+        assertCanEdit(post, requesterId, roles, "pin/unpin");
+        post.setPinned(!post.isPinned());
+        post.setUpdatedBy(requesterId);
+        post.setUpdatedAt(LocalDateTime.now());
         return toResponse(postRepository.save(post), requesterId);
     }
 

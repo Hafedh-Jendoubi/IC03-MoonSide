@@ -27,6 +27,24 @@ public interface PostRepository extends MongoRepository<Post, String> {
     Page<Post> findByDepartmentIdAndPostVisibilityIn(
             String departmentId, List<VisibilityType> visibilities, Pageable pageable);
 
+    // ── Pinned-first variants for Team and Department feeds ───────────────────
+
+    /**
+     * Returns posts for a team sorted with pinned posts first, then newest first.
+     * MongoDB does not support multi-key sort through derived query names, so we
+     * use a raw @Query and rely on the Pageable sort supplied by the service layer.
+     */
+    @Query("{ 'teamId': ?0, 'postVisibility': { '$in': ?1 } }")
+    Page<Post> findByTeamIdAndPostVisibilityInSorted(
+            String teamId, List<VisibilityType> visibilities, Pageable pageable);
+
+    /**
+     * Returns posts for a department sorted with pinned posts first, then newest first.
+     */
+    @Query("{ 'departmentId': ?0, 'postVisibility': { '$in': ?1 } }")
+    Page<Post> findByDepartmentIdAndPostVisibilityInSorted(
+            String departmentId, List<VisibilityType> visibilities, Pageable pageable);
+
     // ── New: personalised follow feed ─────────────────────────────────────────
 
     /**

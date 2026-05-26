@@ -192,7 +192,14 @@ export function usePostFeed({ scope, pageSize = 5, currentUser }: UseFeedOptions
   }, [])
 
   const updatePost = useCallback((updated: PostResponse) => {
-    setPosts((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+    setPosts((prev) => {
+      const replaced = prev.map((p) => (p.id === updated.id ? updated : p))
+      // Keep pinned posts at the top (same order the backend returns them)
+      return [...replaced].sort((a, b) => {
+        if (a.isPinned === b.isPinned) return 0
+        return a.isPinned ? -1 : 1
+      })
+    })
   }, [])
 
   return {

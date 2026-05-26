@@ -981,15 +981,7 @@ export function PostCard({
 
   const handleTogglePin = async () => {
     try {
-      const updated = await postApi.update(post.id, {
-        content: post.content,
-        postType: post.postType,
-        postVisibility: post.postVisibility as 'PUBLIC' | 'PRIVATE',
-        teamId: post.teamId ?? undefined,
-        departmentId: post.departmentId ?? undefined,
-        isPinned: !isPinned,
-        isAIGenerated: post.isAIGenerated,
-      })
+      const updated = await postApi.togglePin(post.id)
       setIsPinned(updated.isPinned)
       onUpdate?.(updated)
     } catch (e) {
