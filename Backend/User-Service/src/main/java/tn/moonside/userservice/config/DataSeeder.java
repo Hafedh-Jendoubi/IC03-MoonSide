@@ -24,9 +24,13 @@ import java.util.Optional;
  * ─────────────────────────────────────────────────────────────────────────────────
  *
  *  EMPLOYEE          — Login + view everything (non-back-office) + own profile update
+ *                      + read posts/feeds + react + comment + save posts + vote surveys
  *  TEAM_LEADER       — Manage own team details, members, and lead assignment
+ *                      + pin posts within own team scope
  *  DEPARTMENT_LEADER — Manage own department details, teams inside it, and dept manager
+ *                      + pin posts within own department scope
  *  HUMAN_RESOURCES   — Back-office dashboard (read) + user list + single invite + org read
+ *                      + read-only access to post feeds (no mutations)
  *  CEO               — Unrestricted via ANYTHING wildcard
  *
  *  No permission appears in more than one role.
@@ -137,7 +141,48 @@ public class DataSeeder implements CommandLineRunner {
             new PermissionDef(AppPermission.AUDIT_LOG_READ,            TypeScope.GLOBAL, "Query audit logs"),
             new PermissionDef(AppPermission.AUDIT_LOG_STATS,           TypeScope.GLOBAL, "View audit log statistics"),
             new PermissionDef(AppPermission.ORG_MANAGE,                TypeScope.GLOBAL, "Full organization management"),
-            new PermissionDef(AppPermission.BACKOFFICE_FULL,           TypeScope.GLOBAL, "Full back-office access (roles, settings, audit)")
+            new PermissionDef(AppPermission.BACKOFFICE_FULL,           TypeScope.GLOBAL, "Full back-office access (roles, settings, audit)"),
+
+            // =================================================================
+            // ── Post-Service permissions ──────────────────────────────────────
+            // =================================================================
+
+            // ── Posts ─────────────────────────────────────────────────────────
+            new PermissionDef(AppPermission.POST_CREATE,           TypeScope.GLOBAL, "Create a new post"),
+            new PermissionDef(AppPermission.POST_READ,             TypeScope.GLOBAL, "Read posts and feeds"),
+            new PermissionDef(AppPermission.POST_UPDATE_OWN,       TypeScope.OWN,    "Edit own post"),
+            new PermissionDef(AppPermission.POST_DELETE_OWN,       TypeScope.OWN,    "Delete own post"),
+            new PermissionDef(AppPermission.POST_DELETE_ANY,       TypeScope.GLOBAL, "Delete any post (moderation)"),
+            new PermissionDef(AppPermission.POST_PIN_TEAM,         TypeScope.TEAM,   "Pin/unpin a post within own team"),
+            new PermissionDef(AppPermission.POST_PIN_DEPARTMENT,   TypeScope.DEPARTMENT, "Pin/unpin a post within own department"),
+            new PermissionDef(AppPermission.POST_PIN_ANY,          TypeScope.GLOBAL, "Pin/unpin any post"),
+
+            // ── Comments ──────────────────────────────────────────────────────
+            new PermissionDef(AppPermission.COMMENT_CREATE,        TypeScope.GLOBAL, "Add a comment on a post"),
+            new PermissionDef(AppPermission.COMMENT_READ,          TypeScope.GLOBAL, "Read comments and replies"),
+            new PermissionDef(AppPermission.COMMENT_UPDATE_OWN,    TypeScope.OWN,    "Edit own comment"),
+            new PermissionDef(AppPermission.COMMENT_DELETE_OWN,    TypeScope.OWN,    "Delete own comment"),
+            new PermissionDef(AppPermission.COMMENT_DELETE_ANY,    TypeScope.GLOBAL, "Delete any comment (moderation)"),
+
+            // ── Reactions ─────────────────────────────────────────────────────
+            new PermissionDef(AppPermission.REACTION_POST,         TypeScope.GLOBAL, "React to a post or view its reactions"),
+            new PermissionDef(AppPermission.REACTION_COMMENT,      TypeScope.GLOBAL, "React to a comment or view its reactions"),
+
+            // ── Reaction Types ────────────────────────────────────────────────
+            new PermissionDef(AppPermission.REACTION_TYPE_READ,    TypeScope.GLOBAL, "List available reaction types"),
+            new PermissionDef(AppPermission.REACTION_TYPE_CREATE,  TypeScope.GLOBAL, "Create a new reaction type (CEO only)"),
+            new PermissionDef(AppPermission.REACTION_TYPE_DELETE,  TypeScope.GLOBAL, "Delete a reaction type (CEO only)"),
+
+            // ── Attachments ───────────────────────────────────────────────────
+            new PermissionDef(AppPermission.ATTACHMENT_UPLOAD,     TypeScope.GLOBAL, "Upload a file attachment to a post"),
+            new PermissionDef(AppPermission.ATTACHMENT_READ,       TypeScope.GLOBAL, "List/view attachments of a post"),
+            new PermissionDef(AppPermission.ATTACHMENT_DELETE_OWN, TypeScope.OWN,    "Delete own attachment"),
+
+            // ── Saved Posts ───────────────────────────────────────────────────
+            new PermissionDef(AppPermission.POST_SAVE,             TypeScope.OWN,    "Bookmark and manage own saved posts"),
+
+            // ── Surveys ───────────────────────────────────────────────────────
+            new PermissionDef(AppPermission.SURVEY_VOTE,           TypeScope.GLOBAL, "Cast or change a vote on a survey post")
         );
 
         defs.forEach(def -> {
@@ -157,6 +202,7 @@ public class DataSeeder implements CommandLineRunner {
     private void seedDefaultRolePermissions() {
 
         // ── EMPLOYEE — own profile + view everything (no back office) ──────────
+        // Post perms: read feeds, create posts, react, comment, save, vote surveys
         List<String> employeePerms = List.of(
             AppPermission.USER_READ_OWN,
             AppPermission.USER_UPDATE_OWN,
@@ -167,17 +213,52 @@ public class DataSeeder implements CommandLineRunner {
             AppPermission.USER_READ_ROLES,
             AppPermission.USER_WRITE,
             AppPermission.FOLLOW_DEPARTMENT,
-            AppPermission.FOLLOW_TEAM
+            AppPermission.FOLLOW_TEAM,
+            // Post-Service
+            AppPermission.POST_READ,
+            AppPermission.POST_CREATE,
+            AppPermission.POST_UPDATE_OWN,
+            AppPermission.POST_DELETE_OWN,
+            AppPermission.COMMENT_READ,
+            AppPermission.COMMENT_CREATE,
+            AppPermission.COMMENT_UPDATE_OWN,
+            AppPermission.COMMENT_DELETE_OWN,
+            AppPermission.REACTION_POST,
+            AppPermission.REACTION_COMMENT,
+            AppPermission.REACTION_TYPE_READ,
+            AppPermission.ATTACHMENT_UPLOAD,
+            AppPermission.ATTACHMENT_READ,
+            AppPermission.ATTACHMENT_DELETE_OWN,
+            AppPermission.POST_SAVE,
+            AppPermission.SURVEY_VOTE
         );
 
         // ── TEAM_MEMBER ────────────────────────────────────────────────────────
         List<String> teamMemberPerms = List.of(
             AppPermission.USER_WRITE,
             AppPermission.FOLLOW_DEPARTMENT,
-            AppPermission.FOLLOW_TEAM
+            AppPermission.FOLLOW_TEAM,
+            // Post-Service (same as EMPLOYEE for posts)
+            AppPermission.POST_READ,
+            AppPermission.POST_CREATE,
+            AppPermission.POST_UPDATE_OWN,
+            AppPermission.POST_DELETE_OWN,
+            AppPermission.COMMENT_READ,
+            AppPermission.COMMENT_CREATE,
+            AppPermission.COMMENT_UPDATE_OWN,
+            AppPermission.COMMENT_DELETE_OWN,
+            AppPermission.REACTION_POST,
+            AppPermission.REACTION_COMMENT,
+            AppPermission.REACTION_TYPE_READ,
+            AppPermission.ATTACHMENT_UPLOAD,
+            AppPermission.ATTACHMENT_READ,
+            AppPermission.ATTACHMENT_DELETE_OWN,
+            AppPermission.POST_SAVE,
+            AppPermission.SURVEY_VOTE
         );
 
         // ── TEAM_LEADER ────────────────────────────────────────────────────────
+        // Adds: pin posts within own team scope
         List<String> teamLeaderPerms = List.of(
             AppPermission.USER_READ_OWN,
             AppPermission.USER_UPDATE_OWN_AVATAR,
@@ -189,20 +270,27 @@ public class DataSeeder implements CommandLineRunner {
             AppPermission.TEAM_MANAGE,
             AppPermission.TEAM_MANAGE_MEMBERS,
             AppPermission.TEAM_MANAGE_LEAD,
-            AppPermission.TEAM_ASSIGN_MEMBER
+            AppPermission.TEAM_ASSIGN_MEMBER,
+            // Post-Service
+            AppPermission.POST_PIN_TEAM
         );
 
         // ── DEPARTMENT_LEADER ─────────────────────────────────────────────────
+        // Adds: pin posts within own department scope + moderate comments in dept
         List<String> departmentLeaderPerms = List.of(
             AppPermission.USER_READ,
             AppPermission.USER_WRITE,
             AppPermission.DEPT_MANAGE,
             AppPermission.DEPT_MANAGE_TEAMS,
             AppPermission.DEPT_MANAGE_MANAGER,
-            AppPermission.TEAM_ASSIGN_MEMBER
+            AppPermission.TEAM_ASSIGN_MEMBER,
+            // Post-Service
+            AppPermission.POST_PIN_DEPARTMENT,
+            AppPermission.COMMENT_DELETE_ANY    // moderate comments in department
         );
 
         // ── HUMAN_RESOURCES ───────────────────────────────────────────────────
+        // Read-only access to post feeds; can delete posts/comments for moderation
         List<String> hrPerms = List.of(
             AppPermission.BACKOFFICE_DASHBOARD_READ,
             AppPermission.USER_READ_ALL,
@@ -210,7 +298,14 @@ public class DataSeeder implements CommandLineRunner {
             AppPermission.USER_INVITE,
             AppPermission.ROLE_READ_ALL,
             AppPermission.ORG_READ,
-            AppPermission.TEAM_ASSIGN_MEMBER
+            AppPermission.TEAM_ASSIGN_MEMBER,
+            // Post-Service — read-only + moderation
+            AppPermission.POST_READ,
+            AppPermission.COMMENT_READ,
+            AppPermission.REACTION_TYPE_READ,
+            AppPermission.ATTACHMENT_READ,
+            AppPermission.POST_DELETE_ANY,
+            AppPermission.COMMENT_DELETE_ANY
         );
 
         // ── CEO ───────────────────────────────────────────────────────────────
