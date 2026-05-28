@@ -50,6 +50,82 @@ public class OrganizationClient {
         }
     }
 
+    /**
+     * Returns true if {@code userId} is an explicit member of team {@code teamId}.
+     * This calls GET /organizations/teams/{teamId}/members and checks the list.
+     */
+    @SuppressWarnings("unchecked")
+    public boolean isTeamMember(String teamId, String userId) {
+        if (teamId == null || userId == null) return false;
+        try {
+            HttpHeaders headers = buildHeaders();
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> resp = restTemplate.exchange(
+                    orgServiceUrl + "/organizations/teams/" + teamId + "/members",
+                    HttpMethod.GET, entity, Map.class);
+            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) return false;
+            Object dataRaw = resp.getBody().get("data");
+            if (!(dataRaw instanceof List<?> list)) return false;
+            return list.stream()
+                    .filter(item -> item instanceof Map)
+                    .anyMatch(item -> userId.equals(((Map<?, ?>) item).get("userId")));
+        } catch (Exception e) {
+            log.error("isTeamMember check failed — org-service unreachable? team={} user={}: {}", teamId, userId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Returns true if {@code userId} is a member of ANY team inside department
+     * {@code deptId}, or is the department manager.
+     */
+    public boolean isDepartmentMember(String deptId, String userId) {
+        if (deptId == null || userId == null) return false;
+        try {
+            // First check if they are the dept manager
+            if (isDepartmentManager(deptId, userId)) return true;
+            // Then check membership in any team of the department
+            HttpHeaders headers = buildHeaders();
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> resp = restTemplate.exchange(
+                    orgServiceUrl + "/organizations/teams/department/" + deptId,
+                    HttpMethod.GET, entity, Map.class);
+            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) return false;
+            Object dataRaw = resp.getBody().get("data");
+            if (!(dataRaw instanceof List<?> teams)) return false;
+            for (Object t : teams) {
+                if (!(t instanceof Map<?, ?> teamMap)) continue;
+                Object teamId = teamMap.get("id");
+                if (teamId instanceof String tid && isTeamMember(tid, userId)) return true;
+                // lead also counts
+                if (userId.equals(teamMap.get("leadId"))) return true;
+            }
+            return false;
+        } catch (Exception e) {
+            log.error("isDepartmentMember check failed — org-service unreachable? dept={} user={}: {}", deptId, userId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Returns true if the JWT currently in the request context carries the given
+     * role. This avoids a network call — we read directly from the
+     * SecurityContext which was already populated by JwtAuthenticationFilter.
+     */
+    public boolean hasRole(String userId, String role) {
+        try {
+            var auth = org.springframework.security.core.context.SecurityContextHolder
+                    .getContext().getAuthentication();
+            if (auth == null) return false;
+            String target = "ROLE_" + role;
+            return auth.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals(target));
+        } catch (Exception e) {
+            log.error("hasRole check failed for role={}: {}", role, e.getMessage());
+            return false;
+        }
+    }
+
     // ── Department checks ─────────────────────────────────────────────────────
 
     /** Returns true if {@code userId} is the manager of department {@code deptId}. */

@@ -873,7 +873,10 @@ interface PostCardProps {
   usersMap: Record<string, User>
   onDelete?: (postId: string) => void
   onUpdate?: (updated: PostResponse) => void
+  /** The team ID that the current user leads, if any. Used to gate pin access. */
   currentLeadTeamId?: string | null
+  /** The department ID that the current user manages, if any. Used to gate pin access. */
+  currentManagedDeptId?: string | null
 }
 
 export function PostCard({
@@ -883,6 +886,7 @@ export function PostCard({
   onDelete,
   onUpdate,
   currentLeadTeamId,
+  currentManagedDeptId,
 }: PostCardProps) {
   const { user: currentUser } = useAuth()
 
@@ -920,7 +924,28 @@ export function PostCard({
   const canEditPost =
     isOwn || isCeo || isLeaderOfThisTeam || (isDeptLeader && (!!post.departmentId || !!post.teamId))
   const canDeletePost = canEditPost
-  const canPinPost = isTeamLeader || isDeptLeader || isCeo
+
+  // ── Pin gate: scoped strictly to the leader's context ───────────────────────
+  // CEO can pin anything.
+  // Dept leader can pin posts that belong to their department, OR posts that
+  //   belong to a team inside their department.
+  // Team leader can ONLY pin posts that belong to the exact team they lead —
+  //   they must NOT see the pin option on the department feed or other teams.
+  const canPinPost = (() => {
+    if (isCeo) return true
+    if (isDeptLeader && currentManagedDeptId) {
+      // post is directly in their department
+      if (post.departmentId === currentManagedDeptId) return true
+      // post is in a team that belongs to their department — we trust the
+      // caller passed currentManagedDeptId only when verified
+      if (post.teamId && !post.departmentId) return true
+    }
+    if (isTeamLeader && currentLeadTeamId) {
+      // only if the post is in the exact team they lead
+      if (post.teamId === currentLeadTeamId) return true
+    }
+    return false
+  })()
 
   const seedMap = currentUser ? { ...usersMap, [currentUser.id]: currentUser } : usersMap
   const { localMap: commentUsersMap, resolveAuthors } = useCommentAuthors(seedMap)

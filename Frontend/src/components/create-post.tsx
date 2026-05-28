@@ -187,6 +187,13 @@ interface CreatePostProps {
   teamId?: string
   departmentId?: string
   defaultVisibility?: ClientPostVisibility
+  /**
+   * When posting into a team or department feed, pass whether the current user
+   * is a member of that team/department.  If false the composer is hidden and
+   * a "members only" notice is shown instead.  Omit (or pass true) for the
+   * global feed where any authenticated user can post.
+   */
+  isMember?: boolean
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -197,7 +204,17 @@ export function CreatePost({
   teamId,
   departmentId,
   defaultVisibility,
+  isMember = true,
 }: CreatePostProps) {
+  // If the user is not a member of this team/department, show a notice instead
+  // of the full composer so they cannot submit posts.
+  if (!isMember && (teamId || departmentId)) {
+    return (
+      <div className="border-border bg-background text-muted-foreground rounded-xl border p-4 text-center text-sm shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        You must be a member of this {teamId ? 'team' : 'department'} to post here.
+      </div>
+    )
+  }
   const [content, setContent] = useState('')
   const [isExpanded, setIsExpanded] = useState(false)
   const [postType, setPostType] = useState<PostType>('DISCUSSION')

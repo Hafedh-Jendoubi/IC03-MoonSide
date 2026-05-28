@@ -2013,6 +2013,8 @@ export default function DepartmentFeedPage() {
   const [followLoading, setFollowLoading] = useState(false)
   const [userTeamIds, setUserTeamIds] = useState<string[]>([])
   const [showFollowersModal, setShowFollowersModal] = useState(false)
+  // Whether the current user is a member of this department (via any of its teams)
+  const [isUserDeptMember, setIsUserDeptMember] = useState(false)
 
   // ── Post feed (paginated, infinite scroll) ────────────────────────────────
   const {
@@ -2042,9 +2044,33 @@ export default function DepartmentFeedPage() {
         setDepartment(dept)
         setTeams(allTeams)
 
-        // derive which teams the current user is a member of (lead counts too)
+        // CEO and dept manager are always considered members for posting purposes
         if (user) {
-          setUserTeamIds(allTeams.filter((t) => t.leadId === user.id).map((t) => t.id))
+          const isCeo = hasRole(user, 'CEO')
+          const isDeptManager = dept.managerId === user.id
+
+          if (isCeo || isDeptManager) {
+            setUserTeamIds(allTeams.map((t) => t.id))
+            setIsUserDeptMember(true)
+          } else {
+            // Fetch actual team memberships to derive which teams the user belongs to
+            const membershipResults = await Promise.allSettled(
+              allTeams.map((t) =>
+                teamApi.getMembers(t.id).then((members: any[]) => ({
+                  teamId: t.id,
+                  isMember: members.some((m) => m.userId === user.id) || t.leadId === user.id,
+                }))
+              )
+            )
+            const memberTeamIds = membershipResults
+              .filter((r) => r.status === 'fulfilled' && r.value.isMember)
+              .map(
+                (r) =>
+                  (r as PromiseFulfilledResult<{ teamId: string; isMember: boolean }>).value.teamId
+              )
+            setUserTeamIds(memberTeamIds)
+            setIsUserDeptMember(memberTeamIds.length > 0)
+          }
         }
       } catch (e: any) {
         setError(e.message ?? 'Failed to load department')
@@ -2339,7 +2365,12 @@ export default function DepartmentFeedPage() {
 
             {/* Create Post and Feed */}
             <div className="space-y-6">
-              <CreatePost user={user} onPostCreate={handlePostCreate} departmentId={deptId} />
+              <CreatePost
+                user={user}
+                onPostCreate={handlePostCreate}
+                departmentId={deptId}
+                isMember={isUserDeptMember}
+              />
               <div className="space-y-6">
                 {postsLoading ? (
                   <div className="flex flex-col items-center gap-4 py-16">
@@ -2367,6 +2398,13 @@ export default function DepartmentFeedPage() {
                           usersMap={usersMap}
                           onDelete={handlePostDelete}
                           onUpdate={handlePostUpdate}
+                          currentLeadTeamId={null}
+                          currentManagedDeptId={
+                            hasRole(user, 'CEO') ||
+                            (hasRole(user, 'DEPARTMENT_LEADER') && department.managerId === user.id)
+                              ? deptId
+                              : null
+                          }
                         />
                       </div>
                     ))}

@@ -1670,6 +1670,8 @@ export default function TeamFeedPage() {
   const [teamDepartment, setTeamDepartment] = useState<DepartmentResponse | null>(null)
   const [showFollowersModal, setShowFollowersModal] = useState(false)
   const [teamProjects, setTeamProjects] = useState<ProjectResponse[]>([])
+  // Whether the current user is a member (or lead) of this team
+  const [isUserTeamMember, setIsUserTeamMember] = useState(false)
 
   // ── Post feed: fetches from API, resolves authors ─────────────────────────
   const {
@@ -1703,6 +1705,21 @@ export default function TeamFeedPage() {
           .getByTeam(teamId)
           .then(setTeamProjects)
           .catch(() => {})
+
+        // Derive membership: lead counts, or check actual member list
+        if (user) {
+          if (teamData.leadId === user.id || hasRole(user, 'CEO')) {
+            setIsUserTeamMember(true)
+          } else {
+            // Fetch members list to check if the user is in it
+            teamApi
+              .getMembers(teamId)
+              .then((members) => {
+                setIsUserTeamMember(members.some((m: any) => m.userId === user.id))
+              })
+              .catch(() => setIsUserTeamMember(false))
+          }
+        }
       } catch (e: any) {
         setError(e.message ?? 'Failed to load team')
       } finally {
@@ -1983,7 +2000,12 @@ export default function TeamFeedPage() {
 
             {/* Create Post and Feed */}
             <div className="space-y-6">
-              <CreatePost user={user} onPostCreate={handlePostCreate} teamId={teamId} />
+              <CreatePost
+                user={user}
+                onPostCreate={handlePostCreate}
+                teamId={teamId}
+                isMember={isUserTeamMember}
+              />
               <div className="space-y-6">
                 {posts.length === 0 ? (
                   <div className="py-12 text-center">
@@ -2007,6 +2029,7 @@ export default function TeamFeedPage() {
                           onDelete={removePost}
                           onUpdate={updatePost}
                           currentLeadTeamId={team?.leadId === user.id ? team.id : null}
+                          currentManagedDeptId={null}
                         />
                       </div>
                     ))}

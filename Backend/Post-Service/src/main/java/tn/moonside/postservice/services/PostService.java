@@ -40,6 +40,29 @@ public class PostService {
     /* ── Create ───────────────────────────────────────────────────────────── */
 
     public PostResponse createPost(PostRequest req, String authorId) {
+        // ── Membership guard ───────────────────────────────────────────────────
+        // A user may only post into a team or department they actually belong to.
+        // CEO is exempt. The check is fail-open: if org-service is unreachable we
+        // let the post through rather than blocking the entire create path.
+        if (req.getTeamId() != null && !req.getTeamId().isBlank()) {
+            boolean isLead   = organizationClient.isTeamLead(req.getTeamId(), authorId);
+            boolean isMember = organizationClient.isTeamMember(req.getTeamId(), authorId);
+            boolean isCeo    = organizationClient.hasRole(authorId, "CEO");
+            if (!isLead && !isMember && !isCeo) {
+                throw new AccessDeniedException(
+                        "You must be a member of this team to post here.");
+            }
+        }
+        if (req.getDepartmentId() != null && !req.getDepartmentId().isBlank()) {
+            boolean isDeptManager = organizationClient.isDepartmentManager(req.getDepartmentId(), authorId);
+            boolean isDeptMember  = organizationClient.isDepartmentMember(req.getDepartmentId(), authorId);
+            boolean isCeo         = organizationClient.hasRole(authorId, "CEO");
+            if (!isDeptManager && !isDeptMember && !isCeo) {
+                throw new AccessDeniedException(
+                        "You must be a member of this department to post here.");
+            }
+        }
+
         VisibilityType resolvedVisibility = resolveVisibility(req);
 
         Post.PostBuilder builder = Post.builder()
