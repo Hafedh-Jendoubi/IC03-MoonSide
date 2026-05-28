@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -26,10 +26,12 @@ interface UsersModalProps {
 export function UsersModal({ open, onOpenChange, title, fetchUsers }: UsersModalProps) {
   const [users, setUsers] = useState<ModalUser[]>([])
   const [loading, setLoading] = useState(false)
+  const [activeEmoji, setActiveEmoji] = useState<string | null>(null)
 
   useEffect(() => {
     if (open) {
       setLoading(true)
+      setActiveEmoji(null)
       fetchUsers()
         .then(setUsers)
         .catch(() => setUsers([]))
@@ -41,6 +43,26 @@ export function UsersModal({ open, onOpenChange, title, fetchUsers }: UsersModal
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
   }
 
+  // Collect unique emojis that actually appear in the list, preserving order
+  const emojiFilters = useMemo(() => {
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const u of users) {
+      if (u.emoji && !seen.has(u.emoji)) {
+        seen.add(u.emoji)
+        result.push(u.emoji)
+      }
+    }
+    return result
+  }, [users])
+
+  const hasFilters = emojiFilters.length > 1
+
+  const visibleUsers = useMemo(
+    () => (activeEmoji ? users.filter((u) => u.emoji === activeEmoji) : users),
+    [users, activeEmoji]
+  )
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[80vh] flex-col">
@@ -48,16 +70,49 @@ export function UsersModal({ open, onOpenChange, title, fetchUsers }: UsersModal
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
+        {/* Emoji filter bar — only shown when there are multiple reaction types */}
+        {!loading && hasFilters && (
+          <div className="flex flex-wrap items-center gap-1.5 pb-1">
+            <button
+              onClick={() => setActiveEmoji(null)}
+              className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                activeEmoji === null
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
+              }`}
+            >
+              All
+            </button>
+            {emojiFilters.map((emoji) => {
+              const count = users.filter((u) => u.emoji === emoji).length
+              return (
+                <button
+                  key={emoji}
+                  onClick={() => setActiveEmoji(activeEmoji === emoji ? null : emoji)}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                    activeEmoji === emoji
+                      ? 'bg-primary text-primary-foreground'
+                      : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'
+                  }`}
+                >
+                  <span>{emoji}</span>
+                  <span>{count}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
         <ScrollArea className="flex-1 pr-4">
           {loading ? (
             <div className="flex items-center justify-center py-8">
               <Loader2 className="text-muted-foreground size-6 animate-spin" />
             </div>
-          ) : users.length === 0 ? (
+          ) : visibleUsers.length === 0 ? (
             <div className="text-muted-foreground py-8 text-center">No users found</div>
           ) : (
             <div className="space-y-2">
-              {users.map((user) => (
+              {visibleUsers.map((user) => (
                 <div
                   key={user.id}
                   className="hover:bg-accent flex items-center gap-3 rounded-lg p-3 transition-colors"
