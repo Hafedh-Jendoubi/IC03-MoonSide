@@ -1,105 +1,93 @@
 package tn.moonside.postservice.security;
 
 /**
- * Central registry of every Post-Service endpoint permission.
+ * Post-Service permission constants — mirrors the Post-Service section of
+ * User-Service's AppPermission.  Keep both files in sync.
  *
- * Naming convention:  <RESOURCE>_<ACTION>[_<SCOPE>]
- * These strings must also be declared in User-Service's AppPermission and seeded
- * into the permissions collection via DataSeeder so that the admin/roles page can
- * assign them to roles.
- *
- * Role → Permission mapping (who can do what by default)
- * ─────────────────────────────────────────────────────────────────────────────
- *  EMPLOYEE          — Read feeds/posts, react, comment, save posts, vote surveys
- *  TEAM_LEADER       — Everything EMPLOYEE can + pin posts in own team
- *  DEPARTMENT_LEADER — Everything TEAM_LEADER can + pin posts in own department
- *  HUMAN_RESOURCES   — Read feeds only (no mutations)
- *  CEO               — Unrestricted via ANYTHING wildcard (already set)
+ * See User-Service AppPermission for the full naming-convention documentation.
  */
 public final class AppPermission {
 
     private AppPermission() {}
 
-    // ─── Posts ────────────────────────────────────────────────────────────────
+    // ── Posts ─────────────────────────────────────────────────────────────────
 
-    /** POST /posts — create a new post */
-    public static final String POST_CREATE           = "POST_CREATE";
+    /** GET /posts/feed, /posts/{id}, /posts/author/**, /posts/team/**, /posts/department/** */
+    public static final String POST_VIEW              = "POST_VIEW";
 
-    /** GET /posts/feed, /posts/author/**, /posts/team/**, /posts/department/**, /posts/{id} */
-    public static final String POST_READ             = "POST_READ";
+    /** POST /posts — create a post */
+    public static final String POST_CREATE            = "POST_CREATE";
 
     /** PUT /posts/{id} — edit own post (ownership enforced in service) */
-    public static final String POST_UPDATE_OWN       = "POST_UPDATE_OWN";
+    public static final String POST_EDIT_OWN          = "POST_EDIT_OWN";
 
     /** DELETE /posts/{id} — delete own post (ownership enforced in service) */
-    public static final String POST_DELETE_OWN       = "POST_DELETE_OWN";
+    public static final String POST_DELETE_OWN        = "POST_DELETE_OWN";
 
-    /** DELETE /posts/{id} — delete ANY post (moderation; CEO / HR) */
-    public static final String POST_DELETE_ANY       = "POST_DELETE_ANY";
+    /** DELETE /posts/{id} — delete any post for moderation (HR / CEO) */
+    public static final String POST_DELETE_ANY        = "POST_DELETE_ANY";
 
-    /** PATCH /posts/{id}/pin — pin/unpin a post within own team scope */
-    public static final String POST_PIN_TEAM         = "POST_PIN_TEAM";
+    /** PATCH /posts/{id}/pin — pin or unpin a post within own team's feed */
+    public static final String POST_PIN_IN_TEAM       = "POST_PIN_IN_TEAM";
 
-    /** PATCH /posts/{id}/pin — pin/unpin a post within own department scope */
-    public static final String POST_PIN_DEPARTMENT   = "POST_PIN_DEPARTMENT";
+    /** PATCH /posts/{id}/pin — pin or unpin a post within own department's feed */
+    public static final String POST_PIN_IN_DEPT       = "POST_PIN_IN_DEPT";
 
-    /** PATCH /posts/{id}/pin — pin/unpin ANY post (CEO only) */
-    public static final String POST_PIN_ANY          = "POST_PIN_ANY";
+    /** PATCH /posts/{id}/pin — pin or unpin any post (CEO only) */
+    public static final String POST_PIN_ANY           = "POST_PIN_ANY";
 
-    // ─── Comments ─────────────────────────────────────────────────────────────
+    /** GET/POST/DELETE /posts/saved/** — bookmark or unbookmark posts */
+    public static final String POST_SAVE              = "POST_SAVE";
+
+    // ── Comments ──────────────────────────────────────────────────────────────
+
+    /** GET /posts/{id}/comments — view comments and replies */
+    public static final String COMMENT_VIEW           = "COMMENT_VIEW";
 
     /** POST /posts/{id}/comments — add a comment */
-    public static final String COMMENT_CREATE        = "COMMENT_CREATE";
-
-    /** GET /posts/{id}/comments — read comments & replies */
-    public static final String COMMENT_READ          = "COMMENT_READ";
+    public static final String COMMENT_CREATE         = "COMMENT_CREATE";
 
     /** PUT /posts/{id}/comments/{cid} — edit own comment */
-    public static final String COMMENT_UPDATE_OWN    = "COMMENT_UPDATE_OWN";
+    public static final String COMMENT_EDIT_OWN       = "COMMENT_EDIT_OWN";
 
     /** DELETE /posts/{id}/comments/{cid} — delete own comment */
-    public static final String COMMENT_DELETE_OWN    = "COMMENT_DELETE_OWN";
+    public static final String COMMENT_DELETE_OWN     = "COMMENT_DELETE_OWN";
 
-    /** DELETE /posts/{id}/comments/{cid} — delete ANY comment (moderation) */
-    public static final String COMMENT_DELETE_ANY    = "COMMENT_DELETE_ANY";
+    /** DELETE /posts/{id}/comments/{cid} — delete any comment (Dept Leader, HR, CEO) */
+    public static final String COMMENT_DELETE_ANY     = "COMMENT_DELETE_ANY";
 
-    // ─── Reactions ────────────────────────────────────────────────────────────
+    // ── Reactions ─────────────────────────────────────────────────────────────
 
-    /** POST/GET /posts/{id}/reactions — react to a post or view reactions */
-    public static final String REACTION_POST         = "REACTION_POST";
+    /** POST/GET /posts/{id}/reactions — react to a post or view its reactions */
+    public static final String POST_REACT             = "POST_REACT";
 
-    /** POST/GET /posts/{id}/comments/{cid}/reactions — react to a comment */
-    public static final String REACTION_COMMENT      = "REACTION_COMMENT";
+    /** POST/GET /posts/{id}/comments/{cid}/reactions — react to a comment or view its reactions */
+    public static final String COMMENT_REACT          = "COMMENT_REACT";
 
-    // ─── Reaction Types (admin) ───────────────────────────────────────────────
+    // ── Reaction Types ────────────────────────────────────────────────────────
 
-    /** GET /reaction-types — list available reaction types */
-    public static final String REACTION_TYPE_READ    = "REACTION_TYPE_READ";
+    /** GET /reaction-types — list available emoji reaction types */
+    public static final String REACTION_TYPE_VIEW     = "REACTION_TYPE_VIEW";
 
-    /** POST /reaction-types — create a new reaction type (CEO only) */
-    public static final String REACTION_TYPE_CREATE  = "REACTION_TYPE_CREATE";
+    /** POST /reaction-types — add a new reaction type (CEO only) */
+    public static final String REACTION_TYPE_CREATE   = "REACTION_TYPE_CREATE";
 
-    /** DELETE /reaction-types/{id} — delete a reaction type (CEO only) */
-    public static final String REACTION_TYPE_DELETE  = "REACTION_TYPE_DELETE";
+    /** DELETE /reaction-types/{id} — remove a reaction type (CEO only) */
+    public static final String REACTION_TYPE_DELETE   = "REACTION_TYPE_DELETE";
 
-    // ─── Attachments ─────────────────────────────────────────────────────────
+    // ── Attachments ───────────────────────────────────────────────────────────
 
-    /** POST /posts/{id}/attachments — upload a file to a post */
-    public static final String ATTACHMENT_UPLOAD     = "ATTACHMENT_UPLOAD";
+    /** GET  /posts/{id}/attachments — view file attachments on a post */
+    public static final String ATTACHMENT_VIEW        = "ATTACHMENT_VIEW";
 
-    /** GET /posts/{id}/attachments — list attachments */
-    public static final String ATTACHMENT_READ       = "ATTACHMENT_READ";
+    /** POST /posts/{id}/attachments — upload a file attachment to a post */
+    public static final String ATTACHMENT_UPLOAD      = "ATTACHMENT_UPLOAD";
 
     /** DELETE /posts/{id}/attachments/{aid} — delete own attachment */
-    public static final String ATTACHMENT_DELETE_OWN = "ATTACHMENT_DELETE_OWN";
+    public static final String ATTACHMENT_DELETE_OWN  = "ATTACHMENT_DELETE_OWN";
 
-    // ─── Saved Posts ──────────────────────────────────────────────────────────
+    // ── Surveys ───────────────────────────────────────────────────────────────
 
-    /** GET/POST/DELETE /posts/saved/** — bookmark management */
-    public static final String POST_SAVE             = "POST_SAVE";
-
-    // ─── Surveys ─────────────────────────────────────────────────────────────
-
-    /** POST /posts/{id}/survey/vote — cast/change vote on a survey post */
-    public static final String SURVEY_VOTE           = "SURVEY_VOTE";
+    /** POST /posts/{id}/survey/vote — cast or change a vote on a survey post */
+    public static final String SURVEY_VOTE            = "SURVEY_VOTE";
 }

@@ -33,21 +33,21 @@ public class RoleController {
 
     /** List all roles — requires ROLE_READ_ALL permission */
     @GetMapping
-    @RequiresPermission(AppPermission.ROLE_READ_ALL)
+    @RequiresPermission(AppPermission.ROLE_VIEW_ALL)
     public ResponseEntity<ApiResponse<List<RoleResponse>>> getAllRoles() {
         return ResponseEntity.ok(ApiResponse.success(roleService.getAllRoles()));
     }
 
     /** Read a specific role — requires ROLE_READ permission */
     @GetMapping("/{id}")
-    @RequiresPermission(AppPermission.ROLE_READ)
+    @RequiresPermission(AppPermission.ROLE_VIEW)
     public ResponseEntity<ApiResponse<RoleResponse>> getRoleById(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(roleService.getRoleById(id)));
     }
 
     /** Update a role — requires ROLE_UPDATE permission */
     @PutMapping("/{id}")
-    @RequiresPermission(AppPermission.ROLE_UPDATE)
+    @RequiresPermission(AppPermission.ROLE_EDIT)
     public ResponseEntity<ApiResponse<RoleResponse>> updateRole(
             @PathVariable String id,
             @Valid @RequestBody RoleRequest request) {

@@ -12,6 +12,26 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+/**
+ * Post-Service security configuration.
+ *
+ * ── Strategy ──────────────────────────────────────────────────────────────────
+ * All requests require a valid JWT.  Fine-grained access control is expressed
+ * via hasRole() rules here rather than a custom annotation filter, because the
+ * Post-Service does not have a local copy of the permission → role mapping.
+ *
+ * The source of truth for which roles hold which permissions lives in the
+ * User-Service DataSeeder and AppPermission.  The role names used below must
+ * stay in sync with the roles seeded there.
+ *
+ * ── Role hierarchy reminder ───────────────────────────────────────────────────
+ *   CEO               — everything (ANYTHING wildcard in User-Service)
+ *   DEPARTMENT_LEADER — manage department, moderate comments, pin in dept feed
+ *   TEAM_LEADER       — manage team, pin in team feed
+ *   HUMAN_RESOURCES   — read-only feeds + post/comment moderation
+ *   EMPLOYEE          — full interactive access (create, react, comment, etc.)
+ *   TEAM_MEMBER       — same as EMPLOYEE
+ */
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
@@ -27,17 +47,17 @@ public class SecurityConfig {
             .cors(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
 
-                // ── Actuator ───────────────────────────────────────────────────
+                // ── Actuator ─────────────────────────────────────────────────
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
 
-                // ── Reaction Types ─────────────────────────────────────────────
-                // Any authenticated user can view reaction types
-                .requestMatchers(HttpMethod.GET, "/reaction-types").authenticated()
-                // Only CEO can create or delete reaction types
+                // ── Reaction Types ────────────────────────────────────────────
+                // POST_REACT / REACTION_TYPE_VIEW: every authenticated user
+                .requestMatchers(HttpMethod.GET,    "/reaction-types").authenticated()
+                // REACTION_TYPE_CREATE / REACTION_TYPE_DELETE: CEO only
                 .requestMatchers(HttpMethod.POST,   "/reaction-types").hasRole("CEO")
                 .requestMatchers(HttpMethod.DELETE, "/reaction-types/**").hasRole("CEO")
 
-                // ── Read post feeds (every authenticated user) ─────────────────
+                // ── POST_VIEW — read feeds (every authenticated user) ─────────
                 .requestMatchers(HttpMethod.GET, "/posts/feed").authenticated()
                 .requestMatchers(HttpMethod.GET, "/posts/feed/following").authenticated()
                 .requestMatchers(HttpMethod.GET, "/posts/author/**").authenticated()
@@ -45,57 +65,59 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/posts/department/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/posts/{postId}").authenticated()
 
-                // ── Saved posts (every authenticated user) ─────────────────────
+                // ── POST_SAVE — bookmarks (every authenticated user) ──────────
                 .requestMatchers("/posts/saved/**").authenticated()
 
-                // ── Create post (EMPLOYEE and above — not HR read-only) ────────
+                // ── POST_CREATE — create a post (EMPLOYEE and above, not HR) ──
                 .requestMatchers(HttpMethod.POST, "/posts")
                     .hasAnyRole("CEO", "DEPARTMENT_LEADER", "TEAM_LEADER", "TEAM_MEMBER", "EMPLOYEE")
 
-                // ── Edit own post (author checked in service) ──────────────────
+                // ── POST_EDIT_OWN — edit own post (ownership checked in service)
                 .requestMatchers(HttpMethod.PUT, "/posts/**")
                     .hasAnyRole("CEO", "DEPARTMENT_LEADER", "TEAM_LEADER", "TEAM_MEMBER", "EMPLOYEE")
 
-                // ── Delete post:
-                //    CEO/HR can delete any post (moderation)
-                //    Others can delete their own (ownership enforced in service)
+                // ── POST_DELETE_OWN / POST_DELETE_ANY ─────────────────────────
+                //    HR and CEO may delete any post (moderation).
+                //    Everyone else can delete their own (enforced in service).
                 .requestMatchers(HttpMethod.DELETE, "/posts/**")
                     .hasAnyRole("CEO", "HUMAN_RESOURCES", "DEPARTMENT_LEADER", "TEAM_LEADER", "TEAM_MEMBER", "EMPLOYEE")
 
-                // ── Pin/unpin post (Team Leader, Dept Leader, CEO) ─────────────
+                // ── POST_PIN_IN_TEAM / POST_PIN_IN_DEPT / POST_PIN_ANY ────────
                 .requestMatchers(HttpMethod.PATCH, "/posts/*/pin")
                     .hasAnyRole("CEO", "DEPARTMENT_LEADER", "TEAM_LEADER")
 
-                // ── Comments — read (every authenticated user) ─────────────────
+                // ── COMMENT_VIEW — read comments (every authenticated user) ────
                 .requestMatchers(HttpMethod.GET, "/posts/*/comments/**").authenticated()
 
-                // ── Comments — create/edit/delete own
+                // ── COMMENT_CREATE / COMMENT_EDIT_OWN ────────────────────────
                 .requestMatchers(HttpMethod.POST, "/posts/*/comments")
                     .hasAnyRole("CEO", "DEPARTMENT_LEADER", "TEAM_LEADER", "TEAM_MEMBER", "EMPLOYEE")
                 .requestMatchers(HttpMethod.PUT, "/posts/*/comments/**")
                     .hasAnyRole("CEO", "DEPARTMENT_LEADER", "TEAM_LEADER", "TEAM_MEMBER", "EMPLOYEE")
 
-                // ── Comments — delete (moderation: CEO/HR can delete any)
+                // ── COMMENT_DELETE_OWN / COMMENT_DELETE_ANY ──────────────────
+                //    HR, Dept Leader, and CEO may delete any comment (moderation).
+                //    Everyone else can only delete their own (enforced in service).
                 .requestMatchers(HttpMethod.DELETE, "/posts/*/comments/**")
                     .hasAnyRole("CEO", "HUMAN_RESOURCES", "DEPARTMENT_LEADER", "TEAM_LEADER", "TEAM_MEMBER", "EMPLOYEE")
 
-                // ── Reactions — every authenticated user ───────────────────────
+                // ── POST_REACT / COMMENT_REACT — reactions (every authenticated user)
                 .requestMatchers("/posts/*/reactions/**").authenticated()
                 .requestMatchers("/posts/*/comments/*/reactions/**").authenticated()
 
-                // ── Attachments — read (every authenticated user) ──────────────
+                // ── ATTACHMENT_VIEW — view attachments (every authenticated user)
                 .requestMatchers(HttpMethod.GET, "/posts/*/attachments/**").authenticated()
 
-                // ── Attachments — upload/delete (post authors, not read-only HR)
+                // ── ATTACHMENT_UPLOAD / ATTACHMENT_DELETE_OWN ────────────────
                 .requestMatchers(HttpMethod.POST, "/posts/*/attachments")
                     .hasAnyRole("CEO", "DEPARTMENT_LEADER", "TEAM_LEADER", "TEAM_MEMBER", "EMPLOYEE")
                 .requestMatchers(HttpMethod.DELETE, "/posts/*/attachments/**")
                     .hasAnyRole("CEO", "DEPARTMENT_LEADER", "TEAM_LEADER", "TEAM_MEMBER", "EMPLOYEE")
 
-                // ── Survey voting (every authenticated user) ───────────────────
+                // ── SURVEY_VOTE — vote on a survey (every authenticated user) ─
                 .requestMatchers(HttpMethod.POST, "/posts/*/survey/vote").authenticated()
 
-                // ── Fallback ───────────────────────────────────────────────────
+                // ── Fallback ──────────────────────────────────────────────────
                 .anyRequest().authenticated()
             )
             .sessionManagement(session ->

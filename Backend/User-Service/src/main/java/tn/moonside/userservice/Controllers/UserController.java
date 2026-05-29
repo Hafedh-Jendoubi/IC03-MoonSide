@@ -30,21 +30,21 @@ public class UserController {
 
     /** List all users — requires USER_READ_ALL permission */
     @GetMapping
-    @RequiresPermission(AppPermission.USER_READ_ALL)
+    @RequiresPermission(AppPermission.USER_VIEW_ALL)
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers() {
         return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers()));
     }
 
     /** Read any user by ID — requires USER_READ permission */
     @GetMapping("/{id}")
-    @RequiresPermission(AppPermission.USER_READ)
+    @RequiresPermission(AppPermission.USER_VIEW)
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id)));
     }
 
     /** Read own profile — requires USER_READ_OWN permission */
     @GetMapping("/me")
-    @RequiresPermission(AppPermission.USER_READ_OWN)
+    @RequiresPermission(AppPermission.USER_VIEW_OWN)
     public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser(
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserByEmail(userDetails.getUsername())));
@@ -52,7 +52,7 @@ public class UserController {
 
     /** Update own avatar — requires USER_UPDATE_OWN_AVATAR permission */
     @PatchMapping("/me/avatar")
-    @RequiresPermission(AppPermission.USER_UPDATE_OWN_AVATAR)
+    @RequiresPermission(AppPermission.USER_EDIT_OWN_AVATAR)
     public ResponseEntity<ApiResponse<UserResponse>> updateMyAvatar(
             @RequestBody UpdateAvatarRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -71,14 +71,14 @@ public class UserController {
 
     /** Get a user's roles — requires USER_READ_ROLES permission */
     @GetMapping("/{id}/roles")
-    @RequiresPermission(AppPermission.USER_READ_ROLES)
+    @RequiresPermission(AppPermission.USER_VIEW_ROLES)
     public ResponseEntity<ApiResponse<List<String>>> getUserRoles(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserRoleNames(id)));
     }
 
     /** Update own profile — requires USER_UPDATE_OWN permission */
     @PutMapping("/me")
-    @RequiresPermission(AppPermission.USER_UPDATE_OWN)
+    @RequiresPermission(AppPermission.USER_EDIT_OWN)
     public ResponseEntity<ApiResponse<UserResponse>> updateMyProfile(
             @RequestBody UpdateUserRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -89,7 +89,7 @@ public class UserController {
 
     /** Update any user — requires USER_UPDATE permission */
     @PutMapping("/{id}")
-    @RequiresPermission(AppPermission.USER_UPDATE)
+    @RequiresPermission(AppPermission.USER_EDIT_ANY)
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(
             @PathVariable String id,
             @RequestBody UpdateUserRequest request,
@@ -100,7 +100,7 @@ public class UserController {
 
     /** Delete a user — requires USER_DELETE permission */
     @DeleteMapping("/{id}")
-    @RequiresPermission(AppPermission.USER_DELETE)
+    @RequiresPermission(AppPermission.USER_DELETE_ANY)
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable String id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(ApiResponse.success(null, "User deleted successfully"));
