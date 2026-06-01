@@ -64,6 +64,7 @@ import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
 import { User, hasRole } from '@/lib/types'
 import { UsersModal } from '@/components/users-modal'
+import { PostViewModal } from '@/components/post-view-modal'
 import { usePostFeed } from '@/hooks/use-post-feed'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -2015,6 +2016,7 @@ export default function DepartmentFeedPage() {
   const [showFollowersModal, setShowFollowersModal] = useState(false)
   // Whether the current user is a member of this department (via any of its teams)
   const [isUserDeptMember, setIsUserDeptMember] = useState(false)
+  const [viewPostId, setViewPostId] = useState<string | null>(null)
 
   // ── Post feed (paginated, infinite scroll) ────────────────────────────────
   const {
@@ -2460,7 +2462,8 @@ export default function DepartmentFeedPage() {
                       return (
                         <div
                           key={post.id}
-                          className="border-border hover:bg-muted/40 rounded-lg border p-3 transition-colors"
+                          onClick={() => setViewPostId(post.id)}
+                          className="border-border hover:bg-muted/40 cursor-pointer rounded-lg border p-3 transition-colors"
                         >
                           <div className="mb-1.5 flex items-center gap-2">
                             <div className="bg-muted h-6 w-6 flex-shrink-0 overflow-hidden rounded-full border">
@@ -2500,6 +2503,8 @@ export default function DepartmentFeedPage() {
           </div>
         </div>
       </div>
+
+      {viewPostId && <PostViewModal postId={viewPostId} onClose={() => setViewPostId(null)} />}
 
       {manageOpen && (
         <ManageDeptPanel

@@ -63,6 +63,7 @@ import { useAuth } from '@/lib/auth-context'
 import { usePostFeed } from '@/hooks/use-post-feed'
 import { User, hasRole } from '@/lib/types'
 import { UsersModal } from '@/components/users-modal'
+import { PostViewModal } from '@/components/post-view-modal'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -1672,6 +1673,7 @@ export default function TeamFeedPage() {
   const [teamProjects, setTeamProjects] = useState<ProjectResponse[]>([])
   // Whether the current user is a member (or lead) of this team
   const [isUserTeamMember, setIsUserTeamMember] = useState(false)
+  const [viewPostId, setViewPostId] = useState<string | null>(null)
 
   // ── Post feed: fetches from API, resolves authors ─────────────────────────
   const {
@@ -2085,7 +2087,8 @@ export default function TeamFeedPage() {
                       return (
                         <div
                           key={post.id}
-                          className="border-border hover:bg-muted/40 rounded-lg border p-3 transition-colors"
+                          onClick={() => setViewPostId(post.id)}
+                          className="border-border hover:bg-muted/40 cursor-pointer rounded-lg border p-3 transition-colors"
                         >
                           <div className="mb-1.5 flex items-center gap-2">
                             <div className="bg-muted h-6 w-6 flex-shrink-0 overflow-hidden rounded-full border">
@@ -2125,6 +2128,8 @@ export default function TeamFeedPage() {
           </div>
         </div>
       </div>
+
+      {viewPostId && <PostViewModal postId={viewPostId} onClose={() => setViewPostId(null)} />}
 
       {manageOpen && (
         <ManageTeamPanel
