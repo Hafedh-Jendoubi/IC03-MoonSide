@@ -11,6 +11,7 @@ import org.springframework.transaction.annotation.Transactional;
 import tn.moonside.postservice.audit.AuditClient;
 import tn.moonside.postservice.audit.PostAuditAction;
 import tn.moonside.postservice.clients.OrganizationClient;
+import tn.moonside.postservice.clients.UserClient;
 import tn.moonside.postservice.dtos.requests.PostRequest;
 import tn.moonside.postservice.dtos.responses.*;
 import tn.moonside.postservice.entities.*;
@@ -19,6 +20,7 @@ import tn.moonside.postservice.enums.VisibilityType;
 import tn.moonside.postservice.repositories.*;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -36,6 +38,7 @@ public class PostService {
     private final OrganizationClient organizationClient;
     private final SurveyService surveyService;
     private final AuditClient auditClient;
+    private final UserClient userClient;
 
     /* ── Create ───────────────────────────────────────────────────────────── */
 
@@ -92,10 +95,13 @@ public class PostService {
 
         Post saved = postRepository.save(builder.build());
 
+        String authorName = userClient.displayName(authorId);
+        String postCreatedDesc = "Post created by " + authorName +
+                " with visibility '" + resolvedVisibility + "'" +
+                (req.getTeamId() != null ? " in a team" : "") +
+                (req.getDepartmentId() != null ? " in a department" : "");
         auditClient.log(authorId, saved.getId(), "POST", PostAuditAction.POST_CREATED,
-                "Post created with visibility '" + resolvedVisibility + "'" +
-                (req.getTeamId() != null ? " in team '" + req.getTeamId() + "'" : "") +
-                (req.getDepartmentId() != null ? " in department '" + req.getDepartmentId() + "'" : ""),
+                postCreatedDesc,
                 true, null, toJson(saved));
 
         return toResponse(saved, authorId);
@@ -214,8 +220,13 @@ public class PostService {
 
         Post saved = postRepository.save(post);
 
+        String updaterName = userClient.displayName(requesterId);
+        boolean isOwnerUpdating = post.getAuthorId().equals(requesterId);
+        String updateDesc = isOwnerUpdating
+                ? "Post updated by its author " + updaterName
+                : "Post updated by " + updaterName + " (moderator action)";
         auditClient.log(requesterId, postId, "POST", PostAuditAction.POST_UPDATED,
-                "Post updated by user '" + requesterId + "'",
+                updateDesc,
                 true, oldJson, toJson(saved));
 
         return toResponse(saved, requesterId);
@@ -234,8 +245,9 @@ public class PostService {
         Post saved = postRepository.save(post);
 
         String action = wasPinned ? PostAuditAction.POST_UNPINNED : PostAuditAction.POST_PINNED;
+        String pinnerName = userClient.displayName(requesterId);
         auditClient.log(requesterId, postId, "POST", action,
-                "Post " + (wasPinned ? "unpinned" : "pinned") + " by user '" + requesterId + "'",
+                "Post " + (wasPinned ? "unpinned" : "pinned") + " by " + pinnerName,
                 true, null, null);
 
         return toResponse(saved, requesterId);
@@ -256,8 +268,16 @@ public class PostService {
         surveyVoteRepository.deleteByPostId(postId);
         postRepository.delete(post);
 
+        String deleterName = userClient.displayName(requesterId);
+        String postAuthorName = userClient.displayName(post.getAuthorId());
+        boolean deletedByOwner = post.getAuthorId().equals(requesterId);
+        String deleteDesc = deletedByOwner
+                ? "Post deleted by its author " + deleterName +
+                  " (originally posted on " + post.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) + ")"
+                : "Post by " + postAuthorName + " deleted by moderator " + deleterName +
+                  " (originally posted on " + post.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) + ")";
         auditClient.log(requesterId, postId, "POST", PostAuditAction.POST_DELETED,
-                "Post deleted by user '" + requesterId + "'",
+                deleteDesc,
                 true, oldJson, null);
     }
 
