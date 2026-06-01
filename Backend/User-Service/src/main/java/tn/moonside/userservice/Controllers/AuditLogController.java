@@ -34,7 +34,7 @@ public class AuditLogController {
      * Requires AUDIT_LOG_READ permission.
      */
     @GetMapping
-    @RequiresPermission(AppPermission.AUDIT_LOG_READ)
+    @RequiresPermission(AppPermission.AUDIT_LOG_VIEW)
     public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> getAll(
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size,
@@ -67,7 +67,7 @@ public class AuditLogController {
      * Requires AUDIT_LOG_STATS permission.
      */
     @GetMapping("/stats")
-    @RequiresPermission(AppPermission.AUDIT_LOG_STATS)
+    @RequiresPermission(AppPermission.AUDIT_LOG_VIEW_STATS)
     public ResponseEntity<ApiResponse<Map<String, Long>>> stats() {
         Map<String, Long> stats = Map.of(
                 "total",   auditLogService.countTotal(),

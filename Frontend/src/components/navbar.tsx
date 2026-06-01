@@ -7,7 +7,18 @@ import { useAuth } from '@/lib/auth-context'
 import { canAccessBackOffice, getFullName } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Heart, Mail, Bell, Search, LogOut, Settings, User, Shield, Compass } from 'lucide-react'
+import {
+  Home,
+  Mail,
+  Bell,
+  Search,
+  LogOut,
+  Settings,
+  User,
+  Shield,
+  Compass,
+  Bookmark,
+} from 'lucide-react'
 import { Notification } from '@/lib/types'
 
 export function Navbar() {
@@ -51,7 +62,7 @@ export function Navbar() {
   }
 
   const navLinks = [
-    { href: '/feed', label: 'Feed', icon: Heart },
+    { href: '/feed', label: 'Feed', icon: Home },
     { href: '/messages', label: 'Messages', icon: Mail },
     { href: '/discover', label: 'Discover', icon: Compass },
   ]
@@ -174,7 +185,7 @@ export function Navbar() {
                       className="border-primary h-10 w-10 rounded-full border-2 object-cover"
                     />
                   ) : (
-                    <div className="border-primary bg-primary/10 text-primary flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold">
+                    <div className="border-primary bg-primary text-primary-foreground flex h-10 w-10 items-center justify-center rounded-full border-2 text-sm font-bold">
                       {user.firstName?.[0]?.toUpperCase()}
                       {user.lastName?.[0]?.toUpperCase()}
                     </div>
@@ -210,6 +221,15 @@ export function Navbar() {
                         >
                           <Settings size={16} />
                           Settings
+                        </button>
+                      </Link>
+                      <Link href="/saved">
+                        <button
+                          onClick={() => setIsDropdownOpen(false)}
+                          className="text-foreground hover:bg-muted flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors"
+                        >
+                          <Bookmark size={16} />
+                          Saved Posts
                         </button>
                       </Link>
                       {canAccessBackOffice(user) && (

@@ -29,6 +29,10 @@ import {
   Crown,
   LogOut,
   ArrowUpRight,
+  FolderKanban,
+  Pencil,
+  Github,
+  ExternalLink,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -41,10 +45,16 @@ import { Button } from '@/components/ui/button'
 import {
   departmentApi,
   teamApi,
+  postApi,
+  projectApi,
   DepartmentResponse,
   TeamResponse,
   UserTeamResponse,
   UserResponse,
+  PostResponse,
+  ProjectResponse,
+  ProjectRequest,
+  ProjectStatus,
   userApi,
 } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
@@ -52,7 +62,10 @@ import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
 import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
-import { Post, User, hasRole } from '@/lib/types'
+import { User, hasRole } from '@/lib/types'
+import { UsersModal } from '@/components/users-modal'
+import { PostViewModal } from '@/components/post-view-modal'
+import { usePostFeed } from '@/hooks/use-post-feed'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -126,11 +139,17 @@ function TeamSidebarCard({
   setMembersTeam,
 }: TeamSidebarCardProps) {
   const canView = canViewTeamMembers(user, team, department, userTeamIds)
+  const isMember = userTeamIds.includes(team.id)
+
   return (
     <div className="group relative">
       <Link href={`/team/${team.id}`}>
         <div
-          className="hover:bg-muted border-border/50 block rounded-lg border p-3 transition-colors"
+          className={`hover:bg-muted block rounded-lg border p-3 transition-colors ${
+            isMember
+              ? 'border-green-500/50 bg-green-500/5 hover:bg-green-500/10'
+              : 'border-border/50'
+          }`}
           title={team.name}
         >
           <div className="flex items-center gap-2">
@@ -146,9 +165,17 @@ function TeamSidebarCard({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <h4 className="text-foreground line-clamp-1 text-sm font-medium" title={team.name}>
-                {team.name}
-              </h4>
+              <div className="flex items-center gap-2">
+                <h4 className="text-foreground line-clamp-1 text-sm font-medium" title={team.name}>
+                  {team.name}
+                </h4>
+                {isMember && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-green-600 dark:text-green-400">
+                    <CheckCircle2 className="h-2.5 w-2.5" />
+                    Member
+                  </span>
+                )}
+              </div>
               <button
                 onClick={(e) => {
                   e.preventDefault()
@@ -176,7 +203,7 @@ function TeamSidebarCard({
 
 // ── Manage Department Panel ───────────────────────────────────────────────────
 
-type DeptSection = 'general' | 'teams' | 'settings'
+type DeptSection = 'general' | 'teams' | 'projects' | 'settings'
 
 interface ManageDeptPanelProps {
   department: DepartmentResponse
@@ -206,12 +233,13 @@ function ManageDeptPanel({
   const navItems: { id: DeptSection; label: string; icon: React.ReactNode }[] = [
     { id: 'general', label: 'General', icon: <LayoutDashboard className="h-4 w-4" /> },
     { id: 'teams', label: 'Teams & Members', icon: <Layers className="h-4 w-4" /> },
+    { id: 'projects', label: 'Projects', icon: <FolderKanban className="h-4 w-4" /> },
     { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
   ]
 
   return (
     <div className="bg-background fixed inset-0 z-50 flex">
-      {/* Left Sidebar */}
+      {/* Left Sidebar - Fixed width */}
       <aside className="bg-muted/30 flex w-60 flex-shrink-0 flex-col border-r">
         <div className="flex items-center gap-3 border-b px-5 py-4">
           <div className="bg-muted flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border">
@@ -264,24 +292,31 @@ function ManageDeptPanel({
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Main Content - Now using full width with responsive max-width for better readability */}
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-2xl px-8 py-8">
-          {section === 'general' && (
-            <DeptGeneralSection department={department} onSaved={onSaved} />
-          )}
-          {section === 'teams' && (
-            <DeptTeamsSection
-              department={department}
-              teams={teams}
-              user={user}
-              onTeamUpdated={onTeamUpdated}
-              onTeamDeleted={onTeamDeleted}
-              onTeamCreated={onTeamCreated}
-              onMemberChange={onMemberChange}
-            />
-          )}
-          {section === 'settings' && <DeptSettingsSection department={department} />}
+        {/* REMOVED: mx-auto max-w-2xl */}
+        <div className="w-full px-4 py-8 md:px-8 lg:px-12 xl:px-16">
+          {/* For very large screens, we add a max-width to maintain readability */}
+          <div className="mx-auto w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl">
+            {section === 'general' && (
+              <DeptGeneralSection department={department} onSaved={onSaved} />
+            )}
+            {section === 'teams' && (
+              <DeptTeamsSection
+                department={department}
+                teams={teams}
+                user={user}
+                onTeamUpdated={onTeamUpdated}
+                onTeamDeleted={onTeamDeleted}
+                onTeamCreated={onTeamCreated}
+                onMemberChange={onMemberChange}
+              />
+            )}
+            {section === 'projects' && (
+              <DeptProjectsSection department={department} teams={teams} user={user} />
+            )}
+            {section === 'settings' && <DeptSettingsSection department={department} />}
+          </div>
         </div>
       </main>
     </div>
@@ -1143,6 +1178,435 @@ function TeamMembersPanel({
   )
 }
 
+// ── Dept Projects Section ─────────────────────────────────────────────────────
+
+const DEPT_PROJECT_STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
+  { value: 'PLANNING', label: 'Planning' },
+  { value: 'IN_PROGRESS', label: 'In Progress' },
+  { value: 'ON_HOLD', label: 'On Hold' },
+  { value: 'COMPLETED', label: 'Completed' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'ARCHIVED', label: 'Archived' },
+]
+
+const DEPT_PROJECT_STATUS_CONFIG: Record<
+  ProjectStatus,
+  { label: string; color: string; bg: string }
+> = {
+  PLANNING: { label: 'Planning', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  IN_PROGRESS: { label: 'In Progress', color: 'text-amber-500', bg: 'bg-amber-500/10' },
+  ON_HOLD: { label: 'On Hold', color: 'text-orange-500', bg: 'bg-orange-500/10' },
+  COMPLETED: { label: 'Completed', color: 'text-green-600', bg: 'bg-green-500/10' },
+  CANCELLED: { label: 'Cancelled', color: 'text-destructive', bg: 'bg-destructive/10' },
+  ARCHIVED: { label: 'Archived', color: 'text-muted-foreground', bg: 'bg-muted' },
+}
+
+function DeptProjectsSection({
+  department,
+  teams,
+  user,
+}: {
+  department: DepartmentResponse
+  teams: TeamResponse[]
+  user: User
+}) {
+  const [projects, setProjects] = useState<ProjectResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingProject, setEditingProject] = useState<ProjectResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Form state
+  const [formName, setFormName] = useState('')
+  const [formDescription, setFormDescription] = useState('')
+  const [formStatus, setFormStatus] = useState<ProjectStatus>('PLANNING')
+  const [formTeamId, setFormTeamId] = useState(teams[0]?.id ?? '')
+  const [formTechnologies, setFormTechnologies] = useState('')
+  const [formRepoUrl, setFormRepoUrl] = useState('')
+  const [formProjectUrl, setFormProjectUrl] = useState('')
+  const [formStartDate, setFormStartDate] = useState('')
+  const [formEndDate, setFormEndDate] = useState('')
+
+  const canManage =
+    hasRole(user, 'CEO') || (hasRole(user, 'DEPARTMENT_LEADER') && department.managerId === user.id)
+
+  useEffect(() => {
+    projectApi
+      .getByDepartment(department.id)
+      .then(setProjects)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [department.id])
+
+  function openCreate() {
+    setEditingProject(null)
+    setFormName('')
+    setFormDescription('')
+    setFormStatus('PLANNING')
+    setFormTeamId(teams[0]?.id ?? '')
+    setFormTechnologies('')
+    setFormRepoUrl('')
+    setFormProjectUrl('')
+    setFormStartDate('')
+    setFormEndDate('')
+    setError(null)
+    setShowForm(true)
+  }
+
+  function openEdit(p: ProjectResponse) {
+    setEditingProject(p)
+    setFormName(p.name)
+    setFormDescription(p.description ?? '')
+    setFormStatus(p.status)
+    // pre-select the first team of this project that belongs to this dept
+    const matchingTeam = p.teams?.find((t) => teams.some((dt) => dt.id === t.id))
+    setFormTeamId(matchingTeam?.id ?? teams[0]?.id ?? '')
+    setFormTechnologies((p.technologies ?? []).join(', '))
+    setFormRepoUrl(p.repositoryUrl ?? '')
+    setFormProjectUrl(p.projectUrl ?? '')
+    setFormStartDate(p.startDate ?? '')
+    setFormEndDate(p.endDate ?? '')
+    setError(null)
+    setShowForm(true)
+  }
+
+  async function handleSave() {
+    if (!formName.trim() || !formTeamId) return
+    setSaving(true)
+    setError(null)
+    const payload: ProjectRequest = {
+      name: formName.trim(),
+      description: formDescription.trim() || undefined,
+      status: formStatus,
+      technologies: formTechnologies
+        ? formTechnologies
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : [],
+      repositoryUrl: formRepoUrl.trim() || undefined,
+      projectUrl: formProjectUrl.trim() || undefined,
+      startDate: formStartDate || undefined,
+      endDate: formEndDate || undefined,
+      teamIds: [formTeamId],
+    }
+    try {
+      if (editingProject) {
+        const updated = await projectApi.update(editingProject.id, payload)
+        setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      } else {
+        const created = await projectApi.createForDepartment(department.id, payload)
+        setProjects((prev) => [created, ...prev])
+      }
+      setShowForm(false)
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to save project')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete(p: ProjectResponse) {
+    setDeletingId(p.id)
+    try {
+      await projectApi.delete(p.id)
+      setProjects((prev) => prev.filter((x) => x.id !== p.id))
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to delete project')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-foreground text-2xl font-bold">Projects</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Create and manage projects for teams in this department.
+          </p>
+        </div>
+        {canManage && !showForm && teams.length > 0 && (
+          <button
+            onClick={openCreate}
+            className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90"
+          >
+            <Plus className="h-4 w-4" />
+            New Project
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-destructive/10 text-destructive border-destructive/20 rounded-lg border px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
+
+      {teams.length === 0 && (
+        <div className="rounded-xl border border-dashed py-10 text-center">
+          <Layers className="text-muted-foreground/40 mx-auto mb-3 h-8 w-8" />
+          <p className="text-foreground text-sm font-medium">No teams in this department yet</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            Create a team first before adding projects.
+          </p>
+        </div>
+      )}
+
+      {/* Create / Edit form */}
+      {showForm && teams.length > 0 && (
+        <div className="bg-muted/20 space-y-4 rounded-xl border p-5">
+          <h3 className="text-foreground text-sm font-semibold">
+            {editingProject ? 'Edit Project' : 'New Project'}
+          </h3>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Project Name *
+              </label>
+              <input
+                type="text"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                placeholder="e.g. Customer Portal v2"
+                maxLength={120}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="text-foreground mb-1 block text-xs font-medium">Description</label>
+              <textarea
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                rows={3}
+                maxLength={1000}
+                placeholder="What is this project about?"
+                className="border-border bg-background text-foreground focus:ring-primary w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Assign to Team *
+              </label>
+              <select
+                value={formTeamId}
+                onChange={(e) => setFormTeamId(e.target.value)}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              >
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">Status</label>
+              <select
+                value={formStatus}
+                onChange={(e) => setFormStatus(e.target.value as ProjectStatus)}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              >
+                {DEPT_PROJECT_STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Technologies (comma-separated)
+              </label>
+              <input
+                type="text"
+                value={formTechnologies}
+                onChange={(e) => setFormTechnologies(e.target.value)}
+                placeholder="e.g. React, Spring Boot, MongoDB"
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Repository URL
+              </label>
+              <input
+                type="url"
+                value={formRepoUrl}
+                onChange={(e) => setFormRepoUrl(e.target.value)}
+                placeholder="https://github.com/org/repo"
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">Project URL</label>
+              <input
+                type="url"
+                value={formProjectUrl}
+                onChange={(e) => setFormProjectUrl(e.target.value)}
+                placeholder="https://myapp.example.com"
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">Start Date</label>
+              <input
+                type="date"
+                value={formStartDate}
+                onChange={(e) => setFormStartDate(e.target.value)}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">End Date</label>
+              <input
+                type="date"
+                value={formEndDate}
+                onChange={(e) => setFormEndDate(e.target.value)}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 border-t pt-3">
+            <button
+              onClick={() => setShowForm(false)}
+              disabled={saving}
+              className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !formName.trim() || !formTeamId}
+              className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {saving ? 'Saving…' : editingProject ? 'Save Changes' : 'Create Project'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Project list */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+        </div>
+      ) : projects.length === 0 && !showForm && teams.length > 0 ? (
+        <div className="rounded-xl border border-dashed py-14 text-center">
+          <FolderKanban className="text-muted-foreground/40 mx-auto mb-3 h-10 w-10" />
+          <p className="text-foreground text-sm font-medium">No projects yet</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            {canManage
+              ? 'Click "New Project" to create one for a team.'
+              : 'No projects assigned to teams in this department.'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {projects.map((p) => {
+            const cfg = DEPT_PROJECT_STATUS_CONFIG[p.status] ?? DEPT_PROJECT_STATUS_CONFIG.PLANNING
+            const assignedTeam = p.teams?.find((t) => teams.some((dt) => dt.id === t.id))
+            return (
+              <div
+                key={p.id}
+                className="bg-background flex items-start gap-4 rounded-xl border p-4"
+              >
+                <div className="bg-muted mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border">
+                  {p.avatarUrl ? (
+                    <img
+                      src={p.avatarUrl}
+                      alt={p.name}
+                      className="h-full w-full rounded-lg object-cover"
+                    />
+                  ) : (
+                    <FolderKanban className="text-muted-foreground h-4 w-4" />
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-foreground text-sm leading-tight font-semibold">{p.name}</p>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.color}`}
+                    >
+                      {cfg.label}
+                    </span>
+                    {assignedTeam && (
+                      <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs">
+                        {assignedTeam.name}
+                      </span>
+                    )}
+                  </div>
+                  {p.description && (
+                    <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
+                      {p.description}
+                    </p>
+                  )}
+                  {p.technologies && p.technologies.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {p.technologies.slice(0, 4).map((t) => (
+                        <span
+                          key={t}
+                          className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                      {p.technologies.length > 4 && (
+                        <span className="text-muted-foreground text-xs">
+                          +{p.technologies.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {canManage && (
+                  <div className="flex flex-shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => openEdit(p)}
+                      className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition-colors"
+                      title="Edit"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p)}
+                      disabled={deletingId === p.id}
+                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg p-1.5 transition-colors disabled:opacity-50"
+                      title="Delete"
+                    >
+                      {deletingId === p.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Dept Settings Section ─────────────────────────────────────────────────────
 
 function DeptSettingsSection({ department }: { department: DepartmentResponse }) {
@@ -1150,6 +1614,7 @@ function DeptSettingsSection({ department }: { department: DepartmentResponse })
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [showFollowersModal, setShowFollowersModal] = useState(false)
 
   const isDirty = membersPublic !== (department.membersPublic ?? true)
 
@@ -1172,110 +1637,136 @@ function DeptSettingsSection({ department }: { department: DepartmentResponse })
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-foreground text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground mt-1 text-sm">Department configuration and info.</p>
-      </div>
-      <div className="divide-y rounded-xl border">
-        {/* Status */}
-        <div className="space-y-2 p-5">
-          <div className="flex items-center gap-2">
-            <Eye className="text-muted-foreground h-4 w-4" />
-            <h2 className="text-foreground text-sm font-semibold">Status</h2>
-          </div>
-          <p className="text-muted-foreground text-xs">
-            The current activation state of this department.
-          </p>
-          <div className="mt-2 flex items-center gap-2">
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${department.isActive ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}
-            >
-              <span
-                className={`h-1.5 w-1.5 rounded-full ${department.isActive ? 'bg-green-500' : 'bg-muted-foreground'}`}
-              />
-              {department.isActive ? 'Active' : 'Inactive'}
-            </span>
-          </div>
+    <>
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-foreground text-2xl font-bold">Settings</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Department configuration and info.</p>
         </div>
-
-        {/* Member Visibility */}
-        <div className="space-y-3 p-5">
-          <div className="flex items-center gap-2">
-            <Users className="text-muted-foreground h-4 w-4" />
-            <h2 className="text-foreground text-sm font-semibold">Member Visibility</h2>
-          </div>
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            Control who can see the member lists of teams under this department.
-          </p>
-          <label className="hover:bg-muted/30 flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors">
-            <div className="relative mt-0.5 flex-shrink-0">
-              <input
-                type="checkbox"
-                checked={membersPublic}
-                onChange={(e) => setMembersPublic(e.target.checked)}
-                className="peer sr-only"
-              />
-              <div
-                className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${membersPublic ? 'border-primary bg-primary' : 'border-muted-foreground bg-background'}`}
-              >
-                {membersPublic && (
-                  <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none">
-                    <path
-                      d="M2 6l3 3 5-5"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                )}
-              </div>
+        <div className="divide-y rounded-xl border">
+          {/* Status */}
+          <div className="space-y-2 p-5">
+            <div className="flex items-center gap-2">
+              <Eye className="text-muted-foreground h-4 w-4" />
+              <h2 className="text-foreground text-sm font-semibold">Status</h2>
             </div>
-            <div className="min-w-0">
-              <p className="text-foreground text-sm font-medium">
-                Allow all users to view team members
-              </p>
-              <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
-                {membersPublic
-                  ? 'Any authenticated user can open a team member list in this department.'
-                  : 'Only department members, Team Leaders, and the Department Leader can view team member lists.'}
-              </p>
-            </div>
-          </label>
-
-          {saveError && <p className="text-destructive text-xs">{saveError}</p>}
-          {saveSuccess && (
-            <p className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-              <CheckCircle2 className="h-3.5 w-3.5" /> Setting saved successfully.
+            <p className="text-muted-foreground text-xs">
+              The current activation state of this department.
             </p>
-          )}
+            <div className="mt-2 flex items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${department.isActive ? 'bg-green-500/10 text-green-600 dark:text-green-400' : 'bg-muted text-muted-foreground'}`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${department.isActive ? 'bg-green-500' : 'bg-muted-foreground'}`}
+                />
+                {department.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+          </div>
 
-          <div className="flex justify-end">
+          {/* Member Visibility */}
+          <div className="space-y-3 p-5">
+            <div className="flex items-center gap-2">
+              <Users className="text-muted-foreground h-4 w-4" />
+              <h2 className="text-foreground text-sm font-semibold">Member Visibility</h2>
+            </div>
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              Control who can see the member lists of teams under this department.
+            </p>
+            <label className="hover:bg-muted/30 flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors">
+              <div className="relative mt-0.5 flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={membersPublic}
+                  onChange={(e) => setMembersPublic(e.target.checked)}
+                  className="peer sr-only"
+                />
+                <div
+                  className={`flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${membersPublic ? 'border-primary bg-primary' : 'border-muted-foreground bg-background'}`}
+                >
+                  {membersPublic && (
+                    <svg className="h-3 w-3 text-white" viewBox="0 0 12 12" fill="none">
+                      <path
+                        d="M2 6l3 3 5-5"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <div className="min-w-0">
+                <p className="text-foreground text-sm font-medium">
+                  Allow all users to view team members
+                </p>
+                <p className="text-muted-foreground mt-0.5 text-xs leading-relaxed">
+                  {membersPublic
+                    ? 'Any authenticated user can open a team member list in this department.'
+                    : 'Only department members, Team Leaders, and the Department Leader can view team member lists.'}
+                </p>
+              </div>
+            </label>
+
+            {saveError && <p className="text-destructive text-xs">{saveError}</p>}
+            {saveSuccess && (
+              <p className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Setting saved successfully.
+              </p>
+            )}
+
+            <div className="flex justify-end">
+              <button
+                onClick={handleSave}
+                disabled={!isDirty || saving}
+                className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="space-y-1 p-5">
+            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              Teams
+            </p>
+            <p className="text-foreground text-2xl font-bold">{department.teamCount}</p>
+          </div>
+          <div className="space-y-1 p-5">
+            <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+              Followers
+            </p>
             <button
-              onClick={handleSave}
-              disabled={!isDirty || saving}
-              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => setShowFollowersModal(true)}
+              className="text-foreground hover:text-primary text-2xl font-bold transition-colors hover:underline"
             >
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              {saving ? 'Saving…' : 'Save'}
+              {department.followerCount}
             </button>
           </div>
         </div>
-
-        {/* Stats */}
-        <div className="space-y-1 p-5">
-          <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">Teams</p>
-          <p className="text-foreground text-2xl font-bold">{department.teamCount}</p>
-        </div>
-        <div className="space-y-1 p-5">
-          <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            Followers
-          </p>
-          <p className="text-foreground text-2xl font-bold">{department.followerCount}</p>
-        </div>
       </div>
-    </div>
+
+      <UsersModal
+        open={showFollowersModal}
+        onOpenChange={setShowFollowersModal}
+        title="Followers"
+        fetchUsers={async () => {
+          const users = await departmentApi.getFollowers(department.id)
+          return users.map((u) => ({
+            id: u.id,
+            firstName: u.firstName,
+            lastName: u.lastName,
+            email: u.email,
+            avatar: u.avatar,
+            jobTitle: u.jobTitle,
+          }))
+        }}
+      />
+    </>
   )
 }
 
@@ -1507,7 +1998,7 @@ function TeamMembersModal({ team, canKick, onClose, onMemberKicked }: TeamMember
   )
 }
 
-// ── Page ───────────────────────────────────────────��──────────────────────────
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function DepartmentFeedPage() {
   const params = useParams()
@@ -1516,14 +2007,32 @@ export default function DepartmentFeedPage() {
 
   const [department, setDepartment] = useState<DepartmentResponse | null>(null)
   const [teams, setTeams] = useState<TeamResponse[]>([])
-  const [posts, setPosts] = useState<Post[]>([])
-  const [usersMap] = useState<Record<string, User>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [manageOpen, setManageOpen] = useState(false)
   const [membersTeam, setMembersTeam] = useState<TeamResponse | null>(null)
   const [followLoading, setFollowLoading] = useState(false)
   const [userTeamIds, setUserTeamIds] = useState<string[]>([])
+  const [showFollowersModal, setShowFollowersModal] = useState(false)
+  // Whether the current user is a member of this department (via any of its teams)
+  const [isUserDeptMember, setIsUserDeptMember] = useState(false)
+  const [viewPostId, setViewPostId] = useState<string | null>(null)
+
+  // ── Post feed (paginated, infinite scroll) ────────────────────────────────
+  const {
+    posts,
+    usersMap,
+    loading: postsLoading,
+    loadingMore: postsLoadingMore,
+    hasMore: postsHasMore,
+    prependPost,
+    removePost,
+    updatePost,
+    sentinelRef,
+  } = usePostFeed({
+    scope: { type: 'department', departmentId: deptId },
+    currentUser: user,
+  })
 
   useEffect(() => {
     if (!deptId) return
@@ -1536,16 +2045,33 @@ export default function DepartmentFeedPage() {
         ])
         setDepartment(dept)
         setTeams(allTeams)
-        // derive which teams the current user is a member of (lead counts too)
+
+        // CEO and dept manager are always considered members for posting purposes
         if (user) {
-          setUserTeamIds(allTeams.filter((t) => t.leadId === user.id).map((t) => t.id))
-        }
-        const stored = localStorage.getItem(`dept_posts_${deptId}`)
-        if (stored) {
-          try {
-            setPosts(JSON.parse(stored))
-          } catch {
-            /* ignore */
+          const isCeo = hasRole(user, 'CEO')
+          const isDeptManager = dept.managerId === user.id
+
+          if (isCeo || isDeptManager) {
+            setUserTeamIds(allTeams.map((t) => t.id))
+            setIsUserDeptMember(true)
+          } else {
+            // Fetch actual team memberships to derive which teams the user belongs to
+            const membershipResults = await Promise.allSettled(
+              allTeams.map((t) =>
+                teamApi.getMembers(t.id).then((members: any[]) => ({
+                  teamId: t.id,
+                  isMember: members.some((m) => m.userId === user.id) || t.leadId === user.id,
+                }))
+              )
+            )
+            const memberTeamIds = membershipResults
+              .filter((r) => r.status === 'fulfilled' && r.value.isMember)
+              .map(
+                (r) =>
+                  (r as PromiseFulfilledResult<{ teamId: string; isMember: boolean }>).value.teamId
+              )
+            setUserTeamIds(memberTeamIds)
+            setIsUserDeptMember(memberTeamIds.length > 0)
           }
         }
       } catch (e: any) {
@@ -1555,35 +2081,23 @@ export default function DepartmentFeedPage() {
       }
     }
     loadData()
-  }, [deptId])
+  }, [deptId, user])
 
-  const handlePostCreate = (content: string) => {
+  const handlePostCreate = (post: PostResponse) => {
     if (!user) return
-    const newPost: Post = {
-      id: Date.now().toString(),
-      authorId: user.id,
-      content,
-      timestamp: new Date(),
-      likes: [],
-      comments: [],
-    }
-    const updated = [newPost, ...posts]
-    setPosts(updated)
-    localStorage.setItem(`dept_posts_${deptId}`, JSON.stringify(updated))
+    prependPost(post)
   }
 
-  const handleLike = (postId: string) => {
-    if (!user) return
-    const updated = posts.map((post) => {
-      if (post.id !== postId) return post
-      const hasLiked = post.likes.includes(user.id)
-      return {
-        ...post,
-        likes: hasLiked ? post.likes.filter((id) => id !== user.id) : [...post.likes, user.id],
-      }
-    })
-    setPosts(updated)
-    localStorage.setItem(`dept_posts_${deptId}`, JSON.stringify(updated))
+  const handlePostDelete = (postId: string) => {
+    removePost(postId)
+  }
+
+  const handlePostUpdate = (updated: PostResponse) => {
+    updatePost(updated)
+  }
+
+  const handleLike = () => {
+    // Like functionality is handled by PostCard component via API calls
   }
 
   const handleMemberKicked = (teamId: string) => {
@@ -1641,105 +2155,50 @@ export default function DepartmentFeedPage() {
 
   return (
     <AuthLayout>
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Cover Banner */}
-        <div className="relative mb-0 h-56 w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-400 to-slate-600">
-          {department.bannerUrl ? (
-            <img
-              src={department.bannerUrl}
-              alt={department.name}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <div className="h-full w-full bg-gradient-to-br from-slate-400 to-slate-600" />
-          )}
-          <div className="absolute inset-0 bg-black/20" />
-        </div>
-
-        {/* Department Header */}
-        <div className="bg-background mb-8 flex items-end gap-6 px-2">
-          <div className="relative -mt-16 flex-shrink-0">
-            <div className="bg-muted flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 border-white shadow-lg dark:border-slate-800">
-              {department.avatarUrl ? (
-                <img
-                  src={department.avatarUrl}
-                  alt={department.name}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <Building2 className="text-foreground h-16 w-16" />
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-1 items-end justify-between pt-4 pb-2">
-            <div>
-              <h1 className="text-foreground text-3xl font-bold">{department.name}</h1>
-              {department.description && (
-                <p className="text-muted-foreground mt-1 text-sm">{department.description}</p>
-              )}
-              {department.manager && (
-                <p className="text-muted-foreground mt-2 text-xs">
-                  Led by {department.manager.firstName} {department.manager.lastName}
-                </p>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              {/* Follow / Unfollow */}
-              <button
-                onClick={handleFollow}
-                disabled={followLoading}
-                className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
-                  department.isFollowing
-                    ? 'border-primary text-primary hover:bg-primary/10'
-                    : 'border-border text-foreground hover:bg-muted'
-                }`}
-              >
-                {followLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : department.isFollowing ? (
-                  <BellOff className="h-4 w-4" />
-                ) : (
-                  <Bell className="h-4 w-4" />
-                )}
-                {department.isFollowing ? 'Following' : 'Follow'}
-                {department.followerCount > 0 && (
-                  <span className="text-muted-foreground text-xs">
-                    ({department.followerCount})
-                  </span>
-                )}
-              </button>
-
-              {/* Manage Department */}
-              {showManageButton && (
-                <button
-                  onClick={() => setManageOpen(true)}
-                  className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
-                >
-                  <Settings className="h-4 w-4" />
-                  Manage Department
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Grid */}
-        <div className="grid gap-8 lg:grid-cols-4">
-          {teams.length > 0 && (
-            <div className="lg:col-span-1">
-              <div className="border-border bg-background sticky top-4 rounded-lg border p-4">
+      {/* REMOVED: mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8 */}
+      <div className="w-full px-4 py-8 sm:px-6 lg:px-8">
+        {/* Responsive Grid Layout - Updated to use full width with better proportions */}
+        <div className="flex flex-col gap-6 lg:flex-row">
+          {/* Left Column - Teams Section */}
+          <div className="order-1 w-full lg:order-1 lg:w-1/5 lg:flex-shrink-0">
+            {teams.length > 0 && (
+              <div className="border-border bg-background z-10 mb-6 rounded-lg border p-4 lg:sticky lg:top-20">
                 <h3 className="text-foreground mb-4 text-lg font-semibold">Teams</h3>
 
+                {/* Joined Teams Section */}
+                {teams.filter((t) => userTeamIds.includes(t.id)).length > 0 && (
+                  <div className="mb-6">
+                    <h4 className="mb-3 flex items-center gap-1.5 text-xs font-semibold tracking-wider text-green-600 uppercase dark:text-green-400">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Your Teams
+                    </h4>
+                    <div className="space-y-2">
+                      {teams
+                        .filter((t) => userTeamIds.includes(t.id))
+                        .map((team) => (
+                          <TeamSidebarCard
+                            key={team.id}
+                            team={team}
+                            department={department}
+                            user={user}
+                            userTeamIds={userTeamIds}
+                            setMembersTeam={setMembersTeam}
+                          />
+                        ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Public Teams Section */}
-                {teams.filter((t) => t.teamVisibility === 'PUBLIC').length > 0 && (
+                {teams.filter((t) => t.teamVisibility === 'PUBLIC' && !userTeamIds.includes(t.id))
+                  .length > 0 && (
                   <div className="mb-6">
                     <h4 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wider uppercase">
                       🔓 Public Teams
                     </h4>
                     <div className="space-y-2">
                       {teams
-                        .filter((t) => t.teamVisibility === 'PUBLIC')
+                        .filter((t) => t.teamVisibility === 'PUBLIC' && !userTeamIds.includes(t.id))
                         .map((team) => (
                           <TeamSidebarCard
                             key={team.id}
@@ -1755,14 +2214,17 @@ export default function DepartmentFeedPage() {
                 )}
 
                 {/* Private Teams Section */}
-                {teams.filter((t) => t.teamVisibility === 'PRIVATE').length > 0 && (
+                {teams.filter((t) => t.teamVisibility === 'PRIVATE' && !userTeamIds.includes(t.id))
+                  .length > 0 && (
                   <div>
                     <h4 className="text-muted-foreground mb-3 text-xs font-semibold tracking-wider uppercase">
                       🔒 Private Teams
                     </h4>
                     <div className="space-y-2">
                       {teams
-                        .filter((t) => t.teamVisibility === 'PRIVATE')
+                        .filter(
+                          (t) => t.teamVisibility === 'PRIVATE' && !userTeamIds.includes(t.id)
+                        )
                         .map((team) => (
                           <TeamSidebarCard
                             key={team.id}
@@ -1776,40 +2238,273 @@ export default function DepartmentFeedPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Show message if no teams available */}
+                {teams.length === 0 && (
+                  <p className="text-muted-foreground py-4 text-center text-sm">
+                    No teams in this department yet.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Middle Column - Main Content - Updated to use more space on large screens */}
+          <div className="order-2 w-full lg:order-2 lg:min-w-0 lg:flex-1">
+            {/* Cover Banner */}
+            <div className="relative mb-0 h-56 w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-400 to-slate-600">
+              {department.bannerUrl ? (
+                <img
+                  src={department.bannerUrl}
+                  alt={department.name}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="h-full w-full bg-gradient-to-br from-slate-400 to-slate-600" />
+              )}
+              <div className="absolute inset-0 bg-black/20" />
+            </div>
+
+            {/* Department Header */}
+            <div className="bg-background border-border border-b py-8">
+              <div className="px-4 sm:px-6 lg:px-8">
+                <div className="flex flex-col gap-6 sm:flex-row sm:gap-8">
+                  {/* Avatar Section */}
+                  <div className="flex flex-shrink-0 justify-center sm:justify-start">
+                    <div className="bg-muted border-background flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 shadow-lg dark:border-slate-900">
+                      {department.avatarUrl ? (
+                        <img
+                          src={department.avatarUrl}
+                          alt={department.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Building2 className="text-muted-foreground h-16 w-16" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Info Section */}
+                  <div className="flex flex-1 flex-col justify-center gap-3">
+                    <div>
+                      <h1 className="text-foreground text-3xl font-bold">{department.name}</h1>
+                      {department.description && (
+                        <p className="text-muted-foreground mt-2 line-clamp-2 text-sm">
+                          {department.description}
+                        </p>
+                      )}
+                      {department.manager && (
+                        <p className="text-muted-foreground mt-2 text-xs">
+                          Led by{' '}
+                          <span className="text-foreground font-medium">
+                            {department.manager.firstName} {department.manager.lastName}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex flex-wrap items-center gap-2 pt-2">
+                      {/* Follow / Unfollow */}
+                      <button
+                        onClick={handleFollow}
+                        disabled={followLoading}
+                        className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all disabled:opacity-60 ${
+                          department.isFollowing
+                            ? 'border-primary bg-primary/5 text-primary hover:bg-primary/10'
+                            : 'border-border text-foreground hover:bg-muted'
+                        }`}
+                      >
+                        {followLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : department.isFollowing ? (
+                          <BellOff className="h-4 w-4" />
+                        ) : (
+                          <Bell className="h-4 w-4" />
+                        )}
+                        {department.isFollowing ? 'Following' : 'Follow'}
+                        {department.followerCount > 0 && (
+                          <span className="text-muted-foreground text-xs">
+                            ({department.followerCount})
+                          </span>
+                        )}
+                      </button>
+
+                      {/* Manage Department */}
+                      {showManageButton && (
+                        <button
+                          onClick={() => setManageOpen(true)}
+                          className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all hover:opacity-85"
+                        >
+                          <Settings className="h-4 w-4" />
+                          <span className="hidden sm:inline">Manage Department</span>
+                          <span className="sm:hidden">Manage</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          )}
 
-          <div className={`space-y-6 ${teams.length > 0 ? 'lg:col-span-3' : 'lg:col-span-4'}`}>
-            <CreatePost user={user} onPostCreate={handlePostCreate} />
+            {/* Followers modal */}
+            <UsersModal
+              open={showFollowersModal}
+              onOpenChange={setShowFollowersModal}
+              title="Followers"
+              fetchUsers={async () => {
+                const users = await departmentApi.getFollowers(deptId)
+                return users.map((u) => ({
+                  id: u.id,
+                  firstName: u.firstName,
+                  lastName: u.lastName,
+                  email: u.email,
+                  avatar: u.avatar,
+                  jobTitle: u.jobTitle,
+                }))
+              }}
+            />
+
+            {/* Create Post and Feed */}
             <div className="space-y-6">
-              {posts.length === 0 ? (
-                <div className="py-12 text-center">
-                  <div className="mb-4 text-6xl">📝</div>
-                  <h2 className="text-foreground mb-2 text-xl font-semibold">No posts yet</h2>
-                  <p className="text-muted-foreground">
-                    Be the first to share something with your department!
-                  </p>
-                </div>
-              ) : (
-                posts.map((post, index) => (
-                  <div
-                    key={post.id}
-                    style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
-                  >
-                    <PostCard
-                      post={post}
-                      currentUserId={user.id}
-                      onLike={handleLike}
-                      usersMap={usersMap}
-                    />
+              <CreatePost
+                user={user}
+                onPostCreate={handlePostCreate}
+                departmentId={deptId}
+                isMember={isUserDeptMember}
+              />
+              <div className="space-y-6">
+                {postsLoading ? (
+                  <div className="flex flex-col items-center gap-4 py-16">
+                    <Loader2 className="text-primary h-8 w-8 animate-spin" />
+                    <p className="text-muted-foreground text-sm">Loading posts…</p>
                   </div>
-                ))
-              )}
+                ) : posts.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <div className="mb-4 text-6xl">📝</div>
+                    <h2 className="text-foreground mb-2 text-xl font-semibold">No posts yet</h2>
+                    <p className="text-muted-foreground">
+                      Be the first to share something with your department!
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {posts.map((post, index) => (
+                      <div
+                        key={post.id}
+                        style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
+                      >
+                        <PostCard
+                          post={post}
+                          currentUserId={user.id}
+                          usersMap={usersMap}
+                          onDelete={handlePostDelete}
+                          onUpdate={handlePostUpdate}
+                          currentLeadTeamId={null}
+                          currentManagedDeptId={
+                            hasRole(user, 'CEO') ||
+                            (hasRole(user, 'DEPARTMENT_LEADER') && department.managerId === user.id)
+                              ? deptId
+                              : null
+                          }
+                        />
+                      </div>
+                    ))}
+
+                    {/* Infinite scroll sentinel */}
+                    {postsHasMore && (
+                      <div ref={sentinelRef} className="flex justify-center py-6">
+                        {postsLoadingMore && (
+                          <div className="flex items-center gap-2">
+                            <Loader2 size={18} className="text-muted-foreground animate-spin" />
+                            <span className="text-muted-foreground text-sm">
+                              Loading more posts…
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
+          </div>
+
+          {/* Right Column - Pinned Posts */}
+          <div className="order-3 hidden lg:block lg:w-1/5 lg:flex-shrink-0">
+            {posts.filter((p) => p.isPinned).length > 0 && (
+              <div className="border-border bg-background sticky top-20 rounded-lg border p-4">
+                <div className="mb-4 flex items-center gap-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-primary"
+                  >
+                    <line x1="12" y1="17" x2="12" y2="22" />
+                    <path d="M5 17H19V13L21 8H3L5 13V17Z" />
+                    <line x1="12" y1="8" x2="12" y2="3" />
+                  </svg>
+                  <h3 className="text-foreground text-sm font-semibold">Pinned Posts</h3>
+                </div>
+                <div className="space-y-3">
+                  {posts
+                    .filter((p) => p.isPinned)
+                    .map((post) => {
+                      const author =
+                        usersMap[post.authorId] ?? (user?.id === post.authorId ? user : null)
+                      return (
+                        <div
+                          key={post.id}
+                          onClick={() => setViewPostId(post.id)}
+                          className="border-border hover:bg-muted/40 cursor-pointer rounded-lg border p-3 transition-colors"
+                        >
+                          <div className="mb-1.5 flex items-center gap-2">
+                            <div className="bg-muted h-6 w-6 flex-shrink-0 overflow-hidden rounded-full border">
+                              {author && 'avatar' in author && author.avatar ? (
+                                <img
+                                  src={author.avatar as string}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center">
+                                  <span className="text-muted-foreground text-[9px] font-bold">
+                                    {author ? (author.firstName?.[0] ?? '?').toUpperCase() : '?'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-foreground truncate text-xs font-medium">
+                              {author ? `${author.firstName} ${author.lastName}` : 'Unknown'}
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground line-clamp-3 text-xs leading-relaxed">
+                            {post.content}
+                          </p>
+                          <p className="text-muted-foreground/60 mt-1.5 text-[10px]">
+                            {new Date(post.createdAt).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </p>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {viewPostId && <PostViewModal postId={viewPostId} onClose={() => setViewPostId(null)} />}
 
       {manageOpen && (
         <ManageDeptPanel

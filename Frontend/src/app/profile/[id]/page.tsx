@@ -20,10 +20,26 @@ import {
   Loader2,
   Camera,
   Trash2,
+  FileText,
+  Heart,
+  MessageCircle,
+  Activity,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import { User, getFullName } from '@/lib/types'
-import { userApi, mediaApi, UpdateUserRequest } from '@/lib/api'
+import {
+  userApi,
+  mediaApi,
+  UpdateUserRequest,
+  postApi,
+  reactionApi,
+  commentApi,
+  PostResponse,
+  ReactionResponse,
+} from '@/lib/api'
 import { useRouter } from 'next/navigation'
+import { PostViewModal } from '@/components/post-view-modal'
 
 // --- Edit Profile Modal -------------------------------------------------------
 
@@ -316,6 +332,358 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
   )
 }
 
+// --- Activity Types -----------------------------------------------------------
+
+type ActivityKind = 'POST' | 'COMMENT' | 'REACTION'
+
+interface ActivityItem {
+  id: string
+  kind: ActivityKind
+  timestamp: string
+  // POST
+  post?: PostResponse
+  // COMMENT
+  commentContent?: string
+  commentPostId?: string
+  commentPostContent?: string
+  // REACTION
+  reactionEmoji?: string
+  reactionPostId?: string
+  reactionPostContent?: string
+}
+
+// --- Recent Activity Section --------------------------------------------------
+
+const ACTIVITY_PAGE_SIZE = 5
+const POST_FETCH_LIMIT = 10 // posts to scan for reactions/comments
+
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMins / 60)
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function truncate(text: string, max = 80): string {
+  return text.length > max ? text.slice(0, max) + '…' : text
+}
+
+const ACTIVITY_ICON: Record<ActivityKind, { icon: React.ReactNode; label: string; color: string }> =
+  {
+    POST: {
+      icon: <FileText size={14} />,
+      label: 'Published a post',
+      color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400',
+    },
+    COMMENT: {
+      icon: <MessageCircle size={14} />,
+      label: 'Commented on a post',
+      color: 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400',
+    },
+    REACTION: {
+      icon: <Heart size={14} />,
+      label: 'Reacted to a post',
+      color: 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400',
+    },
+  }
+
+interface RecentActivityProps {
+  userId: string
+  onOpenPost: (postId: string) => void
+}
+
+function RecentActivity({ userId, onOpenPost }: RecentActivityProps) {
+  const [activities, setActivities] = useState<ActivityItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [visibleCount, setVisibleCount] = useState(ACTIVITY_PAGE_SIZE)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchActivity() {
+      setLoading(true)
+      setError(null)
+
+      try {
+        // 1. Fetch user's own posts (most recent first)
+        const postsPage = await postApi.getByAuthor(userId, 0, POST_FETCH_LIMIT)
+        const userPosts: PostResponse[] = postsPage.content ?? []
+
+        if (cancelled) return
+
+        // 2. Build POST activities
+        const postActivities: ActivityItem[] = userPosts.map((p) => ({
+          id: `post-${p.id}`,
+          kind: 'POST' as ActivityKind,
+          timestamp: p.createdAt,
+          post: p,
+        }))
+
+        // 3. Fetch comments & reactions on each post in parallel (limited set)
+        const postsToScan = userPosts.slice(0, POST_FETCH_LIMIT)
+
+        const [commentsResults, reactionsResults] = await Promise.all([
+          // Comments on each post — filter to those authored by this user
+          Promise.allSettled(
+            postsToScan.map((p) =>
+              commentApi.getComments(p.id, 0, 50).then((page) => ({
+                postId: p.id,
+                postContent: p.content,
+                comments: (page.content ?? []).filter((c) => c.authorId === userId),
+              }))
+            )
+          ),
+          // Reactions on each post — filter to those by this user
+          Promise.allSettled(
+            postsToScan.map((p) =>
+              reactionApi.getPostReactors(p.id).then((reactors: ReactionResponse[]) => ({
+                postId: p.id,
+                postContent: p.content,
+                reactions: reactors.filter((r) => r.userId === userId),
+              }))
+            )
+          ),
+        ])
+
+        if (cancelled) return
+
+        // 4. Build COMMENT activities
+        const commentActivities: ActivityItem[] = []
+        for (const result of commentsResults) {
+          if (result.status === 'fulfilled') {
+            for (const c of result.value.comments) {
+              commentActivities.push({
+                id: `comment-${c.id}`,
+                kind: 'COMMENT',
+                timestamp: c.createdAt,
+                commentContent: c.content,
+                commentPostId: result.value.postId,
+                commentPostContent: result.value.postContent,
+              })
+            }
+          }
+        }
+
+        // 5. Build REACTION activities
+        const reactionActivities: ActivityItem[] = []
+        for (const result of reactionsResults) {
+          if (result.status === 'fulfilled') {
+            for (const r of result.value.reactions) {
+              reactionActivities.push({
+                id: `reaction-${r.id}`,
+                kind: 'REACTION',
+                timestamp: r.createdAt,
+                reactionEmoji: r.reactionTypeEmoji,
+                reactionPostId: result.value.postId,
+                reactionPostContent: result.value.postContent,
+              })
+            }
+          }
+        }
+
+        // 6. Merge and sort by newest first
+        const all = [...postActivities, ...commentActivities, ...reactionActivities].sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        )
+
+        if (!cancelled) {
+          setActivities(all)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load activity')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    fetchActivity()
+    return () => {
+      cancelled = true
+    }
+  }, [userId])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="text-primary h-6 w-6 animate-spin" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/30 dark:bg-red-900/10 dark:text-red-400">
+        {error}
+      </div>
+    )
+  }
+
+  if (activities.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+        <div className="bg-muted flex h-12 w-12 items-center justify-center rounded-full">
+          <Activity className="text-muted-foreground h-5 w-5" />
+        </div>
+        <p className="text-muted-foreground text-sm">No recent activity yet</p>
+      </div>
+    )
+  }
+
+  const visible = activities.slice(0, visibleCount)
+  const hasMore = visibleCount < activities.length
+
+  return (
+    <div className="space-y-1">
+      {/* Stats bar */}
+      <div className="mb-5 flex flex-wrap gap-4">
+        {(
+          [
+            { kind: 'POST', label: 'Posts', icon: <FileText size={13} /> },
+            { kind: 'COMMENT', label: 'Comments', icon: <MessageCircle size={13} /> },
+            { kind: 'REACTION', label: 'Reactions', icon: <Heart size={13} /> },
+          ] as const
+        ).map(({ kind, label, icon }) => {
+          const count = activities.filter((a) => a.kind === kind).length
+          const meta = ACTIVITY_ICON[kind]
+          return (
+            <div
+              key={kind}
+              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${meta.color}`}
+            >
+              {icon}
+              <span>
+                {count} {label}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Timeline */}
+      <div className="relative">
+        {/* Vertical line */}
+        <div className="bg-border absolute top-0 bottom-0 left-[19px] w-px" />
+
+        <div className="space-y-4">
+          {visible.map((item) => {
+            const meta = ACTIVITY_ICON[item.kind]
+            return (
+              <div key={item.id} className="flex gap-4">
+                {/* Icon bubble */}
+                <div
+                  className={`relative z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${meta.color}`}
+                >
+                  {item.kind === 'REACTION' && item.reactionEmoji ? (
+                    <span className="text-base">{item.reactionEmoji}</span>
+                  ) : (
+                    meta.icon
+                  )}
+                </div>
+
+                {/* Content */}
+                <div
+                  className="bg-card border-border hover:bg-muted/30 min-w-0 flex-1 cursor-pointer rounded-xl border p-3 transition-colors"
+                  onClick={() => {
+                    const postId = item.post?.id ?? item.commentPostId ?? item.reactionPostId
+                    if (postId) onOpenPost(postId)
+                  }}
+                >
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-foreground text-sm font-medium">{meta.label}</span>
+                    <span className="text-muted-foreground flex-shrink-0 text-xs">
+                      {formatRelativeTime(item.timestamp)}
+                    </span>
+                  </div>
+
+                  {item.kind === 'POST' && item.post && (
+                    <button
+                      onClick={() => onOpenPost(item.post!.id)}
+                      className="text-muted-foreground hover:text-primary block w-full text-left text-sm transition-colors"
+                    >
+                      <span className="italic">"{truncate(item.post.content)}"</span>
+                      {(item.post.commentCount > 0 || item.post.reactionCount > 0) && (
+                        <span className="text-muted-foreground/70 ml-2 text-xs">
+                          · {item.post.commentCount} comment
+                          {item.post.commentCount !== 1 ? 's' : ''}· {item.post.reactionCount}{' '}
+                          reaction{item.post.reactionCount !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </button>
+                  )}
+
+                  {item.kind === 'COMMENT' && item.commentPostId && (
+                    <button
+                      onClick={() => onOpenPost(item.commentPostId!)}
+                      className="text-muted-foreground hover:text-primary block w-full text-left text-sm transition-colors"
+                    >
+                      <span className="italic">"{truncate(item.commentContent ?? '')}"</span>
+                      {item.commentPostContent && (
+                        <span className="text-muted-foreground/70 ml-1 text-xs">
+                          on "{truncate(item.commentPostContent, 50)}"
+                        </span>
+                      )}
+                    </button>
+                  )}
+
+                  {item.kind === 'REACTION' && item.reactionPostId && (
+                    <button
+                      onClick={() => onOpenPost(item.reactionPostId!)}
+                      className="text-muted-foreground hover:text-primary block w-full text-left text-sm transition-colors"
+                    >
+                      {item.reactionEmoji && <span className="mr-1">{item.reactionEmoji}</span>}
+                      {item.reactionPostContent && (
+                        <span>on "{truncate(item.reactionPostContent, 60)}"</span>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Load more / collapse */}
+      {(hasMore || visibleCount > ACTIVITY_PAGE_SIZE) && (
+        <div className="pt-3 text-center">
+          {hasMore ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => setVisibleCount((v) => v + ACTIVITY_PAGE_SIZE)}
+            >
+              <ChevronDown size={14} />
+              Show more ({activities.length - visibleCount} remaining)
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => setVisibleCount(ACTIVITY_PAGE_SIZE)}
+            >
+              <ChevronUp size={14} />
+              Show less
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // --- Profile Page -------------------------------------------------------------
 
 export default function ProfilePage() {
@@ -328,6 +696,7 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
+  const [viewPostId, setViewPostId] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -370,6 +739,9 @@ export default function ProfilePage() {
 
   return (
     <AuthLayout>
+      {/* Post View Modal */}
+      {viewPostId && <PostViewModal postId={viewPostId} onClose={() => setViewPostId(null)} />}
+
       {/* Edit Profile Modal */}
       {showEditModal && isOwnProfile && (
         <EditProfileModal
@@ -547,10 +919,18 @@ export default function ProfilePage() {
 
         {/* Recent Activity */}
         <Card className="animate-slide-up p-6" style={{ animationDelay: '100ms' }}>
-          <h2 className="text-foreground mb-4 text-2xl font-bold">Recent Activity</h2>
-          <div className="py-8 text-center">
-            <p className="text-muted-foreground">Posts will appear here</p>
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-foreground text-2xl font-bold">Recent Activity</h2>
+              <p className="text-muted-foreground mt-0.5 text-sm">
+                Posts, comments, and reactions by {isOwnProfile ? 'you' : getFullName(profileUser)}
+              </p>
+            </div>
+            <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-full">
+              <Activity className="text-primary h-5 w-5" />
+            </div>
           </div>
+          <RecentActivity userId={userId} onOpenPost={(id) => setViewPostId(id)} />
         </Card>
       </div>
     </AuthLayout>

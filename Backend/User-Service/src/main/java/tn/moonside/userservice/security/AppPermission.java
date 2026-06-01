@@ -1,130 +1,345 @@
 package tn.moonside.userservice.security;
 
 /**
- * Central registry of every endpoint permission in the system.
+ * Central registry of every permission in the system.
  *
- * Naming convention:  <RESOURCE>_<ACTION>[_<SCOPE>]
- * This string is stored as the `action` field in the Permission collection
- * and is used both in @RequiresPermission annotations and in the DataSeeder.
+ * ── Naming convention ────────────────────────────────────────────────────────
  *
- * Role → Permission mapping (ADDITIVE — each role adds its OWN unique permissions)
- * ─────────────────────────────────────────────────────────────────────────────────
- *  EMPLOYEE          — Own profile read/write (login is implicit via auth)
- *  TEAM_LEADER       — Manage own team (details, members) — builds on EMPLOYEE
- *  DEPARTMENT_LEADER — Manage own department + teams within it — builds on TEAM_LEADER
- *  HUMAN_RESOURCES   — Dashboard read + Users management (invite only, no bulk) + Orgs read
- *  CEO               — Unrestricted via ANYTHING wildcard
+ *   <SERVICE>_<RESOURCE>_<ACTION>
  *
- * MULTI-ROLE DESIGN: A user with [EMPLOYEE, TEAM_LEADER] gets the union of both
- * permission sets. There are NO shared permissions between roles.
+ *   SERVICE   : which microservice owns the resource
+ *               (omitted for User-Service — it is the "home" service)
+ *   RESOURCE  : the thing being acted on  (USER, TEAM, DEPT, POST, COMMENT…)
+ *   ACTION    : what is being done
+ *               VIEW        — read / list (safe, no side effects)
+ *               EDIT        — update an existing record
+ *               CREATE      — create a new record
+ *               DELETE      — delete a record
+ *               INVITE      — send an invitation e-mail
+ *               ASSIGN      — assign a relationship (role → user, member → team)
+ *               REVOKE      — remove a relationship
+ *               ACTIVATE    — re-enable a disabled record
+ *               DEACTIVATE  — disable a record
+ *               FOLLOW      — subscribe to notifications for a record
+ *               PIN         — pin a post to the top of a feed
+ *               REACT       — add / change an emoji reaction
+ *               VOTE        — cast a vote on a survey
+ *               SAVE        — bookmark a post
+ *               UPLOAD      — upload a file attachment
+ *
+ *   Scope is encoded directly in the name when it matters:
+ *     _OWN        — only the record that belongs to the calling user
+ *     _ANY        — any record regardless of ownership (moderation / admin)
+ *     (no suffix) — all records within the user's natural scope (e.g. own team for
+ *                   TEAM_LEADER, own department for DEPARTMENT_LEADER)
+ *
+ * ── Role → Permission overview ───────────────────────────────────────────────
+ *
+ *   EMPLOYEE          Own profile · view users / teams / depts / posts · interact with posts
+ *   TEAM_MEMBER       Everything EMPLOYEE has  (identical set; separate role for clarity)
+ *   TEAM_LEADER       Manage own team (members, lead, details) · pin posts in own team
+ *   DEPARTMENT_LEADER Manage own department + its teams · pin posts in dept · moderate comments
+ *   HUMAN_RESOURCES   Back-office dashboard · user list & single invite · read posts & org data
+ *   CEO               ANYTHING wildcard — bypasses all permission checks
+ *
+ *   Roles are ADDITIVE.  A user with [EMPLOYEE, TEAM_LEADER] holds the union
+ *   of both permission sets.
  */
 public final class AppPermission {
 
     private AppPermission() {}
 
-    // ─── CEO wildcard ─────────────────────────────────────────────────────────
-    /** Bypasses ALL permission checks — granted only to CEO role */
+    // =========================================================================
+    // ── CEO wildcard ──────────────────────────────────────────────────────────
+    // =========================================================================
+
+    /** Bypasses ALL permission checks — granted only to the CEO role. */
     public static final String ANYTHING = "ANYTHING";
 
-    // ─── Own Profile (EMPLOYEE role) ──────────────────────────────────────────
-    /** GET /users/me — read own profile */
-    public static final String USER_READ_OWN             = "USER_READ_OWN";
-    /** PUT /users/me — update own profile fields */
-    public static final String USER_UPDATE_OWN           = "USER_UPDATE_OWN";
-    /** PATCH /users/me/avatar — update own avatar */
-    public static final String USER_UPDATE_OWN_AVATAR    = "USER_UPDATE_OWN_AVATAR";
-    /** DELETE /users/me/avatar — delete own avatar */
-    public static final String USER_DELETE_OWN_AVATAR    = "USER_DELETE_OWN_AVATAR";
 
-    // ─── View all content (EMPLOYEE role) ────────────────────────────────────
-    /** GET /users — view any user profile (read-only, not back office) */
-    public static final String USER_READ                 = "USER_READ";
-    /** GET /users/{id}/roles — view a user's roles */
-    public static final String USER_READ_ROLES           = "USER_READ_ROLES";
-    /** Write/update user data within a scope (OWN, TEAM, DEPARTMENT) */
-    public static final String USER_WRITE                = "USER_WRITE";
+    // =========================================================================
+    // ── USER-SERVICE : User management ───────────────────────────────────────
+    // =========================================================================
 
-    // ─── Team membership assignment (TEAM_LEADER, DEPARTMENT_LEADER, HUMAN_RESOURCES) ──
-    /** POST /organizations/teams/{id}/assign/{userId} — assign a user as member to a team */
-    public static final String TEAM_ASSIGN_MEMBER        = "TEAM_ASSIGN_MEMBER";
+    // ── Own profile (EMPLOYEE) ────────────────────────────────────────────────
 
-    // ─── Follow system (EMPLOYEE role) ────────────────────────────────────────
-    /** POST/DELETE /organizations/departments/{id}/follow — follow or unfollow a department */
-    public static final String FOLLOW_DEPARTMENT         = "FOLLOW_DEPARTMENT";
-    /** POST/DELETE /organizations/teams/{id}/follow — follow or unfollow a team */
-    public static final String FOLLOW_TEAM               = "FOLLOW_TEAM";
+    /** GET  /users/me — view own profile */
+    public static final String USER_VIEW_OWN            = "USER_VIEW_OWN";
 
-    // ─── Team management (TEAM_LEADER role) ──────────────────────────────────
-    /** GET/PUT /organizations/teams/{id} — manage team details for own team */
-    public static final String TEAM_MANAGE               = "TEAM_MANAGE";
-    /** POST/DELETE /organizations/teams/{id}/members — add or remove members from own team */
-    public static final String TEAM_MANAGE_MEMBERS       = "TEAM_MANAGE_MEMBERS";
-    /** PATCH /organizations/teams/{id}/lead — assign/change team lead within own team */
-    public static final String TEAM_MANAGE_LEAD          = "TEAM_MANAGE_LEAD";
+    /** PUT  /users/me — edit own profile fields */
+    public static final String USER_EDIT_OWN            = "USER_EDIT_OWN";
 
-    // ─── Department management (DEPARTMENT_LEADER role) ──────────────────────
-    /** GET/PUT /organizations/departments/{id} — manage own department details */
-    public static final String DEPT_MANAGE               = "DEPT_MANAGE";
-    /** POST /organizations/departments/{id}/teams — create teams within own department */
-    public static final String DEPT_MANAGE_TEAMS         = "DEPT_MANAGE_TEAMS";
-    /** PATCH /organizations/departments/{id}/manager — assign/change dept manager */
-    public static final String DEPT_MANAGE_MANAGER       = "DEPT_MANAGE_MANAGER";
+    /** PATCH /users/me/avatar — upload / change own avatar */
+    public static final String USER_EDIT_OWN_AVATAR     = "USER_EDIT_OWN_AVATAR";
 
-    // ─── HR back-office access (HUMAN_RESOURCES role) ────────────────────────
-    /** Access back-office dashboard page (read-only analytics) */
-    public static final String BACKOFFICE_DASHBOARD_READ = "BACKOFFICE_DASHBOARD_READ";
-    /** GET /users — list all users in the back office */
-    public static final String USER_READ_ALL             = "USER_READ_ALL";
-    /** POST /users/invite — invite a single user */
-    public static final String USER_INVITE               = "USER_INVITE";
-    /** GET /organizations — read organizations in the back office */
-    public static final String ORG_READ                  = "ORG_READ";
+    /** DELETE /users/me/avatar — remove own avatar */
+    public static final String USER_DELETE_OWN_AVATAR   = "USER_DELETE_OWN_AVATAR";
 
-    // ─── CEO / Full admin access (CEO role, via ANYTHING) ────────────────────
-    /** POST /users/invite/bulk — bulk invite users from Excel (CEO only) */
-    public static final String USER_INVITE_BULK          = "USER_INVITE_BULK";
-    /** POST /roles — create a role */
-    public static final String ROLE_CREATE               = "ROLE_CREATE";
-    /** GET /roles — list all roles */
-    public static final String ROLE_READ_ALL             = "ROLE_READ_ALL";
-    /** GET /roles/{id} — read a specific role */
-    public static final String ROLE_READ                 = "ROLE_READ";
-    /** PUT /roles/{id} — update a role */
-    public static final String ROLE_UPDATE               = "ROLE_UPDATE";
-    /** DELETE /roles/{id} — delete a role */
-    public static final String ROLE_DELETE               = "ROLE_DELETE";
-    /** POST /roles/{id}/permissions/{pid} — assign permission to role */
-    public static final String ROLE_ASSIGN_PERMISSION    = "ROLE_ASSIGN_PERMISSION";
-    /** DELETE /roles/{id}/permissions/{pid} — revoke permission from role */
-    public static final String ROLE_REVOKE_PERMISSION    = "ROLE_REVOKE_PERMISSION";
-    /** POST /permissions — create a permission */
-    public static final String PERMISSION_CREATE         = "PERMISSION_CREATE";
-    /** GET /permissions — list all permissions */
-    public static final String PERMISSION_READ_ALL       = "PERMISSION_READ_ALL";
-    /** GET /permissions/{id} — read a specific permission */
-    public static final String PERMISSION_READ           = "PERMISSION_READ";
-    /** PUT /permissions/{id} — update a permission */
-    public static final String PERMISSION_UPDATE         = "PERMISSION_UPDATE";
-    /** DELETE /permissions/{id} — delete a permission */
-    public static final String PERMISSION_DELETE         = "PERMISSION_DELETE";
-    /** PUT /users/{id} — update any user */
-    public static final String USER_UPDATE               = "USER_UPDATE";
-    /** DELETE /users/{id} — delete any user */
-    public static final String USER_DELETE               = "USER_DELETE";
-    /** PATCH /users/{id}/deactivate */
-    public static final String USER_DEACTIVATE           = "USER_DEACTIVATE";
-    /** PATCH /users/{id}/activate */
-    public static final String USER_ACTIVATE             = "USER_ACTIVATE";
-    /** POST /users/{id}/roles — assign a role to a user */
-    public static final String USER_ASSIGN_ROLE          = "USER_ASSIGN_ROLE";
-    /** DELETE /users/{id}/roles/{roleId} — revoke a role from a user */
-    public static final String USER_REVOKE_ROLE          = "USER_REVOKE_ROLE";
-    /** GET /audit-logs */
-    public static final String AUDIT_LOG_READ            = "AUDIT_LOG_READ";
-    /** GET /audit-logs/stats */
-    public static final String AUDIT_LOG_STATS           = "AUDIT_LOG_STATS";
-    /** Full organization management */
-    public static final String ORG_MANAGE                = "ORG_MANAGE";
-    /** Access roles & settings pages in back office */
-    public static final String BACKOFFICE_FULL           = "BACKOFFICE_FULL";
+    // ── Viewing other users (EMPLOYEE) ────────────────────────────────────────
+
+    /** GET /users/{id}  — view any user's public profile */
+    public static final String USER_VIEW                = "USER_VIEW";
+
+    /** GET /users — list all users (available to employees for browsing the directory) */
+    public static final String USER_VIEW_ALL            = "USER_VIEW_ALL";
+
+    /** GET /users/{id}/roles — view the roles assigned to a user */
+    public static final String USER_VIEW_ROLES          = "USER_VIEW_ROLES";
+
+    // ── HR / admin user operations ────────────────────────────────────────────
+
+    /** POST /users/invite — invite a single user by e-mail (HR) */
+    public static final String USER_INVITE              = "USER_INVITE";
+
+    /** POST /users/invite/bulk — bulk-invite users from an Excel file (CEO only) */
+    public static final String USER_INVITE_BULK         = "USER_INVITE_BULK";
+
+    /** PUT /users/{id} — edit any user's profile (CEO) */
+    public static final String USER_EDIT_ANY            = "USER_EDIT_ANY";
+
+    /** DELETE /users/{id} — permanently delete a user (CEO) */
+    public static final String USER_DELETE_ANY          = "USER_DELETE_ANY";
+
+    /** PATCH /users/{id}/deactivate — suspend a user account (CEO) */
+    public static final String USER_DEACTIVATE          = "USER_DEACTIVATE";
+
+    /** PATCH /users/{id}/activate — re-enable a suspended account (CEO) */
+    public static final String USER_ACTIVATE            = "USER_ACTIVATE";
+
+    // ── Role assignment ───────────────────────────────────────────────────────
+
+    /** POST /users/{id}/roles — assign a role to a user (CEO) */
+    public static final String USER_ASSIGN_ROLE         = "USER_ASSIGN_ROLE";
+
+    /** DELETE /users/{id}/roles/{roleId} — revoke a role from a user (CEO) */
+    public static final String USER_REVOKE_ROLE         = "USER_REVOKE_ROLE";
+
+
+    // =========================================================================
+    // ── USER-SERVICE : Role & Permission management (CEO only) ───────────────
+    // =========================================================================
+
+    /** POST   /roles          — create a new role */
+    public static final String ROLE_CREATE              = "ROLE_CREATE";
+
+    /** GET    /roles          — list all roles */
+    public static final String ROLE_VIEW_ALL            = "ROLE_VIEW_ALL";
+
+    /** GET    /roles/{id}     — view a specific role */
+    public static final String ROLE_VIEW                = "ROLE_VIEW";
+
+    /** PUT    /roles/{id}     — rename / update a role */
+    public static final String ROLE_EDIT                = "ROLE_EDIT";
+
+    /** DELETE /roles/{id}     — delete a role */
+    public static final String ROLE_DELETE              = "ROLE_DELETE";
+
+    /** POST   /roles/{id}/permissions/{pid} — attach a permission to a role */
+    public static final String ROLE_ASSIGN_PERMISSION   = "ROLE_ASSIGN_PERMISSION";
+
+    /** DELETE /roles/{id}/permissions/{pid} — detach a permission from a role */
+    public static final String ROLE_REVOKE_PERMISSION   = "ROLE_REVOKE_PERMISSION";
+
+    /** POST   /permissions          — create a permission definition */
+    public static final String PERMISSION_CREATE        = "PERMISSION_CREATE";
+
+    /** GET    /permissions          — list all permission definitions */
+    public static final String PERMISSION_VIEW_ALL      = "PERMISSION_VIEW_ALL";
+
+    /** GET    /permissions/{id}     — view a permission definition */
+    public static final String PERMISSION_VIEW          = "PERMISSION_VIEW";
+
+    /** PUT    /permissions/{id}     — update a permission definition */
+    public static final String PERMISSION_EDIT          = "PERMISSION_EDIT";
+
+    /** DELETE /permissions/{id}     — delete a permission definition */
+    public static final String PERMISSION_DELETE        = "PERMISSION_DELETE";
+
+
+    // =========================================================================
+    // ── USER-SERVICE : Audit logs ─────────────────────────────────────────────
+    // =========================================================================
+
+    /** GET /audit-logs       — query the audit log (CEO) */
+    public static final String AUDIT_LOG_VIEW           = "AUDIT_LOG_VIEW";
+
+    /** GET /audit-logs/stats — view aggregated audit statistics (CEO) */
+    public static final String AUDIT_LOG_VIEW_STATS     = "AUDIT_LOG_VIEW_STATS";
+
+
+    // =========================================================================
+    // ── USER-SERVICE : Back-office access ────────────────────────────────────
+    // =========================================================================
+
+    /** Read-only access to the back-office analytics dashboard (HR) */
+    public static final String BACKOFFICE_DASHBOARD_VIEW = "BACKOFFICE_DASHBOARD_VIEW";
+
+    /** Full access to back-office settings, roles, and audit pages (CEO) */
+    public static final String BACKOFFICE_FULL          = "BACKOFFICE_FULL";
+
+
+    // =========================================================================
+    // ── ORGANIZATION-SERVICE : Teams ─────────────────────────────────────────
+    // =========================================================================
+
+    /** GET /organizations/teams/** — view team details, members, and projects */
+    public static final String TEAM_VIEW                = "TEAM_VIEW";
+
+    /** PUT / PATCH /organizations/teams/{id} — edit a team's details (Team Leader, Dept Leader) */
+    public static final String TEAM_EDIT                = "TEAM_EDIT";
+
+    /** POST /organizations/teams/{id}/members — add a member to a team */
+    public static final String TEAM_ADD_MEMBER          = "TEAM_ADD_MEMBER";
+
+    /** DELETE /organizations/teams/{id}/members — remove a member from a team */
+    public static final String TEAM_REMOVE_MEMBER       = "TEAM_REMOVE_MEMBER";
+
+    /** POST /organizations/teams/{id}/assign/{userId} — assign a user as a team member (HR / leaders) */
+    public static final String TEAM_ASSIGN_MEMBER       = "TEAM_ASSIGN_MEMBER";
+
+    /** PATCH /organizations/teams/{id}/lead — change who leads a team */
+    public static final String TEAM_CHANGE_LEAD         = "TEAM_CHANGE_LEAD";
+
+    /** POST  /organizations/teams/{teamId}/follow   — subscribe to team updates */
+    public static final String TEAM_FOLLOW              = "TEAM_FOLLOW";
+
+
+    // =========================================================================
+    // ── ORGANIZATION-SERVICE : Departments ───────────────────────────────────
+    // =========================================================================
+
+    /** GET /organizations/departments/** — view department details (all authenticated users) */
+    public static final String DEPT_VIEW                = "DEPT_VIEW";
+
+    /** PUT /organizations/departments/{id} — edit department details (Dept Leader) */
+    public static final String DEPT_EDIT                = "DEPT_EDIT";
+
+    /** POST /organizations/departments/{id}/teams — create a new team inside a department (Dept Leader) */
+    public static final String DEPT_CREATE_TEAM         = "DEPT_CREATE_TEAM";
+
+    /** PATCH /organizations/departments/{id}/manager — reassign the department manager (Dept Leader) */
+    public static final String DEPT_CHANGE_MANAGER      = "DEPT_CHANGE_MANAGER";
+
+    /** POST  /organizations/departments/{id}/follow   — subscribe to department updates */
+    public static final String DEPT_FOLLOW              = "DEPT_FOLLOW";
+
+
+    // =========================================================================
+    // ── ORGANIZATION-SERVICE : Projects ──────────────────────────────────────
+    // =========================================================================
+
+    /** GET /organizations/projects/** — view projects */
+    public static final String PROJECT_VIEW             = "PROJECT_VIEW";
+
+    /** POST /organizations/teams/{teamId}/projects — create a project under a team (Team Leader +) */
+    public static final String PROJECT_CREATE_TEAM      = "PROJECT_CREATE_TEAM";
+
+    /** POST /organizations/departments/{deptId}/projects — create a project under a dept (Dept Leader +) */
+    public static final String PROJECT_CREATE_DEPT      = "PROJECT_CREATE_DEPT";
+
+    /** PUT /organizations/projects/{id} — edit a project (CEO) */
+    public static final String PROJECT_EDIT             = "PROJECT_EDIT";
+
+    /** DELETE /organizations/projects/{id} — delete a project (CEO) */
+    public static final String PROJECT_DELETE           = "PROJECT_DELETE";
+
+    /** GET /organizations — list all organizations in back-office (HR) */
+    public static final String ORG_VIEW                 = "ORG_VIEW";
+
+    /** Full organization management — create/delete departments, orgs (CEO) */
+    public static final String ORG_MANAGE               = "ORG_MANAGE";
+
+
+    // =========================================================================
+    // ── POST-SERVICE : Posts ──────────────────────────────────────────────────
+    // =========================================================================
+
+    /** GET /posts/feed, /posts/{id}, /posts/author/**, /posts/team/**, /posts/department/** */
+    public static final String POST_VIEW                = "POST_VIEW";
+
+    /** POST /posts — create a post */
+    public static final String POST_CREATE              = "POST_CREATE";
+
+    /** PUT /posts/{id} — edit own post (ownership enforced in service) */
+    public static final String POST_EDIT_OWN            = "POST_EDIT_OWN";
+
+    /** DELETE /posts/{id} — delete own post (ownership enforced in service) */
+    public static final String POST_DELETE_OWN          = "POST_DELETE_OWN";
+
+    /** DELETE /posts/{id} — delete any post for moderation (HR / CEO) */
+    public static final String POST_DELETE_ANY          = "POST_DELETE_ANY";
+
+    /** PATCH /posts/{id}/pin — pin or unpin a post within own team's feed */
+    public static final String POST_PIN_IN_TEAM         = "POST_PIN_IN_TEAM";
+
+    /** PATCH /posts/{id}/pin — pin or unpin a post within own department's feed */
+    public static final String POST_PIN_IN_DEPT         = "POST_PIN_IN_DEPT";
+
+    /** PATCH /posts/{id}/pin — pin or unpin any post (CEO only) */
+    public static final String POST_PIN_ANY             = "POST_PIN_ANY";
+
+    /** GET/POST/DELETE /posts/saved/** — bookmark or unbookmark posts */
+    public static final String POST_SAVE                = "POST_SAVE";
+
+
+    // =========================================================================
+    // ── POST-SERVICE : Comments ───────────────────────────────────────────────
+    // =========================================================================
+
+    /** GET /posts/{id}/comments — view comments and replies */
+    public static final String COMMENT_VIEW             = "COMMENT_VIEW";
+
+    /** POST /posts/{id}/comments — add a comment */
+    public static final String COMMENT_CREATE           = "COMMENT_CREATE";
+
+    /** PUT /posts/{id}/comments/{cid} — edit own comment */
+    public static final String COMMENT_EDIT_OWN         = "COMMENT_EDIT_OWN";
+
+    /** DELETE /posts/{id}/comments/{cid} — delete own comment */
+    public static final String COMMENT_DELETE_OWN       = "COMMENT_DELETE_OWN";
+
+    /** DELETE /posts/{id}/comments/{cid} — delete any comment for moderation (Dept Leader, HR, CEO) */
+    public static final String COMMENT_DELETE_ANY       = "COMMENT_DELETE_ANY";
+
+
+    // =========================================================================
+    // ── POST-SERVICE : Reactions ──────────────────────────────────────────────
+    // =========================================================================
+
+    /** POST /posts/{id}/reactions — react to a post, or GET to view reactions */
+    public static final String POST_REACT               = "POST_REACT";
+
+    /** POST /posts/{id}/comments/{cid}/reactions — react to a comment, or GET to view reactions */
+    public static final String COMMENT_REACT            = "COMMENT_REACT";
+
+    /** GET /reaction-types — list available emoji reaction types */
+    public static final String REACTION_TYPE_VIEW       = "REACTION_TYPE_VIEW";
+
+    /** POST /reaction-types — add a new emoji reaction type (CEO only) */
+    public static final String REACTION_TYPE_CREATE     = "REACTION_TYPE_CREATE";
+
+    /** DELETE /reaction-types/{id} — remove a reaction type (CEO only) */
+    public static final String REACTION_TYPE_DELETE     = "REACTION_TYPE_DELETE";
+
+
+    // =========================================================================
+    // ── POST-SERVICE : Attachments ────────────────────────────────────────────
+    // =========================================================================
+
+    /** GET  /posts/{id}/attachments — view file attachments on a post */
+    public static final String ATTACHMENT_VIEW          = "ATTACHMENT_VIEW";
+
+    /** POST /posts/{id}/attachments — upload a file to a post */
+    public static final String ATTACHMENT_UPLOAD        = "ATTACHMENT_UPLOAD";
+
+    /** DELETE /posts/{id}/attachments/{aid} — delete own attachment */
+    public static final String ATTACHMENT_DELETE_OWN    = "ATTACHMENT_DELETE_OWN";
+
+
+    // =========================================================================
+    // ── POST-SERVICE : Surveys ────────────────────────────────────────────────
+    // =========================================================================
+
+    /** POST /posts/{id}/survey/vote — cast or change a vote on a survey post */
+    public static final String SURVEY_VOTE              = "SURVEY_VOTE";
 }

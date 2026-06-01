@@ -55,7 +55,7 @@ function PasswordStrengthIndicator({ password }: { password: string }) {
     <div className="mt-2 space-y-2">
       {/* Bar */}
       <div className="flex items-center gap-2">
-        <div className="h-1.5 flex-1 rounded-full bg-gray-200">
+        <div className="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-gray-700">
           <div
             className={`h-full rounded-full transition-all duration-300 ${color}`}
             style={{ width: `${pct}%` }}
@@ -153,9 +153,8 @@ function EmailVerificationModal({
   }
 
   return (
-    /* Backdrop */
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
-      <div className="animate-scale-in w-full max-w-md rounded-2xl bg-white p-8 shadow-2xl dark:bg-gray-900">
+      <div className="animate-scale-in bg-card w-full max-w-md rounded-2xl p-8 shadow-2xl">
         {/* Icon */}
         <div className="mb-6 flex flex-col items-center text-center">
           <div className="bg-primary/10 mb-4 flex h-16 w-16 items-center justify-center rounded-full">
@@ -169,12 +168,12 @@ function EmailVerificationModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
               {error}
             </div>
           )}
           {success && (
-            <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700">
+            <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-400">
               {success}
             </div>
           )}
@@ -329,7 +328,7 @@ export default function SignupPage() {
         />
       )}
 
-      <div className="animate-fade-in flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4 py-10">
+      <div className="animate-fade-in dark:from-background dark:to-background flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 px-4 py-10">
         <Card className="animate-scale-in w-full max-w-md p-8">
           {/* Header */}
           <div className="mb-8 text-center">
@@ -342,7 +341,7 @@ export default function SignupPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="animate-slide-down rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+              <div className="animate-slide-down rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
                 {error}
               </div>
             )}

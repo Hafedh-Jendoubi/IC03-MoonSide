@@ -15,11 +15,12 @@ jobs:
     strategy:
       matrix:
         service:
-          - { name: eureka, path: Backend/Eureka, java: 21 }
-          - { name: gateway, path: Backend/Gateway, java: 21 }
-          - { name: user-service, path: Backend/User-Service, java: 17, mongo: true }
-          - { name: media-service, path: Backend/Media-Service, java: 17, mongo: true }
+          - { name: eureka,               path: Backend/Eureka,               java: 21 }
+          - { name: gateway,              path: Backend/Gateway,              java: 21 }
+          - { name: user-service,         path: Backend/User-Service,         java: 17, mongo: true }
+          - { name: media-service,        path: Backend/Media-Service,        java: 17, mongo: true }
           - { name: organization-service, path: Backend/Organization-Service, java: 17, mongo: true }
+          - { name: post-service,         path: Backend/Post-Service,         java: 17, mongo: true }
 
     services:
       mongodb:
