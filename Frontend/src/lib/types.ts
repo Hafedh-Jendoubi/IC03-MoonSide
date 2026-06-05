@@ -158,13 +158,27 @@ export interface ReactionSummary {
   userReactionCode: string | null
 }
 
+export type NotificationType =
+  | 'MENTION'
+  | 'COMMENT'
+  | 'REACTION'
+  | 'FOLLOW'
+  | 'BADGE_EARNED'
+  | 'ANNOUNCEMENT'
+  | 'POST_PINNED'
+
 export interface Notification {
   id: string
-  userId: string
-  type: 'like' | 'comment' | 'mention'
-  message: string
-  read: boolean
-  timestamp: Date
+  recipientId: string
+  senderId: string
+  notificationType: NotificationType
+  title: string
+  body: string
+  resourceId?: string
+  resourceType?: string
+  isRead: boolean
+  createdAt: string
+  readAt?: string
 }
 
 export interface Message {

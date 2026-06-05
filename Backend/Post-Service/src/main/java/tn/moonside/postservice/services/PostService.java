@@ -17,11 +17,15 @@ import tn.moonside.postservice.dtos.responses.*;
 import tn.moonside.postservice.entities.*;
 import tn.moonside.postservice.enums.TypePosts;
 import tn.moonside.postservice.enums.VisibilityType;
+import tn.moonside.postservice.event.NotificationEvent;
+import tn.moonside.postservice.kafka.NotificationEventPublisher;
 import tn.moonside.postservice.repositories.*;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 @Service
@@ -39,6 +43,10 @@ public class PostService {
     private final SurveyService surveyService;
     private final AuditClient auditClient;
     private final UserClient userClient;
+    private final NotificationEventPublisher notificationPublisher;
+
+    /** Matches @uuid-style mentions in post content. */
+    private static final Pattern MENTION_PATTERN = Pattern.compile("@([0-9a-fA-F\\-]{36})");
 
     /* ── Create ───────────────────────────────────────────────────────────── */
 
@@ -94,6 +102,9 @@ public class PostService {
         }
 
         Post saved = postRepository.save(builder.build());
+
+        // ── MENTION notifications ─────────────────────────────────────────────
+        publishMentionNotifications(saved, authorId);
 
         String authorName = userClient.displayName(authorId);
         String postCreatedDesc = "Post created by " + authorName +
@@ -319,6 +330,30 @@ public class PostService {
         if (req.getTeamId() == null) req.setTeamId(existingPost.getTeamId());
         if (req.getDepartmentId() == null) req.setDepartmentId(existingPost.getDepartmentId());
         return req;
+    }
+
+    /* ── Notification helpers ──────────────────────────────────────────────── */
+
+    private void publishMentionNotifications(Post post, String authorId) {
+        if (post.getContent() == null || post.getContent().isBlank()) return;
+        String authorName = userClient.displayName(authorId);
+        Matcher m = MENTION_PATTERN.matcher(post.getContent());
+        while (m.find()) {
+            String mentionedId = m.group(1);
+            if (!mentionedId.equals(authorId)) {
+                notificationPublisher.publish(NotificationEvent.builder()
+                        .recipientId(mentionedId)
+                        .senderId(authorId)
+                        .notificationType("MENTION")
+                        .title(authorName + " mentioned you in a post")
+                        .body(post.getContent().length() > 100
+                                ? post.getContent().substring(0, 100) + "…"
+                                : post.getContent())
+                        .resourceId(post.getId())
+                        .resourceType("POST")
+                        .build());
+            }
+        }
     }
 
     /* ── Mapping ──────────────────────────────────────────────────────────── */

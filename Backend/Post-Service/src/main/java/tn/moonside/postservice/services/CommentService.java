@@ -13,6 +13,8 @@ import tn.moonside.postservice.dtos.requests.CommentRequest;
 import tn.moonside.postservice.dtos.responses.CommentResponse;
 import tn.moonside.postservice.entities.Comment;
 import tn.moonside.postservice.entities.Post;
+import tn.moonside.postservice.event.NotificationEvent;
+import tn.moonside.postservice.kafka.NotificationEventPublisher;
 import tn.moonside.postservice.repositories.CommentRepository;
 import tn.moonside.postservice.repositories.PostRepository;
 import tn.moonside.postservice.repositories.ReactionRepository;
@@ -31,6 +33,7 @@ public class CommentService {
     private final OrganizationClient organizationClient;
     private final AuditClient auditClient;
     private final UserClient userClient;
+    private final NotificationEventPublisher notificationPublisher;
 
     public CommentResponse addComment(String postId, CommentRequest req, String authorId) {
         if (!postRepository.existsById(postId)) {
@@ -47,6 +50,39 @@ public class CommentService {
                 .parentId(req.getParentId())
                 .build();
         Comment saved = commentRepository.save(comment);
+
+        // ── Kafka notification ────────────────────────────────────────────────
+        Post parentPost = postRepository.findById(postId).orElse(null);
+        if (parentPost != null) {
+            String commenterName = userClient.displayName(authorId);
+            if (req.getParentId() != null) {
+                // Reply: notify the parent comment author
+                commentRepository.findById(req.getParentId()).ifPresent(parentComment -> {
+                    if (!parentComment.getAuthorId().equals(authorId)) {
+                        notificationPublisher.publish(NotificationEvent.builder()
+                                .recipientId(parentComment.getAuthorId())
+                                .senderId(authorId)
+                                .notificationType("COMMENT")
+                                .title(commenterName + " replied to your comment")
+                                .body(saved.getContent())
+                                .resourceId(postId)
+                                .resourceType("POST")
+                                .build());
+                    }
+                });
+            } else if (!parentPost.getAuthorId().equals(authorId)) {
+                // Top-level comment: notify post author
+                notificationPublisher.publish(NotificationEvent.builder()
+                        .recipientId(parentPost.getAuthorId())
+                        .senderId(authorId)
+                        .notificationType("COMMENT")
+                        .title(commenterName + " commented on your post")
+                        .body(saved.getContent())
+                        .resourceId(postId)
+                        .resourceType("POST")
+                        .build());
+            }
+        }
 
         String commenterName = userClient.displayName(authorId);
         String commentAddedDesc;

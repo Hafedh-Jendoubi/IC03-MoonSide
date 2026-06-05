@@ -9,6 +9,8 @@ import tn.moonside.postservice.clients.UserClient;
 import tn.moonside.postservice.dtos.requests.ReactionRequest;
 import tn.moonside.postservice.entities.Post;
 import tn.moonside.postservice.entities.Comment;
+import tn.moonside.postservice.event.NotificationEvent;
+import tn.moonside.postservice.kafka.NotificationEventPublisher;
 import tn.moonside.postservice.repositories.PostRepository;
 import tn.moonside.postservice.repositories.CommentRepository;
 import tn.moonside.postservice.dtos.responses.ReactionResponse;
@@ -34,6 +36,7 @@ public class ReactionService {
     private final UserClient userClient;
     private final PostRepository postRepository;
     private final CommentRepository commentRepository;
+    private final NotificationEventPublisher notificationPublisher;
 
     /**
      * Toggle reaction: if the user already has the same reaction, remove it.
@@ -90,6 +93,21 @@ public class ReactionService {
 
         String reactorName = userClient.displayName(userId);
         String targetDesc = resolveTargetDescription(reactableType, reactableId);
+
+        // ── Kafka notification ────────────────────────────────────────────────
+        String targetOwnerId = resolveOwnerId(reactableType, reactableId);
+        if (targetOwnerId != null && !targetOwnerId.equals(userId)) {
+            notificationPublisher.publish(NotificationEvent.builder()
+                    .recipientId(targetOwnerId)
+                    .senderId(userId)
+                    .notificationType("REACTION")
+                    .title(reactorName + " reacted to your " + reactableType.toLowerCase())
+                    .body(reactionType.getEmoji() + " " + reactionType.getCode())
+                    .resourceId(reactableId)
+                    .resourceType(reactableType)
+                    .build());
+        }
+
         auditClient.log(userId, reactableId, reactableType, PostAuditAction.REACTION_ADDED,
                 reactorName + " reacted '" + req.getReactionTypeCode() + "' to " + targetDesc,
                 true, null, req.getReactionTypeCode());
@@ -142,6 +160,18 @@ public class ReactionService {
                 .reactableId(r.getReactableId())
                 .createdAt(r.getCreatedAt())
                 .build();
+    }
+
+    private String resolveOwnerId(String reactableType, String reactableId) {
+        try {
+            if ("POST".equalsIgnoreCase(reactableType)) {
+                return postRepository.findById(reactableId).map(Post::getAuthorId).orElse(null);
+            }
+            if ("COMMENT".equalsIgnoreCase(reactableType)) {
+                return commentRepository.findById(reactableId).map(Comment::getAuthorId).orElse(null);
+            }
+        } catch (Exception ignored) {}
+        return null;
     }
 
     /**

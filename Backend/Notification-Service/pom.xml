@@ -12,10 +12,10 @@
     </parent>
 
     <groupId>tn.moonside</groupId>
-    <artifactId>Post-Service</artifactId>
+    <artifactId>Notification-Service</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <name>Post-Service</name>
-    <description>Posts and Reactions microservice for Moonside</description>
+    <name>Notification-Service</name>
+    <description>Real-time notification microservice for Moonside</description>
 
     <properties>
         <java.version>17</java.version>
@@ -60,6 +60,12 @@
             <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
         </dependency>
 
+        <!-- Kafka -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
         <!-- JWT -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
@@ -93,28 +99,10 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-
-        <!-- Kafka -->
         <dependency>
             <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
-        </dependency>
-
-        <!-- MinIO Java SDK — S3-compatible object storage client -->
-        <dependency>
-            <groupId>io.minio</groupId>
-            <artifactId>minio</artifactId>
-            <version>8.5.9</version>
-        </dependency>
-
-        <!--
-            OkHttp is pulled in transitively by minio:8.5.9, but pinning it here
-            avoids version conflicts with other Spring Boot dependencies.
-        -->
-        <dependency>
-            <groupId>com.squareup.okhttp3</groupId>
-            <artifactId>okhttp</artifactId>
-            <version>4.12.0</version>
+            <artifactId>spring-kafka-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 
