@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useState, useRef, useEffect } from 'react'
+import { useTheme } from 'next-themes'
 import { useAuth } from '@/lib/auth-context'
 import { canAccessBackOffice, getFullName } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -22,6 +23,8 @@ import {
   Heart,
   AtSign,
   Pin,
+  Moon,
+  Sun,
 } from 'lucide-react'
 import { NotificationType } from '@/lib/types'
 import { useNotifications } from '@/hooks/use-notifications'
@@ -44,6 +47,7 @@ function NotifIcon({ type }: { type: NotificationType }) {
 
 export function Navbar() {
   const { user, logout } = useAuth()
+  const { theme, setTheme } = useTheme()
   const router = useRouter()
   const pathname = usePathname()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
@@ -125,6 +129,15 @@ export function Navbar() {
 
             {/* Right Side */}
             <div className="flex items-center gap-4">
+              {/* Theme Toggle */}
+              <button
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="text-foreground hover:bg-muted rounded-md p-2 transition-colors"
+                aria-label="Toggle theme"
+              >
+                {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+              </button>
+
               {/* Notifications Dropdown */}
               {user && (
                 <div className="relative" ref={notificationsRef}>

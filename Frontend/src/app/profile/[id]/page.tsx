@@ -54,7 +54,6 @@ const MAX_SIZE_MB = 10
 
 function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
   const { refreshUser } = useAuth()
-  const inputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
     firstName: user.firstName ?? '',
@@ -66,58 +65,12 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  // Avatar state
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(user.avatar ?? null)
-  const [avatarFile, setAvatarFile] = useState<File | null>(null)
-  const [avatarStatus, setAvatarStatus] = useState<'idle' | 'uploading' | 'deleting'>('idle')
-  const [avatarError, setAvatarError] = useState<string | null>(null)
-  const [pendingDelete, setPendingDelete] = useState(false)
-
-  const initials = `${form.firstName?.[0] ?? ''}${form.lastName?.[0] ?? ''}`.toUpperCase()
-
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      setAvatarError('Only JPEG, PNG, GIF and WebP images are allowed.')
-      return
-    }
-    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-      setAvatarError(`File must be under ${MAX_SIZE_MB} MB.`)
-      return
-    }
-
-    setAvatarError(null)
-    setPendingDelete(false)
-    setAvatarPreview(URL.createObjectURL(file))
-    setAvatarFile(file)
-    if (inputRef.current) inputRef.current.value = ''
-  }
-
-  const handleDeleteAvatar = () => {
-    setAvatarPreview(null)
-    setAvatarFile(null)
-    setAvatarError(null)
-    setPendingDelete(true)
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setError('')
 
     try {
-      // Handle avatar changes first
-      if (pendingDelete) {
-        setAvatarStatus('deleting')
-        await userApi.deleteAvatar()
-      } else if (avatarFile) {
-        setAvatarStatus('uploading')
-        const media = await mediaApi.upload(avatarFile, 'AVATAR')
-        await userApi.updateAvatar(media.url)
-      }
-
       // Save profile fields — use the /users/me endpoint (requires USER_UPDATE_OWN)
       const payload: UpdateUserRequest = {
         firstName: form.firstName || undefined,
@@ -133,7 +86,6 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
       setError(err instanceof Error ? err.message : 'Failed to save changes')
     } finally {
       setSaving(false)
-      setAvatarStatus('idle')
     }
   }
 
@@ -142,16 +94,17 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
     if (e.target === e.currentTarget) onClose()
   }
 
-  const avatarBusy = avatarStatus !== 'idle'
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
-      <div className="animate-scale-in w-full max-w-lg rounded-2xl bg-white p-0 shadow-2xl dark:bg-slate-900">
+      <div
+        className="animate-scale-in flex w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl dark:bg-slate-900"
+        style={{ maxHeight: 'calc(100vh - 3rem)' }}
+      >
         {/* Modal header */}
-        <div className="border-border flex items-center justify-between border-b px-6 py-4 dark:border-slate-700">
+        <div className="border-border flex flex-shrink-0 items-center justify-between border-b px-6 py-4 dark:border-slate-700">
           <div>
             <h2 className="text-foreground text-lg font-semibold">Edit Profile</h2>
             <p className="text-muted-foreground text-sm">Update your personal information</p>
@@ -164,168 +117,85 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
           </button>
         </div>
 
-        {/* Avatar row */}
-        <div className="border-border flex items-center gap-5 border-b px-6 py-5 dark:border-slate-700">
-          {/* Clickable avatar with camera overlay */}
-          <div className="group relative flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              disabled={avatarBusy}
-              className="border-border focus-visible:ring-ring relative block h-20 w-20 overflow-hidden rounded-full border-2 focus:outline-none focus-visible:ring-2 disabled:cursor-not-allowed"
-              aria-label="Change profile picture"
-            >
-              {avatarPreview ? (
-                <img
-                  src={avatarPreview}
-                  alt={getFullName(user)}
-                  className="h-full w-full object-cover"
+        {/* Scrollable form body */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+          <div className="space-y-4 px-6 py-5">
+            {error && (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-foreground mb-1 block text-sm font-medium">First Name</label>
+                <Input
+                  value={form.firstName}
+                  onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
+                  placeholder="First name"
+                  required
                 />
-              ) : (
-                <span className="bg-primary/10 text-primary flex h-full w-full items-center justify-center rounded-full text-xl font-bold">
-                  {initials || '?'}
-                </span>
-              )}
+              </div>
+              <div>
+                <label className="text-foreground mb-1 block text-sm font-medium">Last Name</label>
+                <Input
+                  value={form.lastName}
+                  onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
+                  placeholder="Last name"
+                  required
+                />
+              </div>
+            </div>
 
-              {/* Hover overlay */}
-              <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                {avatarBusy ? (
-                  <Loader2 size={18} className="animate-spin text-white" />
-                ) : (
-                  <Camera size={18} className="text-white" />
-                )}
-                <span className="text-[9px] leading-none font-medium text-white">
-                  {avatarBusy ? '…' : 'Change'}
-                </span>
-              </span>
-            </button>
-          </div>
+            <div>
+              <label className="text-foreground mb-1 block text-sm font-medium">Job Title</label>
+              <Input
+                value={form.jobTitle}
+                onChange={(e) => setForm((f) => ({ ...f, jobTitle: e.target.value }))}
+                placeholder="e.g. Software Engineer"
+              />
+            </div>
 
-          {/* Info + action buttons */}
-          <div className="min-w-0 flex-1">
-            <p className="text-foreground font-medium">{getFullName(user)}</p>
-            <p className="text-muted-foreground mb-3 text-sm">{user.email}</p>
+            <div>
+              <label className="text-foreground mb-1 block text-sm font-medium">Phone Number</label>
+              <Input
+                value={form.phoneNumber}
+                onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))}
+                placeholder="+1 (555) 000-0000"
+                type="tel"
+              />
+            </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="gap-1.5 text-xs"
-                disabled={avatarBusy}
-                onClick={() => inputRef.current?.click()}
-              >
-                <Camera size={13} />
-                {avatarFile ? 'Change photo' : 'Upload photo'}
+            <div>
+              <label className="text-foreground mb-1 block text-sm font-medium">Bio</label>
+              <textarea
+                value={form.bio}
+                onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
+                placeholder="Tell people a bit about yourself..."
+                rows={3}
+                className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1 pb-1">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
               </Button>
-
-              {(avatarPreview || user.avatar) && !pendingDelete && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 border-red-200 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
-                  disabled={avatarBusy}
-                  onClick={handleDeleteAvatar}
-                >
-                  <Trash2 size={13} />
-                  Remove photo
-                </Button>
-              )}
-
-              {pendingDelete && (
-                <span className="flex items-center gap-1 text-xs text-amber-600">
-                  <Trash2 size={13} />
-                  Photo will be removed on save
-                </span>
-              )}
-            </div>
-
-            {avatarError && <p className="mt-1.5 text-xs text-red-600">{avatarError}</p>}
-          </div>
-
-          {/* Hidden file input */}
-          <input
-            ref={inputRef}
-            type="file"
-            accept={ALLOWED_TYPES.join(',')}
-            className="hidden"
-            onChange={handleAvatarChange}
-          />
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
-          {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-              {error}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-foreground mb-1 block text-sm font-medium">First Name</label>
-              <Input
-                value={form.firstName}
-                onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
-                placeholder="First name"
-                required
-              />
-            </div>
-            <div>
-              <label className="text-foreground mb-1 block text-sm font-medium">Last Name</label>
-              <Input
-                value={form.lastName}
-                onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
-                placeholder="Last name"
-                required
-              />
+              <Button
+                type="submit"
+                disabled={saving}
+                className="bg-primary hover:bg-primary/90 gap-2 text-white"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {saving ? 'Saving…' : 'Save Changes'}
+              </Button>
             </div>
           </div>
-
-          <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">Job Title</label>
-            <Input
-              value={form.jobTitle}
-              onChange={(e) => setForm((f) => ({ ...f, jobTitle: e.target.value }))}
-              placeholder="e.g. Software Engineer"
-            />
-          </div>
-
-          <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">Phone Number</label>
-            <Input
-              value={form.phoneNumber}
-              onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))}
-              placeholder="+1 (555) 000-0000"
-              type="tel"
-            />
-          </div>
-
-          <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">Bio</label>
-            <textarea
-              value={form.bio}
-              onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
-              placeholder="Tell people a bit about yourself..."
-              rows={3}
-              className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={saving}
-              className="bg-primary hover:bg-primary/90 gap-2 text-white"
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {saving ? 'Saving…' : 'Save Changes'}
-            </Button>
-          </div>
+          {/* end space-y-4 */}
         </form>
       </div>
     </div>
@@ -698,6 +568,50 @@ export default function ProfilePage() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [viewPostId, setViewPostId] = useState<string | null>(null)
 
+  // Avatar editing state (own profile only)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const [avatarStatus, setAvatarStatus] = useState<'idle' | 'uploading' | 'deleting'>('idle')
+  const [avatarError, setAvatarError] = useState<string | null>(null)
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !profileUser) return
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setAvatarError('Only JPEG, PNG, GIF and WebP images are allowed.')
+      return
+    }
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      setAvatarError(`File must be under ${MAX_SIZE_MB} MB.`)
+      return
+    }
+    setAvatarError(null)
+    setAvatarStatus('uploading')
+    try {
+      const media = await mediaApi.upload(file, 'AVATAR')
+      await userApi.updateAvatar(media.url)
+      setProfileUser((u) => (u ? { ...u, avatar: media.url } : u))
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : 'Failed to upload photo')
+    } finally {
+      setAvatarStatus('idle')
+      if (avatarInputRef.current) avatarInputRef.current.value = ''
+    }
+  }
+
+  const handleDeleteAvatar = async () => {
+    if (!profileUser) return
+    setAvatarError(null)
+    setAvatarStatus('deleting')
+    try {
+      await userApi.deleteAvatar()
+      setProfileUser((u) => (u ? { ...u, avatar: undefined } : u))
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : 'Failed to remove photo')
+    } finally {
+      setAvatarStatus('idle')
+    }
+  }
+
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -761,19 +675,69 @@ export default function ProfilePage() {
         {/* Profile Card */}
         <Card className="animate-scale-in relative -mt-24 mb-8 p-6">
           <div className="flex flex-col gap-6 sm:flex-row">
-            {/* Avatar */}
-            {profileUser.avatar ? (
-              <img
-                src={profileUser.avatar}
-                alt={displayName}
-                className="h-32 w-32 rounded-full border-4 border-white object-cover shadow-lg dark:border-slate-800"
-              />
-            ) : (
-              <div className="bg-primary/10 text-primary flex h-32 w-32 flex-shrink-0 items-center justify-center rounded-full border-4 border-white text-4xl font-bold shadow-lg dark:border-slate-800">
-                {profileUser.firstName?.[0]?.toUpperCase()}
-                {profileUser.lastName?.[0]?.toUpperCase()}
+            {/* Avatar with hover controls (own profile only) */}
+            <div className="relative flex-shrink-0 self-start">
+              <div className="group relative h-32 w-32">
+                {profileUser.avatar ? (
+                  <img
+                    src={profileUser.avatar}
+                    alt={displayName}
+                    className="h-32 w-32 rounded-full border-4 border-white object-cover shadow-lg dark:border-slate-800"
+                  />
+                ) : (
+                  <div className="bg-primary/10 text-primary flex h-32 w-32 flex-shrink-0 items-center justify-center rounded-full border-4 border-white text-4xl font-bold shadow-lg dark:border-slate-800">
+                    {profileUser.firstName?.[0]?.toUpperCase()}
+                    {profileUser.lastName?.[0]?.toUpperCase()}
+                  </div>
+                )}
+
+                {/* Hover overlay — own profile only */}
+                {isOwnProfile && (
+                  <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                    {avatarStatus !== 'idle' ? (
+                      <Loader2 size={22} className="animate-spin text-white" />
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => avatarInputRef.current?.click()}
+                          title="Change photo"
+                          className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white transition-colors hover:bg-white/40"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        {profileUser.avatar && (
+                          <button
+                            type="button"
+                            onClick={handleDeleteAvatar}
+                            title="Remove photo"
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-red-500/80 text-white transition-colors hover:bg-red-600"
+                          >
+                            <X size={15} />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Hidden file input */}
+              {isOwnProfile && (
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept={ALLOWED_TYPES.join(',')}
+                  className="hidden"
+                  onChange={handleAvatarFileChange}
+                />
+              )}
+
+              {/* Avatar error */}
+              {avatarError && (
+                <p className="mt-1 max-w-[8rem] text-center text-xs text-red-500">{avatarError}</p>
+              )}
+            </div>
 
             {/* Profile Info */}
             <div className="flex-1">
