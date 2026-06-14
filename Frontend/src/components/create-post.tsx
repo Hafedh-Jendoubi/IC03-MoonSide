@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { MentionTextarea } from '@/components/mention-textarea'
 import { Badge } from '@/components/ui/badge'
 import {
   Globe,
@@ -360,19 +361,17 @@ export function CreatePost({
                 <span className="text-sm">Create a survey…</span>
               </div>
             ) : (
-              <textarea
+              <MentionTextarea
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
+                onChange={setContent}
                 placeholder={
-                  isSurvey ? `Add a description (optional)…` : `What's on your mind, ${firstName}?`
+                  isSurvey
+                    ? `Add a description (optional)…`
+                    : `What's on your mind, ${firstName}? (type @ to mention someone)`
                 }
-                className="text-foreground placeholder-muted-foreground w-full resize-none bg-transparent focus:outline-none"
                 rows={isExpanded ? (isSurvey ? 2 : 4) : 1}
                 maxLength={5000}
-                onClick={(e) => {
-                  setIsExpanded(true)
-                  e.stopPropagation()
-                }}
+                className="resize-none bg-transparent focus:ring-0 focus:outline-none"
               />
             )}
           </div>

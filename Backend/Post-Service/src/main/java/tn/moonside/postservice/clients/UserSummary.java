@@ -15,6 +15,7 @@ public class UserSummary {
     private String lastName;
     private String email;
     private String jobTitle;
+    private String avatarUrl;
 
     /** Returns "FirstName LastName", or email as fallback, or the raw id as last resort. */
     public String displayName() {

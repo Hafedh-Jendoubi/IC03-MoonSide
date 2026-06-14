@@ -21,6 +21,8 @@ import tn.moonside.postservice.repositories.ReactionRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -34,6 +36,9 @@ public class CommentService {
     private final AuditClient auditClient;
     private final UserClient userClient;
     private final NotificationEventPublisher notificationPublisher;
+
+    /** Matches @uuid-style mentions in comment content. */
+    private static final Pattern MENTION_PATTERN = Pattern.compile("@([0-9a-fA-F\\-]{36})");
 
     public CommentResponse addComment(String postId, CommentRequest req, String authorId) {
         if (!postRepository.existsById(postId)) {
@@ -81,6 +86,26 @@ public class CommentService {
                         .resourceId(postId)
                         .resourceType("POST")
                         .build());
+            }
+        }
+
+        // ── Mention notifications ─────────────────────────────────────────────
+        if (saved.getContent() != null) {
+            String commenterNameForMention = userClient.displayName(authorId);
+            Matcher m = MENTION_PATTERN.matcher(saved.getContent());
+            while (m.find()) {
+                String mentionedUserId = m.group(1);
+                if (!mentionedUserId.equals(authorId)) {
+                    notificationPublisher.publish(NotificationEvent.builder()
+                            .recipientId(mentionedUserId)
+                            .senderId(authorId)
+                            .notificationType("MENTION")
+                            .title(commenterNameForMention + " mentioned you in a comment")
+                            .body(saved.getContent())
+                            .resourceId(postId)
+                            .resourceType("POST")
+                            .build());
+                }
             }
         }
 

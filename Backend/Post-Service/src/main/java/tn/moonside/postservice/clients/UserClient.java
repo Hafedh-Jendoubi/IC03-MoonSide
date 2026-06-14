@@ -9,6 +9,8 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -68,6 +70,7 @@ public class UserClient {
                     .lastName(str(data, "lastName"))
                     .email(str(data, "email"))
                     .jobTitle(str(data, "jobTitle"))
+                    .avatarUrl(str(data, "avatarUrl"))
                     .build();
             return Optional.of(summary);
 
@@ -85,6 +88,47 @@ public class UserClient {
         return findById(userId)
                 .map(UserSummary::displayName)
                 .orElse(userId);
+    }
+
+    /**
+     * Searches users by name prefix — used by the mention autocomplete proxy endpoint.
+     * Returns an empty list on any error.
+     */
+    @SuppressWarnings("unchecked")
+    public List<UserSummary> searchByName(String query) {
+        if (query == null || query.isBlank()) return List.of();
+        try {
+            HttpHeaders headers = buildHeaders();
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> resp = restTemplate.exchange(
+                    userServiceUrl + "/users/internal/search?q=" + query,
+                    HttpMethod.GET, entity, Map.class);
+
+            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null)
+                return List.of();
+
+            Map<String, Object> body = resp.getBody();
+            if (!Boolean.TRUE.equals(body.get("success"))) return List.of();
+
+            List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
+            if (data == null) return List.of();
+
+            List<UserSummary> results = new ArrayList<>();
+            for (Map<String, Object> u : data) {
+                results.add(UserSummary.builder()
+                        .id(str(u, "id"))
+                        .firstName(str(u, "firstName"))
+                        .lastName(str(u, "lastName"))
+                        .email(str(u, "email"))
+                        .jobTitle(str(u, "jobTitle"))
+                        .avatarUrl(str(u, "avatarUrl"))
+                        .build());
+            }
+            return results;
+        } catch (Exception e) {
+            log.warn("Mention search failed for query '{}': {}", query, e.getMessage());
+            return List.of();
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
