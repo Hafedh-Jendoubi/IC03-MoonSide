@@ -604,7 +604,7 @@ export default function ProfilePage() {
     setAvatarStatus('deleting')
     try {
       await userApi.deleteAvatar()
-      setProfileUser((u) => (u ? { ...u, avatar: undefined } : u))
+      setProfileUser((u) => (u ? { ...u, avatar: null } : u))
     } catch (err) {
       setAvatarError(err instanceof Error ? err.message : 'Failed to remove photo')
     } finally {
