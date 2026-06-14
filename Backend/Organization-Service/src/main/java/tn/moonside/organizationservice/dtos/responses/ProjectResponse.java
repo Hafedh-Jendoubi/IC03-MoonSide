@@ -4,7 +4,6 @@ import lombok.Builder;
 import lombok.Data;
 import tn.moonside.organizationservice.enums.ProjectStatus;
 import tn.moonside.organizationservice.enums.VisibilityType;
-
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -18,6 +17,9 @@ public class ProjectResponse {
 
     /** Lightweight team summaries for the teams responsible for this project. */
     private List<TeamSummary> teams;
+
+    /** Users assigned to work on this project. */
+    private List<UserSummary> assignedUsers;
 
     private List<String> technologies;
     private String repositoryUrl;

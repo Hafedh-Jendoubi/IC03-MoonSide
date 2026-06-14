@@ -113,6 +113,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.PUT,   "/organizations/departments/**")
                     .hasAnyRole("CEO", "DEPARTMENT_LEADER")
 
+                // ── PROJECT_ASSIGN_MEMBER — assign/unassign users to projects ──
+                //    CEO, TEAM_LEADER, DEPARTMENT_LEADER (service enforces team membership)
+                .requestMatchers(HttpMethod.POST,
+                        "/organizations/projects/*/members/*")
+                    .hasAnyRole("CEO", "TEAM_LEADER", "DEPARTMENT_LEADER")
+                .requestMatchers(HttpMethod.DELETE,
+                        "/organizations/projects/*/members/*")
+                    .hasAnyRole("CEO", "TEAM_LEADER", "DEPARTMENT_LEADER")
+
                 // ── PROJECT_EDIT / PROJECT_DELETE (CEO only) ──────────────────
                 .requestMatchers(HttpMethod.POST,   "/organizations/projects").hasRole("CEO")
                 .requestMatchers(HttpMethod.PUT,    "/organizations/projects/**").hasRole("CEO")

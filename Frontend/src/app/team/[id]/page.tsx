@@ -1170,6 +1170,12 @@ function TeamProjectsSection({ team, user }: { team: TeamResponse; user: User })
   const [saving, setSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 
+  // Team members for assignment
+  const [teamMembers, setTeamMembers] = useState<UserTeamResponse[]>([])
+  // Assignment modal state
+  const [assigningProject, setAssigningProject] = useState<ProjectResponse | null>(null)
+  const [assigningUserId, setAssigningUserId] = useState<string | null>(null)
+
   // Form state
   const [formName, setFormName] = useState('')
   const [formDescription, setFormDescription] = useState('')
@@ -1191,7 +1197,37 @@ function TeamProjectsSection({ team, user }: { team: TeamResponse; user: User })
       .then(setProjects)
       .catch(() => {})
       .finally(() => setLoading(false))
+    teamApi
+      .getMembers(team.id)
+      .then(setTeamMembers)
+      .catch(() => {})
   }, [team.id])
+
+  async function handleAssignUser(projectId: string, userId: string) {
+    setAssigningUserId(userId)
+    try {
+      const updated = await projectApi.assignUser(projectId, userId)
+      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      if (assigningProject?.id === updated.id) setAssigningProject(updated)
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to assign user')
+    } finally {
+      setAssigningUserId(null)
+    }
+  }
+
+  async function handleUnassignUser(projectId: string, userId: string) {
+    setAssigningUserId(userId)
+    try {
+      const updated = await projectApi.unassignUser(projectId, userId)
+      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      if (assigningProject?.id === updated.id) setAssigningProject(updated)
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to unassign user')
+    } finally {
+      setAssigningUserId(null)
+    }
+  }
 
   function openCreate() {
     setEditingProject(null)
@@ -1441,6 +1477,8 @@ function TeamProjectsSection({ team, user }: { team: TeamResponse; user: User })
         <div className="space-y-3">
           {projects.map((p) => {
             const cfg = PROJECT_STATUS_CONFIG[p.status] ?? PROJECT_STATUS_CONFIG.PLANNING
+            const assignedUsers = p.assignedUsers ?? []
+            const MAX_SHOWN = 4
             return (
               <div
                 key={p.id}
@@ -1489,6 +1527,49 @@ function TeamProjectsSection({ team, user }: { team: TeamResponse; user: User })
                       )}
                     </div>
                   )}
+
+                  {/* ── Assigned-user avatar bubbles ── */}
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <div className="flex -space-x-2">
+                      {assignedUsers.slice(0, MAX_SHOWN).map((u) => (
+                        <div
+                          key={u.id}
+                          title={`${u.firstName} ${u.lastName}`}
+                          className="ring-background h-6 w-6 flex-shrink-0 overflow-hidden rounded-full ring-2"
+                        >
+                          {u.avatar ? (
+                            <img
+                              src={u.avatar}
+                              alt={`${u.firstName} ${u.lastName}`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase">
+                              {u.firstName?.[0]}
+                              {u.lastName?.[0]}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {assignedUsers.length > MAX_SHOWN && (
+                        <div className="ring-background bg-muted text-muted-foreground flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ring-2">
+                          +{assignedUsers.length - MAX_SHOWN}
+                        </div>
+                      )}
+                    </div>
+                    {canManage && (
+                      <button
+                        onClick={() => setAssigningProject(p)}
+                        className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-full p-0.5 transition-colors"
+                        title="Manage project members"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {assignedUsers.length === 0 && !canManage && (
+                      <span className="text-muted-foreground text-xs">No members assigned</span>
+                    )}
+                  </div>
                 </div>
 
                 {canManage && (
@@ -1517,6 +1598,89 @@ function TeamProjectsSection({ team, user }: { team: TeamResponse; user: User })
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* ── Assign Members Modal ── */}
+      {assigningProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-background w-full max-w-sm rounded-xl border p-5 shadow-lg">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-foreground text-sm font-semibold">Assign Members</h3>
+                <p className="text-muted-foreground mt-0.5 text-xs">{assigningProject.name}</p>
+              </div>
+              <button
+                onClick={() => setAssigningProject(null)}
+                className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {teamMembers.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No team members found.</p>
+            ) : (
+              <ul className="max-h-72 space-y-2 overflow-y-auto">
+                {teamMembers.map((m) => {
+                  if (!m.user) return null
+                  const isAssigned = (assigningProject.assignedUsers ?? []).some(
+                    (u) => u.id === m.userId
+                  )
+                  const isBusy = assigningUserId === m.userId
+                  return (
+                    <li key={m.userId} className="flex items-center gap-3 rounded-lg px-2 py-1.5">
+                      <div className="h-8 w-8 flex-shrink-0 overflow-hidden rounded-full">
+                        {m.user.avatar ? (
+                          <img
+                            src={m.user.avatar}
+                            alt={`${m.user.firstName} ${m.user.lastName}`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-xs font-semibold uppercase">
+                            {m.user.firstName?.[0]}
+                            {m.user.lastName?.[0]}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-foreground text-sm font-medium">
+                          {m.user.firstName} {m.user.lastName}
+                        </p>
+                        {m.user.jobTitle && (
+                          <p className="text-muted-foreground truncate text-xs">
+                            {m.user.jobTitle}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        disabled={isBusy}
+                        onClick={() =>
+                          isAssigned
+                            ? handleUnassignUser(assigningProject.id, m.userId)
+                            : handleAssignUser(assigningProject.id, m.userId)
+                        }
+                        className={`flex-shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+                          isAssigned
+                            ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+                            : 'bg-primary/10 text-primary hover:bg-primary/20'
+                        }`}
+                      >
+                        {isBusy ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : isAssigned ? (
+                          'Remove'
+                        ) : (
+                          'Assign'
+                        )}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -1615,6 +1779,51 @@ function ProjectSidebarCard({ project }: { project: ProjectResponse }) {
               </span>
             </div>
           )}
+
+          {/* Assigned user avatar bubbles */}
+          {project.assignedUsers &&
+            project.assignedUsers.length > 0 &&
+            (() => {
+              const MAX_SHOWN = 4
+              const shown = project.assignedUsers.slice(0, MAX_SHOWN)
+              const overflow = project.assignedUsers.length - MAX_SHOWN
+              return (
+                <div className="mt-2 flex items-center gap-1.5">
+                  <div className="flex -space-x-1.5">
+                    {shown.map((u) => (
+                      <div
+                        key={u.id}
+                        title={`${u.firstName} ${u.lastName}`}
+                        className="ring-background h-5 w-5 flex-shrink-0 overflow-hidden rounded-full ring-2"
+                      >
+                        {u.avatar ? (
+                          <img
+                            src={u.avatar}
+                            alt={`${u.firstName} ${u.lastName}`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-[8px] font-semibold uppercase">
+                            {u.firstName?.[0]}
+                            {u.lastName?.[0]}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {overflow > 0 && (
+                      <div className="ring-background bg-muted text-muted-foreground flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[8px] font-semibold ring-2">
+                        +{overflow}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-muted-foreground text-[10px]">
+                    {project.assignedUsers.length === 1
+                      ? '1 member'
+                      : `${project.assignedUsers.length} members`}
+                  </span>
+                </div>
+              )
+            })()}
 
           {/* Links */}
           {(project.repositoryUrl || project.projectUrl) && (

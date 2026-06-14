@@ -96,6 +96,7 @@ export interface ProjectResponse {
   projectUrl: string | null
   technologies: string[]
   teams: ProjectTeamSummary[]
+  assignedUsers: UserSummary[]
   startDate: string | null
   endDate: string | null
   createdAt: string

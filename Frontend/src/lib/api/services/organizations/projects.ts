@@ -29,6 +29,18 @@ export const projectApi = {
 
   delete: (id: string) => apiFetch<void>(`/organizations/projects/${id}`, { method: 'DELETE' }),
 
+  // ── Project member assignment ────────────────────────────────────────────
+
+  assignUser: (projectId: string, userId: string) =>
+    apiFetch<ProjectResponse>(`/organizations/projects/${projectId}/members/${userId}`, {
+      method: 'POST',
+    }),
+
+  unassignUser: (projectId: string, userId: string) =>
+    apiFetch<ProjectResponse>(`/organizations/projects/${projectId}/members/${userId}`, {
+      method: 'DELETE',
+    }),
+
   // ── Team self-service ───────────────────────────────────────────────────────
 
   /**

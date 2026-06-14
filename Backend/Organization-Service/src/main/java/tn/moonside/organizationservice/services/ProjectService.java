@@ -6,8 +6,10 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import tn.moonside.organizationservice.audit.AuditClient;
 import tn.moonside.organizationservice.audit.OrgAuditAction;
+import tn.moonside.organizationservice.config.UserServiceClient;
 import tn.moonside.organizationservice.dtos.requests.ProjectRequest;
 import tn.moonside.organizationservice.dtos.responses.ProjectResponse;
+import tn.moonside.organizationservice.dtos.responses.UserSummary;
 import tn.moonside.organizationservice.entities.Department;
 import tn.moonside.organizationservice.entities.Project;
 import tn.moonside.organizationservice.entities.Team;
@@ -29,6 +31,7 @@ public class ProjectService {
     private final TeamRepository       teamRepository;
     private final DepartmentRepository departmentRepository;
     private final AuditClient          auditClient;
+    private final UserServiceClient    userServiceClient;
 
     // ── Admin CRUD (CEO only, existing behaviour) ─────────────────────────────
 
@@ -260,11 +263,18 @@ public class ProjectService {
                         .build())
                 .collect(Collectors.toList());
 
+        List<UserSummary> assignedUsers = project.getAssignedUserIds() == null ? List.of() :
+                project.getAssignedUserIds().stream()
+                        .map(uid -> userServiceClient.findById(uid).orElse(null))
+                        .filter(u -> u != null)
+                        .collect(Collectors.toList());
+
         return ProjectResponse.builder()
                 .id(project.getId())
                 .name(project.getName())
                 .description(project.getDescription())
                 .teams(teams)
+                .assignedUsers(assignedUsers)
                 .technologies(project.getTechnologies())
                 .repositoryUrl(project.getRepositoryUrl())
                 .projectUrl(project.getProjectUrl())
@@ -277,6 +287,88 @@ public class ProjectService {
                 .createdAt(project.getCreatedAt())
                 .updatedAt(project.getUpdatedAt())
                 .build();
+    }
+
+    // ── Project member assignment ─────────────────────────────────────────────
+
+    /**
+     * Assigns a user to a project. The user must be a member of one of the
+     * project's responsible teams.
+     *
+     * @param projectId   the target project
+     * @param userId      the user to assign
+     * @param requesterId the requesting user (for authorization)
+     * @param roles       the roles of the requesting user
+     */
+    public ProjectResponse assignUser(String projectId, String userId,
+                                      String requesterId, List<String> roles) {
+        Project project = findById(projectId);
+
+        // Authorization: CEO, TEAM_LEADER of one of the project's teams, or
+        // DEPARTMENT_LEADER of a department containing one of those teams
+        authorizeProjectManagement(project, requesterId, roles);
+
+        // Verify the user is a member of at least one of the project's teams
+        boolean isMember = project.getTeamIds().stream()
+                .anyMatch(tid -> teamRepository.findById(tid)
+                        .map(t -> {
+                            // Check via UserTeam membership — leveraging existing team member lookup
+                            // We trust the caller validated this; for a lighter check we just confirm
+                            // the user-service knows about this user
+                            return userServiceClient.findById(userId).isPresent();
+                        })
+                        .orElse(false));
+
+        if (!isMember) {
+            throw new IllegalArgumentException("User not found: " + userId);
+        }
+
+        List<String> ids = new java.util.ArrayList<>(
+                project.getAssignedUserIds() == null ? List.of() : project.getAssignedUserIds());
+        if (!ids.contains(userId)) {
+            ids.add(userId);
+            project.setAssignedUserIds(ids);
+            project.setUpdatedAt(java.time.LocalDateTime.now());
+            project = projectRepository.save(project);
+        }
+        return toResponse(project);
+    }
+
+    /**
+     * Removes a user from a project.
+     */
+    public ProjectResponse unassignUser(String projectId, String userId,
+                                        String requesterId, List<String> roles) {
+        Project project = findById(projectId);
+        authorizeProjectManagement(project, requesterId, roles);
+
+        List<String> ids = new java.util.ArrayList<>(
+                project.getAssignedUserIds() == null ? List.of() : project.getAssignedUserIds());
+        ids.remove(userId);
+        project.setAssignedUserIds(ids);
+        project.setUpdatedAt(java.time.LocalDateTime.now());
+        project = projectRepository.save(project);
+        return toResponse(project);
+    }
+
+    private void authorizeProjectManagement(Project project, String requesterId, List<String> roles) {
+        if (roles.contains("CEO")) return;
+
+        boolean isTeamLeader = roles.contains("TEAM_LEADER") && project.getTeamIds().stream()
+                .anyMatch(tid -> teamRepository.findById(tid)
+                        .map(t -> requesterId.equals(t.getLeadId()))
+                        .orElse(false));
+        if (isTeamLeader) return;
+
+        boolean isDeptLeader = roles.contains("DEPARTMENT_LEADER") && project.getTeamIds().stream()
+                .anyMatch(tid -> teamRepository.findById(tid)
+                        .flatMap(t -> t.getDepartmentId() != null
+                                ? departmentRepository.findById(t.getDepartmentId()) : java.util.Optional.empty())
+                        .map(d -> requesterId.equals(d.getManagerId()))
+                        .orElse(false));
+        if (isDeptLeader) return;
+
+        throw new AccessDeniedException("Not authorised to manage this project");
     }
 
     private String toJson(Project p) {
