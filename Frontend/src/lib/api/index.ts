@@ -29,5 +29,9 @@ export {
   attachmentApi,
 } from './services/posts'
 
+// Re-export search
+export type { SearchResult, UserHit, TeamHit, DepartmentHit, PostHit } from './types/search'
+export { searchApi } from './services/search'
+
 // Re-export core utilities
 export { tokenStorage, apiFetch } from './client'

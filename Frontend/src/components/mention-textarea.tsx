@@ -3,15 +3,13 @@
 /**
  * MentionTextarea
  * ───────────────
- * Wire format: @[Full Name](userId)
- *
- * When a user selects a suggestion, we insert "@[Jendoubi Majdi](abc-123) "
- * into the textarea. This keeps the full name intact (no space-splitting),
- * embeds the userId for navigation, and lets the backend/renderer parse it
- * reliably with a single regex.
- *
- * The `onMentionsChange` callback gives the parent the list of mentioned user
- * IDs so the backend can fire notifications without parsing the content.
+ * Behaves like Meta / Slack mentions:
+ *  - User types "@ha" → dropdown shows matching users
+ *  - User picks "Hamza Ben Ali" → text becomes "…@Hamza Ben Ali …"  (display name, no UUID)
+ *  - The component also tracks the set of mentioned user IDs separately
+ *  - Parent gets both via:  onChange(displayText)  +  onMentionsChange(Set<userId>)
+ *  - On submit, the parent passes mentionedUserIds[] in the request body so the
+ *    backend knows who to notify — no regex parsing needed.
  */
 
 import {
@@ -53,12 +51,13 @@ interface MentionTextareaProps {
 
 export interface MentionTextareaHandle {
   focus: () => void
+  /** Reset tracked mentions (call after a successful submit) */
   clearMentions: () => void
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function userDisplayName(u: MentionUser): string {
+function displayName(u: MentionUser): string {
   const parts = [u.firstName, u.lastName].filter(Boolean)
   return parts.length > 0 ? parts.join(' ') : (u.email ?? u.id)
 }
@@ -68,43 +67,30 @@ function initials(u: MentionUser): string {
 }
 
 /**
- * Build the token that gets inserted into the textarea:
- *   @[Jendoubi Majdi]
- * followed by a space so the user can keep typing.
- */
-function buildMentionToken(user: MentionUser): string {
-  return `@[${userDisplayName(user)}] `
-}
-
-/**
  * Walk back from the cursor to find an active "@query" fragment.
- * We stop at a space/newline OR at a complete @[...] token (already resolved).
- * Returns null if no active fragment exists.
+ * Returns null if the cursor isn't inside one (e.g. already separated by space).
  */
 function getMentionQuery(text: string, cursorPos: number): { query: string; start: number } | null {
   let i = cursorPos - 1
   while (i >= 0) {
     const ch = text[i]
-    if (ch === '@') {
-      // Make sure this @ isn't already part of a resolved @[...]  token
-      const ahead = text.slice(i)
-      if (/^@\[[^\]]*\]/.test(ahead)) return null
-      return { query: text.slice(i + 1, cursorPos), start: i }
-    }
+    if (ch === '@') return { query: text.slice(i + 1, cursorPos), start: i }
     if (ch === ' ' || ch === '\n') break
     i--
   }
   return null
 }
 
-/** Replace the "@query" fragment (start → cursorPos) with the resolved token. */
+/**
+ * Replace the "@query" fragment (from start to cursorPos) with "@Display Name ".
+ */
 function replaceMentionFragment(
   text: string,
   start: number,
   cursorPos: number,
   user: MentionUser
 ): { newText: string; newCursor: number } {
-  const token = buildMentionToken(user)
+  const token = `@${displayName(user)} `
   const newText = text.slice(0, start) + token + text.slice(cursorPos)
   return { newText, newCursor: start + token.length }
 }
@@ -142,7 +128,7 @@ function MentionDropdown({
               <button
                 type="button"
                 onMouseDown={(e) => {
-                  e.preventDefault() // keep focus on input
+                  e.preventDefault() // keep focus on the input
                   onSelect(u)
                 }}
                 className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors ${
@@ -154,7 +140,7 @@ function MentionDropdown({
                 {u.avatarUrl ? (
                   <img
                     src={u.avatarUrl}
-                    alt={userDisplayName(u)}
+                    alt={displayName(u)}
                     className="h-8 w-8 flex-shrink-0 rounded-full object-cover"
                   />
                 ) : (
@@ -163,7 +149,7 @@ function MentionDropdown({
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{userDisplayName(u)}</p>
+                  <p className="truncate text-sm font-semibold">{displayName(u)}</p>
                   {u.jobTitle && (
                     <p className="text-muted-foreground truncate text-xs">{u.jobTitle}</p>
                   )}
@@ -205,7 +191,10 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, MentionTextarea
     const [open, setOpen] = useState(false)
     const mentionStartRef = useRef<number | null>(null)
 
-    /** userId → displayName for every confirmed mention in this input session */
+    /**
+     * Tracks userId → displayName for every mention confirmed in this session.
+     * We use a Map so we can efficiently expose the IDs list.
+     */
     const mentionMapRef = useRef<Map<string, string>>(new Map())
 
     useImperativeHandle(ref, () => ({
@@ -216,6 +205,7 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, MentionTextarea
       },
     }))
 
+    // Close dropdown on outside click
     useEffect(() => {
       function handler(e: MouseEvent) {
         if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -276,7 +266,8 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, MentionTextarea
         user
       )
 
-      mentionMapRef.current.set(user.id, userDisplayName(user))
+      // Track the mentioned user
+      mentionMapRef.current.set(user.id, displayName(user))
       onMentionsChange?.(Array.from(mentionMapRef.current.keys()))
 
       onChange(newText)

@@ -151,6 +151,12 @@
             <version>5.2.5</version>
         </dependency>
 
+
+        <!-- Kafka (search index publishing) -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -5,9 +5,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.config.TopicBuilder;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.core.ProducerFactory;
-import tn.moonside.postservice.event.NotificationEvent;
 
 @Configuration
 public class KafkaConfig {
@@ -23,9 +20,4 @@ public class KafkaConfig {
                 .build();
     }
 
-    @Bean
-    public KafkaTemplate<String, NotificationEvent> notificationKafkaTemplate(
-            ProducerFactory<String, NotificationEvent> producerFactory) {
-        return new KafkaTemplate<>(producerFactory);
-    }
 }

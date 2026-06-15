@@ -29,6 +29,7 @@ import {
 import { NotificationType } from '@/lib/types'
 import { useNotifications } from '@/hooks/use-notifications'
 import { NotificationToast } from '@/components/notification-toast'
+import { GlobalSearch } from '@/components/global-search'
 
 function NotifIcon({ type }: { type: NotificationType }) {
   switch (type) {
@@ -113,19 +114,7 @@ export function Navbar() {
             </div>
 
             {/* Search Bar */}
-            <div className="mx-8 hidden max-w-sm flex-1 lg:flex">
-              <div className="relative w-full">
-                <Search
-                  className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 transform"
-                  size={18}
-                />
-                <Input
-                  type="text"
-                  placeholder="Search people, posts..."
-                  className="bg-muted pl-10"
-                />
-              </div>
-            </div>
+            <GlobalSearch />
 
             {/* Right Side */}
             <div className="flex items-center gap-4">

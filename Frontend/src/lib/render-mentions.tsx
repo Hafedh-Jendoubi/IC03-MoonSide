@@ -1,27 +1,17 @@
 import React from 'react'
 
 /**
- * Wire format: @[Full Name]
- * This lets us store the full name with spaces in plain text
- * and survive round-trips through the backend.
- *
- * Example stored value:
- *   "Hello @[Jendoubi Majdi], how are you?"
+ * Matches "@Name" patterns in post/comment content.
+ * Since we now store display names (not UUIDs), this highlights any
+ * word starting with "@" that isn't just a lone "@".
  */
-const MENTION_TOKEN_RE = /@\[([^\]]+)\]/g
-
-interface MentionSpanProps {
-  name: string
-}
-
-function MentionSpan({ name }: MentionSpanProps) {
-  return <span className="text-primary font-semibold">@{name}</span>
-}
+const MENTION_RE = /@([^\s@][^\s]*)/g
 
 /**
- * Converts raw content that may contain @[Name](userId) tokens into React nodes.
- * Each token becomes a styled, clickable span that navigates to the user's profile.
- * Plain text between tokens is left unchanged.
+ * Converts raw content text into React nodes, highlighting @mentions
+ * as styled spans (same visual as Meta / LinkedIn mentions).
+ *
+ * No user map needed — the display name is already embedded in the content.
  */
 export function renderMentions(content: string): React.ReactNode {
   if (!content) return null
@@ -31,23 +21,29 @@ export function renderMentions(content: string): React.ReactNode {
   let match: RegExpExecArray | null
   let key = 0
 
-  MENTION_TOKEN_RE.lastIndex = 0
+  MENTION_RE.lastIndex = 0
 
-  while ((match = MENTION_TOKEN_RE.exec(content)) !== null) {
-    const [fullMatch, name] = match
+  while ((match = MENTION_RE.exec(content)) !== null) {
+    const [fullMatch] = match
     const matchStart = match.index
 
+    // Plain text before this mention
     if (matchStart > lastIndex) {
       parts.push(
         <React.Fragment key={key++}>{content.slice(lastIndex, matchStart)}</React.Fragment>
       )
     }
 
-    parts.push(<MentionSpan key={key++} name={name} />)
+    parts.push(
+      <span key={key++} className="text-primary cursor-pointer font-semibold hover:underline">
+        {fullMatch}
+      </span>
+    )
 
     lastIndex = matchStart + fullMatch.length
   }
 
+  // Remaining plain text
   if (lastIndex < content.length) {
     parts.push(<React.Fragment key={key++}>{content.slice(lastIndex)}</React.Fragment>)
   }
