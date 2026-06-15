@@ -25,8 +25,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Stream;
+import java.util.regex.Pattern;import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
@@ -44,9 +43,6 @@ public class PostService {
     private final AuditClient auditClient;
     private final UserClient userClient;
     private final NotificationEventPublisher notificationPublisher;
-
-    /** Matches @uuid-style mentions in post content. */
-    private static final Pattern MENTION_PATTERN = Pattern.compile("@([0-9a-fA-F\\-]{36})");
 
     /* ── Create ───────────────────────────────────────────────────────────── */
 
@@ -104,7 +100,9 @@ public class PostService {
         Post saved = postRepository.save(builder.build());
 
         // ── MENTION notifications ─────────────────────────────────────────────
-        publishMentionNotifications(saved, authorId);
+        if (req.getMentionedUserIds() != null && !req.getMentionedUserIds().isEmpty()) {
+            publishMentionNotifications(saved, authorId, req.getMentionedUserIds());
+        }
 
         String authorName = userClient.displayName(authorId);
         String postCreatedDesc = "Post created by " + authorName +
@@ -334,21 +332,19 @@ public class PostService {
 
     /* ── Notification helpers ──────────────────────────────────────────────── */
 
-    private void publishMentionNotifications(Post post, String authorId) {
-        if (post.getContent() == null || post.getContent().isBlank()) return;
+    private void publishMentionNotifications(Post post, String authorId, List<String> mentionedUserIds) {
         String authorName = userClient.displayName(authorId);
-        Matcher m = MENTION_PATTERN.matcher(post.getContent());
-        while (m.find()) {
-            String mentionedId = m.group(1);
-            if (!mentionedId.equals(authorId)) {
+        String body = post.getContent() != null && post.getContent().length() > 100
+                ? post.getContent().substring(0, 100) + "…"
+                : post.getContent();
+        for (String mentionedId : mentionedUserIds) {
+            if (mentionedId != null && !mentionedId.equals(authorId)) {
                 notificationPublisher.publish(NotificationEvent.builder()
                         .recipientId(mentionedId)
                         .senderId(authorId)
                         .notificationType("MENTION")
                         .title(authorName + " mentioned you in a post")
-                        .body(post.getContent().length() > 100
-                                ? post.getContent().substring(0, 100) + "…"
-                                : post.getContent())
+                        .body(body)
                         .resourceId(post.getId())
                         .resourceType("POST")
                         .build());

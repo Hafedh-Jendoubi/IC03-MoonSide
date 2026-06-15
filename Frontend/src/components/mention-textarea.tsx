@@ -3,13 +3,13 @@
 /**
  * MentionTextarea
  * ───────────────
- * A textarea/input wrapper that intercepts "@" keystrokes, fetches matching
- * users from the API, and lets the user pick one to insert a mention token
- * of the form  @{uuid}  (displayed as "@First Last" in the rendered output).
- *
- * The *wire* value stored in `value` / emitted by `onChange` always uses the
- * raw UUID token so the backend can extract it via regex.  A separate display
- * layer (`renderMentions`) converts those tokens back to styled spans.
+ * Behaves like Meta / Slack mentions:
+ *  - User types "@ha" → dropdown shows matching users
+ *  - User picks "Hamza Ben Ali" → text becomes "…@Hamza Ben Ali …"  (display name, no UUID)
+ *  - The component also tracks the set of mentioned user IDs separately
+ *  - Parent gets both via:  onChange(displayText)  +  onMentionsChange(Set<userId>)
+ *  - On submit, the parent passes mentionedUserIds[] in the request body so the
+ *    backend knows who to notify — no regex parsing needed.
  */
 
 import {
@@ -23,7 +23,7 @@ import {
 } from 'react'
 import { apiFetch } from '@/lib/api/client'
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface MentionUser {
   id: string
@@ -37,6 +37,8 @@ export interface MentionUser {
 interface MentionTextareaProps {
   value: string
   onChange: (value: string) => void
+  /** Called whenever the set of mentioned user IDs changes */
+  onMentionsChange?: (mentionedUserIds: string[]) => void
   placeholder?: string
   maxLength?: number
   rows?: number
@@ -49,9 +51,11 @@ interface MentionTextareaProps {
 
 export interface MentionTextareaHandle {
   focus: () => void
+  /** Reset tracked mentions (call after a successful submit) */
+  clearMentions: () => void
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function displayName(u: MentionUser): string {
   const parts = [u.firstName, u.lastName].filter(Boolean)
@@ -62,9 +66,11 @@ function initials(u: MentionUser): string {
   return `${u.firstName?.[0] ?? ''}${u.lastName?.[0] ?? ''}`.toUpperCase() || '?'
 }
 
-/** Extracts the "@query" fragment that the cursor is currently inside. */
+/**
+ * Walk back from the cursor to find an active "@query" fragment.
+ * Returns null if the cursor isn't inside one (e.g. already separated by space).
+ */
 function getMentionQuery(text: string, cursorPos: number): { query: string; start: number } | null {
-  // Walk back from cursor to find the last '@' that hasn't been closed by a space
   let i = cursorPos - 1
   while (i >= 0) {
     const ch = text[i]
@@ -75,30 +81,32 @@ function getMentionQuery(text: string, cursorPos: number): { query: string; star
   return null
 }
 
-/** Replace the mention fragment with the resolved token. */
+/**
+ * Replace the "@query" fragment (from start to cursorPos) with "@Display Name ".
+ */
 function replaceMentionFragment(
   text: string,
   start: number,
-  end: number,
+  cursorPos: number,
   user: MentionUser
-): string {
-  return text.slice(0, start) + `@${user.id} ` + text.slice(end)
+): { newText: string; newCursor: number } {
+  const token = `@${displayName(user)} `
+  const newText = text.slice(0, start) + token + text.slice(cursorPos)
+  return { newText, newCursor: start + token.length }
 }
 
-// ── Dropdown ─────────────────────────────────────────────────────────────────
+// ── Dropdown ──────────────────────────────────────────────────────────────────
 
 function MentionDropdown({
   users,
   loading,
   activeIdx,
   onSelect,
-  anchorRef,
 }: {
   users: MentionUser[]
   loading: boolean
   activeIdx: number
   onSelect: (u: MentionUser) => void
-  anchorRef: React.RefObject<HTMLDivElement | null>
 }) {
   if (!loading && users.length === 0) return null
 
@@ -120,7 +128,7 @@ function MentionDropdown({
               <button
                 type="button"
                 onMouseDown={(e) => {
-                  e.preventDefault() // prevent blur
+                  e.preventDefault() // keep focus on the input
                   onSelect(u)
                 }}
                 className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors ${
@@ -129,7 +137,6 @@ function MentionDropdown({
                     : 'hover:bg-muted text-foreground'
                 }`}
               >
-                {/* Avatar */}
                 {u.avatarUrl ? (
                   <img
                     src={u.avatarUrl}
@@ -141,7 +148,6 @@ function MentionDropdown({
                     {initials(u)}
                   </div>
                 )}
-                {/* Name + job */}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{displayName(u)}</p>
                   {u.jobTitle && (
@@ -164,6 +170,7 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, MentionTextarea
     {
       value,
       onChange,
+      onMentionsChange,
       placeholder,
       maxLength = 2000,
       rows = 3,
@@ -182,11 +189,20 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, MentionTextarea
     const [loading, setLoading] = useState(false)
     const [activeIdx, setActiveIdx] = useState(0)
     const [open, setOpen] = useState(false)
-    /** Position in `value` where the current "@" mention started */
     const mentionStartRef = useRef<number | null>(null)
+
+    /**
+     * Tracks userId → displayName for every mention confirmed in this session.
+     * We use a Map so we can efficiently expose the IDs list.
+     */
+    const mentionMapRef = useRef<Map<string, string>>(new Map())
 
     useImperativeHandle(ref, () => ({
       focus: () => inputRef.current?.focus(),
+      clearMentions: () => {
+        mentionMapRef.current.clear()
+        onMentionsChange?.([])
+      },
     }))
 
     // Close dropdown on outside click
@@ -241,26 +257,32 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, MentionTextarea
     const handleSelect = (user: MentionUser) => {
       const el = inputRef.current
       if (!el || mentionStartRef.current === null) return
+
       const cursor = el.selectionStart ?? value.length
-      const newVal = replaceMentionFragment(value, mentionStartRef.current, cursor, user)
-      onChange(newVal)
+      const { newText, newCursor } = replaceMentionFragment(
+        value,
+        mentionStartRef.current,
+        cursor,
+        user
+      )
+
+      // Track the mentioned user
+      mentionMapRef.current.set(user.id, displayName(user))
+      onMentionsChange?.(Array.from(mentionMapRef.current.keys()))
+
+      onChange(newText)
       setOpen(false)
       setUsers([])
       mentionStartRef.current = null
-      // Move cursor after inserted token
-      const newCursorPos =
-        mentionStartRef.current !== null
-          ? mentionStartRef.current + user.id.length + 2 // "@{uuid} "
-          : newVal.length
+
       requestAnimationFrame(() => {
         el.focus()
-        el.setSelectionRange(newCursorPos, newCursorPos)
+        el.setSelectionRange(newCursor, newCursor)
       })
     }
 
     const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) => {
       if (!open) {
-        // Allow Enter to submit on single-line mode
         if (singleLine && e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault()
           onSubmit?.()
@@ -308,7 +330,6 @@ export const MentionTextarea = forwardRef<MentionTextareaHandle, MentionTextarea
             loading={loading}
             activeIdx={activeIdx}
             onSelect={handleSelect}
-            anchorRef={containerRef}
           />
         )}
       </div>

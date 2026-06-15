@@ -6,6 +6,7 @@ import lombok.Data;
 import tn.moonside.postservice.enums.TypePosts;
 import tn.moonside.postservice.enums.VisibilityType;
 
+import java.util.Collections;
 import java.util.List;
 
 @Data
@@ -24,6 +25,12 @@ public class PostRequest {
 
     private boolean isPinned = false;
     private boolean isAIGenerated = false;
+
+    /**
+     * IDs of users explicitly mentioned via @ in this post.
+     * Populated by the frontend; used by the backend to fire MENTION notifications.
+     */
+    private List<String> mentionedUserIds = Collections.emptyList();
 
     // ── Survey-specific fields (only used when postType == SURVEY) ─────────────
 

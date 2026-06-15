@@ -68,6 +68,7 @@ export interface PostRequest {
   departmentId?: string
   isPinned?: boolean
   isAIGenerated?: boolean
+  mentionedUserIds?: string[]
   // Survey-specific
   surveyQuestion?: string
   surveyOptions?: string[]
@@ -92,6 +93,7 @@ export interface CommentRequest {
   content: string
   postVisibility?: PostVisibility
   parentId?: string
+  mentionedUserIds?: string[]
 }
 
 export interface ReactionTypeResponse {
