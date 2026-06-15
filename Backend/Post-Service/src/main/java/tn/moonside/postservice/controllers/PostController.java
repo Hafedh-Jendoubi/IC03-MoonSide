@@ -9,6 +9,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import tn.moonside.postservice.clients.UserClient;
+import tn.moonside.postservice.clients.UserSummary;
 import tn.moonside.postservice.dtos.requests.PostRequest;
 import tn.moonside.postservice.dtos.responses.ApiResponse;
 import tn.moonside.postservice.dtos.responses.PostResponse;
@@ -23,6 +25,7 @@ import java.util.List;
 public class PostController {
 
     private final PostService postService;
+    private final UserClient userClient;
 
     @PostMapping
     public ResponseEntity<ApiResponse<PostResponse>> createPost(
@@ -120,6 +123,17 @@ public class PostController {
             @AuthenticationPrincipal String userId) {
         postService.deletePost(postId, userId, extractRoles());
         return ResponseEntity.ok(ApiResponse.success(null, "Post deleted"));
+    }
+
+    /**
+     * GET /posts/mentions/search?q=john
+     * Proxies user search to User-Service for the mention autocomplete dropdown.
+     * Returns up to 10 users whose first or last name starts with the query.
+     */
+    @GetMapping("/mentions/search")
+    public ResponseEntity<ApiResponse<List<UserSummary>>> searchMentions(
+            @RequestParam("q") String query) {
+        return ResponseEntity.ok(ApiResponse.success(userClient.searchByName(query)));
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

@@ -72,6 +72,45 @@ public class ProjectController {
         return ResponseEntity.ok(ApiResponse.success(null, "Project deleted successfully"));
     }
 
+    // ── Project member assignment ─────────────────────────────────────────────
+
+    /**
+     * POST /organizations/projects/{id}/members/{userId}
+     * Assign a team member to a project.
+     * Authorized: CEO, TEAM_LEADER of one of the project's teams, DEPARTMENT_LEADER.
+     */
+    @PostMapping("/organizations/projects/{id}/members/{userId}")
+    public ResponseEntity<ApiResponse<ProjectResponse>> assignUser(
+            @PathVariable String id,
+            @PathVariable String userId,
+            @AuthenticationPrincipal String requesterId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(
+                projectService.assignUser(id, userId, requesterId, roles),
+                "User assigned to project"));
+    }
+
+    /**
+     * DELETE /organizations/projects/{id}/members/{userId}
+     * Remove a user from a project.
+     */
+    @DeleteMapping("/organizations/projects/{id}/members/{userId}")
+    public ResponseEntity<ApiResponse<ProjectResponse>> unassignUser(
+            @PathVariable String id,
+            @PathVariable String userId,
+            @AuthenticationPrincipal String requesterId) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        List<String> roles = auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(ApiResponse.success(
+                projectService.unassignUser(id, userId, requesterId, roles),
+                "User removed from project"));
+    }
+
     // ── /organizations/teams/{teamId}/projects — team self-service ────────────
 
     /**

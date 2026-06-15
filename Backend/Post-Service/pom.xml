@@ -94,6 +94,12 @@
             <scope>test</scope>
         </dependency>
 
+        <!-- Kafka -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
         <!-- MinIO Java SDK — S3-compatible object storage client -->
         <dependency>
             <groupId>io.minio</groupId>

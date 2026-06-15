@@ -189,9 +189,16 @@ public class UserController {
     }
 
     /**
-     * Internal endpoint — called by other microservices to revoke a role from a user.
+     * Internal endpoint — mention autocomplete. Returns up to 10 users whose
+     * first or last name starts with the given query string.
+     * Only requires a valid JWT; no special permission needed.
      */
-    @DeleteMapping("/internal/{userId}/roles/{roleName}")
+    @GetMapping("/internal/search")
+    public ResponseEntity<ApiResponse<List<UserResponse>>> searchUsers(
+            @RequestParam("q") String query) {
+        return ResponseEntity.ok(ApiResponse.success(userService.searchByName(query)));
+    }
+
     public ResponseEntity<ApiResponse<Void>> revokeRoleByNameInternal(
             @PathVariable String userId,
             @PathVariable String roleName) {

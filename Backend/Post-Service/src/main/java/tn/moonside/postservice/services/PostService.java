@@ -11,15 +11,21 @@ import org.springframework.transaction.annotation.Transactional;
 import tn.moonside.postservice.audit.AuditClient;
 import tn.moonside.postservice.audit.PostAuditAction;
 import tn.moonside.postservice.clients.OrganizationClient;
+import tn.moonside.postservice.clients.UserClient;
 import tn.moonside.postservice.dtos.requests.PostRequest;
 import tn.moonside.postservice.dtos.responses.*;
 import tn.moonside.postservice.entities.*;
 import tn.moonside.postservice.enums.TypePosts;
 import tn.moonside.postservice.enums.VisibilityType;
+import tn.moonside.postservice.event.NotificationEvent;
+import tn.moonside.postservice.kafka.NotificationEventPublisher;
 import tn.moonside.postservice.repositories.*;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 @Service
@@ -36,6 +42,11 @@ public class PostService {
     private final OrganizationClient organizationClient;
     private final SurveyService surveyService;
     private final AuditClient auditClient;
+    private final UserClient userClient;
+    private final NotificationEventPublisher notificationPublisher;
+
+    /** Matches @uuid-style mentions in post content. */
+    private static final Pattern MENTION_PATTERN = Pattern.compile("@([0-9a-fA-F\\-]{36})");
 
     /* ── Create ───────────────────────────────────────────────────────────── */
 
@@ -92,10 +103,16 @@ public class PostService {
 
         Post saved = postRepository.save(builder.build());
 
+        // ── MENTION notifications ─────────────────────────────────────────────
+        publishMentionNotifications(saved, authorId);
+
+        String authorName = userClient.displayName(authorId);
+        String postCreatedDesc = "Post created by " + authorName +
+                " with visibility '" + resolvedVisibility + "'" +
+                (req.getTeamId() != null ? " in a team" : "") +
+                (req.getDepartmentId() != null ? " in a department" : "");
         auditClient.log(authorId, saved.getId(), "POST", PostAuditAction.POST_CREATED,
-                "Post created with visibility '" + resolvedVisibility + "'" +
-                (req.getTeamId() != null ? " in team '" + req.getTeamId() + "'" : "") +
-                (req.getDepartmentId() != null ? " in department '" + req.getDepartmentId() + "'" : ""),
+                postCreatedDesc,
                 true, null, toJson(saved));
 
         return toResponse(saved, authorId);
@@ -214,8 +231,13 @@ public class PostService {
 
         Post saved = postRepository.save(post);
 
+        String updaterName = userClient.displayName(requesterId);
+        boolean isOwnerUpdating = post.getAuthorId().equals(requesterId);
+        String updateDesc = isOwnerUpdating
+                ? "Post updated by its author " + updaterName
+                : "Post updated by " + updaterName + " (moderator action)";
         auditClient.log(requesterId, postId, "POST", PostAuditAction.POST_UPDATED,
-                "Post updated by user '" + requesterId + "'",
+                updateDesc,
                 true, oldJson, toJson(saved));
 
         return toResponse(saved, requesterId);
@@ -234,8 +256,9 @@ public class PostService {
         Post saved = postRepository.save(post);
 
         String action = wasPinned ? PostAuditAction.POST_UNPINNED : PostAuditAction.POST_PINNED;
+        String pinnerName = userClient.displayName(requesterId);
         auditClient.log(requesterId, postId, "POST", action,
-                "Post " + (wasPinned ? "unpinned" : "pinned") + " by user '" + requesterId + "'",
+                "Post " + (wasPinned ? "unpinned" : "pinned") + " by " + pinnerName,
                 true, null, null);
 
         return toResponse(saved, requesterId);
@@ -256,8 +279,16 @@ public class PostService {
         surveyVoteRepository.deleteByPostId(postId);
         postRepository.delete(post);
 
+        String deleterName = userClient.displayName(requesterId);
+        String postAuthorName = userClient.displayName(post.getAuthorId());
+        boolean deletedByOwner = post.getAuthorId().equals(requesterId);
+        String deleteDesc = deletedByOwner
+                ? "Post deleted by its author " + deleterName +
+                  " (originally posted on " + post.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) + ")"
+                : "Post by " + postAuthorName + " deleted by moderator " + deleterName +
+                  " (originally posted on " + post.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")) + ")";
         auditClient.log(requesterId, postId, "POST", PostAuditAction.POST_DELETED,
-                "Post deleted by user '" + requesterId + "'",
+                deleteDesc,
                 true, oldJson, null);
     }
 
@@ -299,6 +330,30 @@ public class PostService {
         if (req.getTeamId() == null) req.setTeamId(existingPost.getTeamId());
         if (req.getDepartmentId() == null) req.setDepartmentId(existingPost.getDepartmentId());
         return req;
+    }
+
+    /* ── Notification helpers ──────────────────────────────────────────────── */
+
+    private void publishMentionNotifications(Post post, String authorId) {
+        if (post.getContent() == null || post.getContent().isBlank()) return;
+        String authorName = userClient.displayName(authorId);
+        Matcher m = MENTION_PATTERN.matcher(post.getContent());
+        while (m.find()) {
+            String mentionedId = m.group(1);
+            if (!mentionedId.equals(authorId)) {
+                notificationPublisher.publish(NotificationEvent.builder()
+                        .recipientId(mentionedId)
+                        .senderId(authorId)
+                        .notificationType("MENTION")
+                        .title(authorName + " mentioned you in a post")
+                        .body(post.getContent().length() > 100
+                                ? post.getContent().substring(0, 100) + "…"
+                                : post.getContent())
+                        .resourceId(post.getId())
+                        .resourceType("POST")
+                        .build());
+            }
+        }
     }
 
     /* ── Mapping ──────────────────────────────────────────────────────────── */

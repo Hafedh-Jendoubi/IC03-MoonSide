@@ -34,7 +34,8 @@ public class GatewayConfig {
 
                 // Notification Service: Notification
                 .route("notification-service", r -> r
-                        .path("/notifications/**")
+                        .path("/api/notifications/**")
+                        .filters(f -> f.dedupeResponseHeader("Access-Control-Allow-Origin Access-Control-Allow-Credentials", "RETAIN_FIRST"))
                         .uri("lb://NOTIFICATION-SERVICE"))
 
                 // Badge Service: Badge, UserBadge, AuditLog

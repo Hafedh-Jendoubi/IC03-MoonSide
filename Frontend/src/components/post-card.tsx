@@ -50,6 +50,8 @@ import { useAuth } from '@/lib/auth-context'
 import { UsersModal, ModalUser } from '@/components/users-modal'
 import { AttachmentGallery } from '@/components/attachment-gallery'
 import { EditPostModal } from '@/components/edit-post-modal'
+import { MentionTextarea } from '@/components/mention-textarea'
+import { renderMentions } from '@/lib/render-mentions'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -523,13 +525,13 @@ function ReplyInput({
     <form onSubmit={handleSubmit} className="mt-2 flex items-center gap-2">
       <UserAvatar user={usersMap[currentUserId]} size={depth >= 2 ? 'xs' : 'sm'} />
       <div className="flex flex-1 items-center gap-2">
-        <input
-          ref={inputRef}
+        <MentionTextarea
           value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Write a reply…"
-          maxLength={2000}
-          className="bg-muted text-foreground placeholder-muted-foreground focus:ring-primary/30 flex-1 rounded-full px-4 py-1.5 text-sm focus:ring-2 focus:outline-none dark:bg-slate-800"
+          onChange={setText}
+          placeholder="Write a reply… (type @ to mention)"
+          singleLine
+          onSubmit={() => handleSubmit({ preventDefault: () => {} } as React.FormEvent)}
+          className="flex-1 rounded-full px-4 py-1.5"
         />
         <Button
           type="submit"
@@ -740,13 +742,11 @@ function CommentRow({
           </div>
           {isEditing ? (
             <div className="mt-2 space-y-2">
-              <textarea
+              <MentionTextarea
                 value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                maxLength={2000}
+                onChange={setEditContent}
                 rows={3}
-                className="bg-background text-foreground placeholder-muted-foreground focus:ring-primary/30 w-full rounded-lg px-3 py-2 text-sm focus:ring-2 focus:outline-none dark:bg-slate-700"
-                autoFocus
+                className="rounded-lg px-3 py-2 dark:bg-slate-700"
               />
               <div className="flex justify-end gap-2">
                 <Button
@@ -773,7 +773,9 @@ function CommentRow({
               </div>
             </div>
           ) : (
-            <p className="text-foreground mt-1 text-sm leading-relaxed">{comment.content}</p>
+            <p className="text-foreground mt-1 text-sm leading-relaxed">
+              {renderMentions(comment.content, usersMap)}
+            </p>
           )}
         </div>
         <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-3 pl-3 text-xs">
@@ -1209,7 +1211,7 @@ export function PostCard({
         <>
           {post.content && (
             <p className="text-foreground mb-2 leading-relaxed whitespace-pre-wrap">
-              {post.content}
+              {renderMentions(post.content, commentUsersMap)}
             </p>
           )}
           {/* Survey panel — renders below content for SURVEY posts */}
@@ -1287,21 +1289,22 @@ export function PostCard({
         {/* Comment section */}
         {showComments && (
           <div className="border-border mt-2 border-t pt-4 dark:border-slate-700">
-            <form onSubmit={handleAddComment} className="mb-4 flex items-center gap-3">
+            <form onSubmit={handleAddComment} className="mb-4 flex items-start gap-3">
               <UserAvatar user={commentUsersMap[currentUserId]} size="sm" />
-              <div className="flex flex-1 items-center gap-2">
-                <input
+              <div className="flex flex-1 items-start gap-2">
+                <MentionTextarea
                   value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Write a comment…"
-                  maxLength={2000}
-                  className="bg-muted text-foreground placeholder-muted-foreground focus:ring-primary/30 flex-1 rounded-full px-4 py-2 text-sm focus:ring-2 focus:outline-none dark:bg-slate-800"
+                  onChange={setNewComment}
+                  placeholder="Write a comment… (type @ to mention someone)"
+                  singleLine
+                  onSubmit={handleAddComment as unknown as () => void}
+                  className="flex-1 rounded-full px-4 py-2"
                 />
                 <Button
                   type="submit"
                   size="icon"
                   disabled={!newComment.trim() || submittingComment}
-                  className="h-8 w-8 shrink-0"
+                  className="mt-0.5 h-8 w-8 shrink-0"
                 >
                   <Send size={14} />
                 </Button>

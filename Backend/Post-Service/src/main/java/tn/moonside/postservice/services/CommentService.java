@@ -8,16 +8,21 @@ import org.springframework.stereotype.Service;
 import tn.moonside.postservice.audit.AuditClient;
 import tn.moonside.postservice.audit.PostAuditAction;
 import tn.moonside.postservice.clients.OrganizationClient;
+import tn.moonside.postservice.clients.UserClient;
 import tn.moonside.postservice.dtos.requests.CommentRequest;
 import tn.moonside.postservice.dtos.responses.CommentResponse;
 import tn.moonside.postservice.entities.Comment;
 import tn.moonside.postservice.entities.Post;
+import tn.moonside.postservice.event.NotificationEvent;
+import tn.moonside.postservice.kafka.NotificationEventPublisher;
 import tn.moonside.postservice.repositories.CommentRepository;
 import tn.moonside.postservice.repositories.PostRepository;
 import tn.moonside.postservice.repositories.ReactionRepository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +34,11 @@ public class CommentService {
     private final ReactionRepository reactionRepository;
     private final OrganizationClient organizationClient;
     private final AuditClient auditClient;
+    private final UserClient userClient;
+    private final NotificationEventPublisher notificationPublisher;
+
+    /** Matches @uuid-style mentions in comment content. */
+    private static final Pattern MENTION_PATTERN = Pattern.compile("@([0-9a-fA-F\\-]{36})");
 
     public CommentResponse addComment(String postId, CommentRequest req, String authorId) {
         if (!postRepository.existsById(postId)) {
@@ -46,9 +56,76 @@ public class CommentService {
                 .build();
         Comment saved = commentRepository.save(comment);
 
+        // ── Kafka notification ────────────────────────────────────────────────
+        Post parentPost = postRepository.findById(postId).orElse(null);
+        if (parentPost != null) {
+            String commenterName = userClient.displayName(authorId);
+            if (req.getParentId() != null) {
+                // Reply: notify the parent comment author
+                commentRepository.findById(req.getParentId()).ifPresent(parentComment -> {
+                    if (!parentComment.getAuthorId().equals(authorId)) {
+                        notificationPublisher.publish(NotificationEvent.builder()
+                                .recipientId(parentComment.getAuthorId())
+                                .senderId(authorId)
+                                .notificationType("COMMENT")
+                                .title(commenterName + " replied to your comment")
+                                .body(saved.getContent())
+                                .resourceId(postId)
+                                .resourceType("POST")
+                                .build());
+                    }
+                });
+            } else if (!parentPost.getAuthorId().equals(authorId)) {
+                // Top-level comment: notify post author
+                notificationPublisher.publish(NotificationEvent.builder()
+                        .recipientId(parentPost.getAuthorId())
+                        .senderId(authorId)
+                        .notificationType("COMMENT")
+                        .title(commenterName + " commented on your post")
+                        .body(saved.getContent())
+                        .resourceId(postId)
+                        .resourceType("POST")
+                        .build());
+            }
+        }
+
+        // ── Mention notifications ─────────────────────────────────────────────
+        if (saved.getContent() != null) {
+            String commenterNameForMention = userClient.displayName(authorId);
+            Matcher m = MENTION_PATTERN.matcher(saved.getContent());
+            while (m.find()) {
+                String mentionedUserId = m.group(1);
+                if (!mentionedUserId.equals(authorId)) {
+                    notificationPublisher.publish(NotificationEvent.builder()
+                            .recipientId(mentionedUserId)
+                            .senderId(authorId)
+                            .notificationType("MENTION")
+                            .title(commenterNameForMention + " mentioned you in a comment")
+                            .body(saved.getContent())
+                            .resourceId(postId)
+                            .resourceType("POST")
+                            .build());
+                }
+            }
+        }
+
+        String commenterName = userClient.displayName(authorId);
+        String commentAddedDesc;
+        if (req.getParentId() != null) {
+            // reply: resolve the parent comment's author
+            String parentAuthorName = commentRepository.findById(req.getParentId())
+                    .map(pc -> userClient.displayName(pc.getAuthorId()))
+                    .orElse("another user");
+            commentAddedDesc = commenterName + " replied to a comment by " + parentAuthorName;
+        } else {
+            // top-level comment: resolve the post author
+            String postAuthorName = postRepository.findById(postId)
+                    .map(p -> userClient.displayName(p.getAuthorId()))
+                    .orElse("another user");
+            commentAddedDesc = commenterName + " commented on a post by " + postAuthorName;
+        }
         auditClient.log(authorId, saved.getId(), "COMMENT", PostAuditAction.COMMENT_ADDED,
-                "Comment added on post '" + postId + "'" +
-                (req.getParentId() != null ? " as reply to comment '" + req.getParentId() + "'" : ""),
+                commentAddedDesc,
                 true, null, saved.getContent());
 
         return toResponse(saved);
@@ -97,8 +174,13 @@ public class CommentService {
         comment.setUpdatedAt(LocalDateTime.now());
         Comment saved = commentRepository.save(comment);
 
+        String updaterName = userClient.displayName(requesterId);
+        boolean isCommentOwner = comment.getAuthorId().equals(requesterId);
+        String updateCommentDesc = isCommentOwner
+                ? updaterName + " edited their own comment"
+                : updaterName + " edited a comment by " + userClient.displayName(comment.getAuthorId()) + " (moderator action)";
         auditClient.log(requesterId, commentId, "COMMENT", PostAuditAction.COMMENT_UPDATED,
-                "Comment updated by user '" + requesterId + "' on post '" + comment.getPostId() + "'",
+                updateCommentDesc,
                 true, oldContent, saved.getContent());
 
         return toResponse(saved);
@@ -115,8 +197,14 @@ public class CommentService {
         reactionRepository.deleteByReactableTypeAndReactableId("COMMENT", commentId);
         commentRepository.delete(comment);
 
+        String deleterNameC = userClient.displayName(requesterId);
+        String commentOwnerName = userClient.displayName(comment.getAuthorId());
+        boolean deletingOwn = comment.getAuthorId().equals(requesterId);
+        String deleteCommentDesc = deletingOwn
+                ? deleterNameC + " deleted their own comment"
+                : deleterNameC + " deleted a comment by " + commentOwnerName + " (moderator action)";
         auditClient.log(requesterId, commentId, "COMMENT", PostAuditAction.COMMENT_DELETED,
-                "Comment deleted by user '" + requesterId + "' on post '" + postId + "'",
+                deleteCommentDesc,
                 true, comment.getContent(), null);
     }
 

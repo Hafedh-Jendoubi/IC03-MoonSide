@@ -5,6 +5,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import tn.moonside.postservice.audit.AuditClient;
 import tn.moonside.postservice.audit.PostAuditAction;
+import tn.moonside.postservice.clients.UserClient;
+import tn.moonside.postservice.entities.Post;
 import tn.moonside.postservice.dtos.responses.PostResponse;
 import tn.moonside.postservice.entities.SavedPost;
 import tn.moonside.postservice.repositories.PostRepository;
@@ -21,6 +23,7 @@ public class SavedPostService {
     private final PostRepository postRepository;
     private final PostService postService;
     private final AuditClient auditClient;
+    private final UserClient userClient;
 
     public void save(String postId, String userId) {
         if (!postRepository.existsById(postId)) {
@@ -31,8 +34,15 @@ public class SavedPostService {
         }
         savedPostRepository.save(SavedPost.builder().userId(userId).postId(postId).build());
 
+        String saverName = userClient.displayName(userId);
+        String savedPostDesc = postRepository.findById(postId).map(p -> {
+            String postAuthorName = userClient.displayName(p.getAuthorId());
+            String date = p.getCreatedAt()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+            return saverName + " bookmarked a post by " + postAuthorName + " (posted " + date + ")";
+        }).orElse(saverName + " bookmarked a post");
         auditClient.log(userId, postId, "POST", PostAuditAction.POST_SAVED,
-                "Post '" + postId + "' saved by user '" + userId + "'",
+                savedPostDesc,
                 true, null, null);
     }
 
@@ -42,8 +52,13 @@ public class SavedPostService {
         }
         savedPostRepository.deleteByUserIdAndPostId(userId, postId);
 
+        String unsaverName = userClient.displayName(userId);
+        String unsavedPostDesc = postRepository.findById(postId).map(p -> {
+            String postAuthorName = userClient.displayName(p.getAuthorId());
+            return unsaverName + " removed a bookmark on a post by " + postAuthorName;
+        }).orElse(unsaverName + " removed a bookmark");
         auditClient.log(userId, postId, "POST", PostAuditAction.POST_UNSAVED,
-                "Post '" + postId + "' unsaved by user '" + userId + "'",
+                unsavedPostDesc,
                 true, null, null);
     }
 

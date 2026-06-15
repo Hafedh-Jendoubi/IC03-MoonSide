@@ -270,6 +270,16 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public List<UserResponse> searchByName(String query) {
+        if (query == null || query.isBlank()) return List.of();
+        String escaped = query.trim().replaceAll("[.*+?^${}()|\\[\\]\\\\]", "\\\\$0");
+        return userRepository.searchByName(escaped).stream()
+                .limit(10)
+                .map(this::mapToUserResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     @Transactional
     public UserResponse updateAvatar(String email, String avatarUrl) {
         User user = userRepository.findByEmail(email)

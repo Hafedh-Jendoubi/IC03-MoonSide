@@ -34,6 +34,10 @@ public class Project {
     @Builder.Default
     private List<String> teamIds = List.of();
 
+    /** User IDs assigned to work on this project (must be members of a responsible team). */
+    @Builder.Default
+    private List<String> assignedUserIds = List.of();
+
     // ── Software-engineering metadata ─────────────────────────────────────────
 
     /** Main tech stack (e.g. ["Java", "Spring Boot", "React", "MongoDB"]). */
