@@ -1,14 +1,11 @@
 package tn.moonside.searchservice.service;
 
-import co.elastic.clients.elasticsearch._types.query_dsl.MultiMatchQuery;
-import co.elastic.clients.elasticsearch._types.query_dsl.Query;
 import co.elastic.clients.elasticsearch._types.query_dsl.TextQueryType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
 import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
 import org.springframework.data.elasticsearch.core.SearchHits;
-import org.springframework.data.elasticsearch.core.query.StringQuery;
 import org.springframework.stereotype.Service;
 import tn.moonside.searchservice.document.*;
 import tn.moonside.searchservice.dto.SearchDto;
@@ -16,7 +13,6 @@ import tn.moonside.searchservice.repository.*;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 @Service
 @RequiredArgsConstructor
@@ -28,8 +24,6 @@ public class SearchService {
     private final TeamSearchRepository teamSearchRepository;
     private final DepartmentSearchRepository departmentSearchRepository;
     private final PostSearchRepository postSearchRepository;
-
-    // ── Global search across all indices ────────────────────────────────────
 
     public SearchDto.SearchResult globalSearch(String query, int maxPerCategory) {
         log.debug("Global search: query='{}', maxPerCategory={}", query, maxPerCategory);
@@ -50,15 +44,19 @@ public class SearchService {
                 .build();
     }
 
-    // ── Users ────────────────────────────────────────────────────────────────
-
     private List<SearchDto.UserHit> searchUsers(String query, int max) {
         try {
             NativeQuery nativeQuery = NativeQuery.builder()
                     .withQuery(q -> q.multiMatch(mm -> mm
                             .query(query)
-                            .fields("firstName", "lastName", "jobTitle", "email")
+                            // fullName (concatenated "firstName lastName") catches multi-word
+                            // queries like "Hafedh Jendoubi" as a single best-matching field.
+                            // firstName/lastName/jobTitle/email catch single-word queries.
+                            // best_fields picks whichever field scores highest and, unlike
+                            // cross_fields, supports fuzziness for typo-tolerant matching.
+                            .fields("fullName^3", "firstName", "lastName", "jobTitle", "email")
                             .type(TextQueryType.BestFields)
+                            .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.Or)
                             .fuzziness("AUTO")
                     ))
                     .withMaxResults(max)
@@ -89,7 +87,7 @@ public class SearchService {
             NativeQuery nativeQuery = NativeQuery.builder()
                     .withQuery(q -> q.multiMatch(mm -> mm
                             .query(query)
-                            .fields("name", "description")
+                            .fields("name^2", "description")
                             .type(TextQueryType.BestFields)
                             .fuzziness("AUTO")
                     ))
@@ -120,7 +118,7 @@ public class SearchService {
             NativeQuery nativeQuery = NativeQuery.builder()
                     .withQuery(q -> q.multiMatch(mm -> mm
                             .query(query)
-                            .fields("name", "description")
+                            .fields("name^2", "description")
                             .type(TextQueryType.BestFields)
                             .fuzziness("AUTO")
                     ))
@@ -183,14 +181,17 @@ public class SearchService {
             userSearchRepository.deleteById(event.getId());
             return;
         }
+        String fullName = (event.getFirstName() != null ? event.getFirstName() : "") + " "
+                + (event.getLastName() != null ? event.getLastName() : "");
         userSearchRepository.save(UserDocument.builder()
                 .id(event.getId())
                 .firstName(event.getFirstName())
                 .lastName(event.getLastName())
+                .fullName(fullName.trim())
                 .email(event.getEmail())
                 .jobTitle(event.getJobTitle())
                 .avatar(event.getAvatar())
-                .isActive(event.isActive())
+                .active(event.isActive())
                 .build());
     }
 

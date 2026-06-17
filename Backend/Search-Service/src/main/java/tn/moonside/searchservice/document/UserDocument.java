@@ -24,6 +24,13 @@ public class UserDocument {
     @Field(type = FieldType.Text, analyzer = "autocomplete", searchAnalyzer = "standard")
     private String lastName;
 
+    /**
+     * Concatenated "firstName lastName" — allows cross-field full-name search
+     * (e.g. "Hafedh Jendoubi" matches even though the words span two fields).
+     */
+    @Field(type = FieldType.Text, analyzer = "autocomplete", searchAnalyzer = "standard")
+    private String fullName;
+
     @Field(type = FieldType.Keyword)
     private String email;
 
@@ -34,5 +41,5 @@ public class UserDocument {
     private String avatar;
 
     @Field(type = FieldType.Boolean)
-    private boolean isActive;
+    private boolean active;
 }
