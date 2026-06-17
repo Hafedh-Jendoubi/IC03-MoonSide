@@ -57,6 +57,11 @@ public class SecurityConfig {
                 // ── Actuator ──────────────────────────────────────────────────
                 .requestMatchers("/actuator/health", "/actuator/info").permitAll()
 
+                // ── Internal search reindex ────────────────────────────────────
+                // Called by the Search Service on startup to backfill ES index.
+                .requestMatchers(HttpMethod.POST, "/organizations/departments/internal/reindex").permitAll()
+                .requestMatchers(HttpMethod.POST, "/organizations/teams/internal/reindex").permitAll()
+
                 // ── TEAM_VIEW — browse teams (every authenticated user) ────────
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/public").authenticated()
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/independent").authenticated()

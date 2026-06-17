@@ -7,7 +7,7 @@ import java.util.List;
 
 public interface DepartmentRepository extends MongoRepository<Department, String> {
 
-    List<Department> findByIsActiveTrue();
+    List<Department> findByActiveTrue();
 
     boolean existsByNameIgnoreCase(String name);
 

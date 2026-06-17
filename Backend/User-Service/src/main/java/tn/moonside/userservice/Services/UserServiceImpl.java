@@ -500,4 +500,12 @@ public class UserServiceImpl implements UserService {
                 .updatedAt(user.getUpdatedAt())
                 .build();
     }
+
+    @Override
+    public int reindexAll() {
+        List<User> users = userRepository.findAll();
+        users.forEach(searchIndexPublisher::publishUpsert);
+        log.info("Reindexed {} users to search index", users.size());
+        return users.size();
+    }
 }

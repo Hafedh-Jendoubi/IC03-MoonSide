@@ -29,7 +29,7 @@ public class Department {
     private String bannerUrl;
 
     @Builder.Default
-    private boolean isActive = true;
+    private boolean active = true;
 
     /**
      * When true, any authenticated user can view the members of teams in this department.

@@ -43,7 +43,7 @@ public class DepartmentService {
                 .managerId(request.getManagerId())
                 .avatarUrl(request.getAvatarUrl())
                 .bannerUrl(request.getBannerUrl())
-                .isActive(true)
+                .active(true)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -74,7 +74,7 @@ public class DepartmentService {
     }
 
     public List<DepartmentResponse> getActiveDepartments() {
-        return departmentRepository.findByIsActiveTrue()
+        return departmentRepository.findByActiveTrue()
                 .stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
@@ -416,10 +416,10 @@ public class DepartmentService {
                 .description(dept.getDescription())
                 .avatarUrl(dept.getAvatarUrl())
                 .bannerUrl(dept.getBannerUrl())
-                .isActive(dept.isActive())
+                .active(dept.isActive())
                 .membersPublic(dept.isMembersPublic())
                 .teamCount(teamCount)
-                .isFollowing(isFollowing)
+                .following(isFollowing)
                 .followerCount(followerCount)
                 .createdAt(dept.getCreatedAt())
                 .updatedAt(dept.getUpdatedAt())

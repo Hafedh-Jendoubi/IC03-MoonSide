@@ -14,6 +14,8 @@ import tn.moonside.organizationservice.dtos.requests.UpdateImagesRequest;
 import tn.moonside.organizationservice.dtos.responses.ApiResponse;
 import tn.moonside.organizationservice.dtos.responses.TeamResponse;
 import tn.moonside.organizationservice.dtos.responses.UserTeamResponse;
+import tn.moonside.organizationservice.kafka.SearchIndexPublisher;
+import tn.moonside.organizationservice.repositories.TeamRepository;
 import tn.moonside.organizationservice.services.TeamService;
 
 import java.util.List;
@@ -25,6 +27,8 @@ import java.util.stream.Collectors;
 public class TeamController {
 
     private final TeamService teamService;
+    private final SearchIndexPublisher searchIndexPublisher;
+    private final TeamRepository teamRepository;
 
     // ── Public / authenticated reads ─────────────────────────────────────────
 
@@ -277,5 +281,16 @@ public class TeamController {
         return ResponseEntity.ok(ApiResponse.success(
                 teamService.updateBanner(teamId, request.getUrl(), userId, roles),
                 "Team banner updated"));
+    }
+
+    /**
+     * Internal endpoint — re-publishes all teams to the search.index.teams
+     * Kafka topic so the Search Service Elasticsearch index stays in sync.
+     */
+    @PostMapping("/internal/reindex")
+    public ResponseEntity<ApiResponse<String>> reindexAll() {
+        var teams = teamRepository.findAll();
+        teams.forEach(searchIndexPublisher::publishTeamUpsert);
+        return ResponseEntity.ok(ApiResponse.success("Reindexed " + teams.size() + " teams"));
     }
 }
