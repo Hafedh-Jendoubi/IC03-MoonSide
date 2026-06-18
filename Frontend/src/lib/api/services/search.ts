@@ -1,12 +1,7 @@
 import { apiFetch } from '../client'
-import type { SearchResult } from '../types/search'
+import type { SearchResponse } from '../types/search'
 
 export const searchApi = {
-  /**
-   * Global search across users, teams, departments and posts.
-   * @param q     - search query string
-   * @param size  - max results per category (default 5)
-   */
-  global: (q: string, size = 5) =>
-    apiFetch<SearchResult>(`/search?q=${encodeURIComponent(q)}&size=${size}`),
+  /** Global search across users, teams, and posts. Backs the navbar search bar. */
+  search: (query: string) => apiFetch<SearchResponse>(`/search?q=${encodeURIComponent(query)}`),
 }

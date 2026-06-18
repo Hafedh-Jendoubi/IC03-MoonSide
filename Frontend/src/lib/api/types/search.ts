@@ -1,40 +1,17 @@
-export interface UserHit {
+export type SearchResultType = 'USER' | 'TEAM' | 'POST'
+
+export interface SearchResultItem {
   id: string
-  firstName: string
-  lastName: string
-  email: string
-  jobTitle?: string
-  avatar?: string
+  type: SearchResultType
+  title: string
+  subtitle?: string | null
+  imageUrl?: string | null
+  /** Only set for POST results — the team the post belongs to. */
+  teamId?: string | null
 }
 
-export interface TeamHit {
-  id: string
-  name: string
-  description?: string
-  departmentId?: string
-  avatarUrl?: string
-}
-
-export interface DepartmentHit {
-  id: string
-  name: string
-  description?: string
-  avatarUrl?: string
-}
-
-export interface PostHit {
-  id: string
-  content: string
-  authorId: string
-  authorName?: string
-  postType?: string
-  createdAt?: string
-}
-
-export interface SearchResult {
-  users: UserHit[]
-  teams: TeamHit[]
-  departments: DepartmentHit[]
-  posts: PostHit[]
-  totalHits: number
+export interface SearchResponse {
+  users: SearchResultItem[]
+  teams: SearchResultItem[]
+  posts: SearchResultItem[]
 }

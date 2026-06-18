@@ -28,6 +28,4 @@ public interface UserService {
     BulkInviteResult bulkInviteFromExcel(MultipartFile file);
     /** Search users by name prefix for mention autocomplete (max 10 results). */
     List<UserResponse> searchByName(String query);
-    /** Publish all existing users to the search index topic (backfill). */
-    int reindexAll();
 }

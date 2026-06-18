@@ -9,6 +9,7 @@ export * from './types/media'
 export * from './types/audit'
 export * from './types/organizations'
 export * from './types/posts'
+export * from './types/search'
 
 // Re-export all services
 export { authApi } from './services/auth'
@@ -20,6 +21,7 @@ export { notificationsApi } from './services/notifications'
 export { departmentApi } from './services/organizations/departments'
 export { teamApi } from './services/organizations/teams'
 export { projectApi } from './services/organizations/projects'
+export { searchApi } from './services/search'
 export {
   postApi,
   surveyApi,
@@ -28,10 +30,6 @@ export {
   reactionApi,
   attachmentApi,
 } from './services/posts'
-
-// Re-export search
-export type { SearchResult, UserHit, TeamHit, DepartmentHit, PostHit } from './types/search'
-export { searchApi } from './services/search'
 
 // Re-export core utilities
 export { tokenStorage, apiFetch } from './client'

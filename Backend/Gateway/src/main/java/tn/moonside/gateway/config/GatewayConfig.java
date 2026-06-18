@@ -48,10 +48,10 @@ public class GatewayConfig {
                         .path("/media/**")
                         .uri("lb://MEDIA-SERVICE"))
 
-                // Search Service: Elasticsearch-powered global search
+                // Search Service: global search across users, posts, teams (Elasticsearch)
                 .route("search-service", r -> r
                         .path("/search/**")
-                        .uri("lb://search-service"))
+                        .uri("lb://SEARCH-SERVICE"))
 
                 .build();
     }

@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context'
 import { canAccessBackOffice, getFullName } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import {
   Home,
   Mail,
@@ -16,6 +17,8 @@ import {
   LogOut,
   Settings,
   User,
+  Users,
+  FileText,
   Shield,
   Compass,
   Bookmark,
@@ -25,11 +28,14 @@ import {
   Pin,
   Moon,
   Sun,
+  Loader2,
+  X,
 } from 'lucide-react'
 import { NotificationType } from '@/lib/types'
 import { useNotifications } from '@/hooks/use-notifications'
+import { useSearch } from '@/hooks/use-search'
 import { NotificationToast } from '@/components/notification-toast'
-import { GlobalSearch } from '@/components/global-search'
+import type { SearchResultItem } from '@/lib/api/types/search'
 
 function NotifIcon({ type }: { type: NotificationType }) {
   switch (type) {
@@ -46,6 +52,41 @@ function NotifIcon({ type }: { type: NotificationType }) {
   }
 }
 
+function SearchResultRow({ item, onClick }: { item: SearchResultItem; onClick: () => void }) {
+  const initials =
+    item.title
+      .split(' ')
+      .map((part) => part[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || '?'
+
+  return (
+    <button
+      onClick={onClick}
+      className="hover:bg-muted flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors"
+    >
+      {item.type === 'POST' ? (
+        <span className="bg-muted text-muted-foreground flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full">
+          <FileText size={16} />
+        </span>
+      ) : (
+        <Avatar className="h-8 w-8 flex-shrink-0">
+          {item.imageUrl && <AvatarImage src={item.imageUrl} alt={item.title} />}
+          <AvatarFallback className="text-xs font-semibold">
+            {item.type === 'TEAM' ? <Users size={14} /> : initials}
+          </AvatarFallback>
+        </Avatar>
+      )}
+      <div className="min-w-0">
+        <p className="text-foreground truncate font-medium">{item.title}</p>
+        {item.subtitle && <p className="text-muted-foreground truncate text-xs">{item.subtitle}</p>}
+      </div>
+    </button>
+  )
+}
+
 export function Navbar() {
   const { user, logout } = useAuth()
   const { theme, setTheme } = useTheme()
@@ -55,6 +96,10 @@ export function Navbar() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const notificationsRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLDivElement>(null)
+
+  const { query, results, isLoading, isOpen, setIsOpen, hasResults, onQueryChange, clear } =
+    useSearch()
 
   const { notifications, unreadCount, markAsRead, markAllAsRead, latestPush, clearLatestPush } =
     useNotifications(user?.id)
@@ -67,14 +112,28 @@ export function Navbar() {
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
         setIsNotificationsOpen(false)
       }
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setIsOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
+  }, [setIsOpen])
 
   const handleLogout = () => {
     logout()
     router.push('/login')
+  }
+
+  const handleSelectResult = (item: SearchResultItem) => {
+    clear()
+    if (item.type === 'USER') {
+      router.push(`/profile/${item.id}`)
+    } else if (item.type === 'TEAM') {
+      router.push(`/team/${item.id}`)
+    } else {
+      router.push(item.teamId ? `/team/${item.teamId}` : '/feed')
+    }
   }
 
   const navLinks = [
@@ -114,7 +173,96 @@ export function Navbar() {
             </div>
 
             {/* Search Bar */}
-            <GlobalSearch />
+            <div className="mx-8 hidden max-w-sm flex-1 lg:flex" ref={searchRef}>
+              <div className="relative w-full">
+                <Search
+                  className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 transform"
+                  size={18}
+                />
+                <Input
+                  type="text"
+                  value={query}
+                  onChange={(e) => onQueryChange(e.target.value)}
+                  onFocus={() => query.trim().length > 0 && setIsOpen(true)}
+                  onKeyDown={(e) => e.key === 'Escape' && setIsOpen(false)}
+                  placeholder="Search people, posts, teams..."
+                  className="bg-muted pr-9 pl-10"
+                />
+                {query && (
+                  <button
+                    onClick={clear}
+                    aria-label="Clear search"
+                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transform"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+
+                {isOpen && (
+                  <div className="border-border animate-slide-down bg-background absolute left-0 mt-2 max-h-96 w-full overflow-y-auto rounded-lg border shadow-lg dark:shadow-xl">
+                    {query.trim().length < 2 ? (
+                      <p className="text-muted-foreground px-4 py-6 text-center text-sm">
+                        Keep typing to search…
+                      </p>
+                    ) : isLoading ? (
+                      <p className="text-muted-foreground flex items-center justify-center gap-2 px-4 py-6 text-center text-sm">
+                        <Loader2 size={14} className="animate-spin" />
+                        Searching…
+                      </p>
+                    ) : !hasResults ? (
+                      <p className="text-muted-foreground px-4 py-6 text-center text-sm">
+                        No results for &ldquo;{query}&rdquo;
+                      </p>
+                    ) : (
+                      <div className="p-2">
+                        {results.users.length > 0 && (
+                          <div className="mb-1">
+                            <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
+                              People
+                            </p>
+                            {results.users.map((item) => (
+                              <SearchResultRow
+                                key={`user-${item.id}`}
+                                item={item}
+                                onClick={() => handleSelectResult(item)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {results.teams.length > 0 && (
+                          <div className="mb-1">
+                            <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
+                              Teams
+                            </p>
+                            {results.teams.map((item) => (
+                              <SearchResultRow
+                                key={`team-${item.id}`}
+                                item={item}
+                                onClick={() => handleSelectResult(item)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {results.posts.length > 0 && (
+                          <div>
+                            <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
+                              Posts
+                            </p>
+                            {results.posts.map((item) => (
+                              <SearchResultRow
+                                key={`post-${item.id}`}
+                                item={item}
+                                onClick={() => handleSelectResult(item)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Right Side */}
             <div className="flex items-center gap-4">

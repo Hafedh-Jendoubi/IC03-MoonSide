@@ -16,7 +16,6 @@ import tn.moonside.userservice.repositories.PermissionRoleRepository;
 import tn.moonside.userservice.repositories.PermissionRepository;
 import tn.moonside.userservice.entities.PermissionRole;
 import lombok.RequiredArgsConstructor;
-import tn.moonside.userservice.kafka.SearchIndexPublisher;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Value;
@@ -52,7 +51,6 @@ public class UserServiceImpl implements UserService {
     private final AuditLogService auditLogService;
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender mailSender;
-    private final SearchIndexPublisher searchIndexPublisher;
 
     @Value("${app.name:WorkSphere}")
     private String appName;
@@ -110,7 +108,6 @@ public class UserServiceImpl implements UserService {
         // Log the invitation
         auditLogService.log(saved.getId(), saved.getId(), "USER",
                 "USER_INVITED", "User invited: " + saved.getEmail(), true, null, null, null);
-        searchIndexPublisher.publishUpsert(saved);
 
         return mapToUserResponse(saved);
     }
@@ -292,7 +289,6 @@ public class UserServiceImpl implements UserService {
         user.setUpdatedAt(LocalDateTime.now());
         User saved = userRepository.save(user);
         log.info("Updated avatar for user: {}", saved.getId());
-        searchIndexPublisher.publishUpsert(saved);
 
         String action = (avatarUrl == null) ? "AVATAR_DELETE" : "AVATAR_UPDATE";
         String desc   = (avatarUrl == null)
@@ -323,7 +319,6 @@ public class UserServiceImpl implements UserService {
         user.setUpdatedAt(LocalDateTime.now());
         User updated = userRepository.save(user);
         log.info("Updated user: {}", updated.getId());
-        searchIndexPublisher.publishUpsert(updated);
 
         auditLogService.log(updated.getId(), updated.getId(), "USER",
                 "PROFILE_UPDATE",
@@ -499,13 +494,5 @@ public class UserServiceImpl implements UserService {
                 .createdAt(user.getCreatedAt())
                 .updatedAt(user.getUpdatedAt())
                 .build();
-    }
-
-    @Override
-    public int reindexAll() {
-        List<User> users = userRepository.findAll();
-        users.forEach(searchIndexPublisher::publishUpsert);
-        log.info("Reindexed {} users to search index", users.size());
-        return users.size();
     }
 }

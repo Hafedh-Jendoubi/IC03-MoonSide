@@ -1,12 +1,28 @@
 package tn.moonside.notificationservice.config;
 
-/**
- * CORS is handled entirely by the API Gateway (CorsWebFilter in the gateway module).
- * Defining CORS here as well would cause duplicate Access-Control-Allow-Origin headers,
- * which browsers reject. The Gateway already has a dedupeResponseHeader filter on the
- * notification route to strip any accidental duplicates from SSE responses.
- *
- * This class is intentionally left empty — do not add a CorsFilter bean here.
- */
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
+
+import java.util.List;
+
+@Configuration
 public class CorsConfig {
+
+    @Bean
+    public CorsFilter corsFilter() {
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true);
+        // SSE requires the connection to be kept alive — allow the EventStream content type
+        config.setExposedHeaders(List.of("Content-Type", "Cache-Control", "Connection"));
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return new CorsFilter(source);
+    }
 }

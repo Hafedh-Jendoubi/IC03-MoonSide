@@ -13,8 +13,6 @@ import tn.moonside.organizationservice.dtos.requests.DepartmentRequest;
 import tn.moonside.organizationservice.dtos.requests.UpdateImagesRequest;
 import tn.moonside.organizationservice.dtos.responses.ApiResponse;
 import tn.moonside.organizationservice.dtos.responses.DepartmentResponse;
-import tn.moonside.organizationservice.kafka.SearchIndexPublisher;
-import tn.moonside.organizationservice.repositories.DepartmentRepository;
 import tn.moonside.organizationservice.services.DepartmentService;
 
 import java.util.List;
@@ -26,8 +24,6 @@ import java.util.stream.Collectors;
 public class DepartmentController {
 
     private final DepartmentService departmentService;
-    private final SearchIndexPublisher searchIndexPublisher;
-    private final DepartmentRepository departmentRepository;
 
     // ── Public / authenticated reads ─────────────────────────────────────────
 
@@ -176,17 +172,5 @@ public class DepartmentController {
             @AuthenticationPrincipal String userId) {
         return ResponseEntity.ok(ApiResponse.success(
                 departmentService.unfollowDepartment(id, userId), "Unfollowed department"));
-    }
-
-    /**
-     * Internal endpoint — re-publishes all departments to the search.index.departments
-     * Kafka topic so the Search Service Elasticsearch index stays in sync after
-     * a fresh deploy or Search Service restart.
-     */
-    @PostMapping("/internal/reindex")
-    public ResponseEntity<ApiResponse<String>> reindexAll() {
-        var departments = departmentRepository.findAll();
-        departments.forEach(searchIndexPublisher::publishDepartmentUpsert);
-        return ResponseEntity.ok(ApiResponse.success("Reindexed " + departments.size() + " departments"));
     }
 }

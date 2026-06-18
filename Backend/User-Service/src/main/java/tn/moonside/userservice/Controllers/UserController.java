@@ -199,18 +199,6 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(userService.searchByName(query)));
     }
 
-    /**
-     * Internal endpoint — triggers a full re-publish of all users to the
-     * search.index.users Kafka topic so Elasticsearch stays in sync after
-     * a fresh deploy or Search Service restart.
-     * Reachable only inside the Docker network (no auth required by gateway).
-     */
-    @PostMapping("/internal/reindex")
-    public ResponseEntity<ApiResponse<String>> reindexAll() {
-        int count = userService.reindexAll();
-        return ResponseEntity.ok(ApiResponse.success("Reindexed " + count + " users"));
-    }
-
     public ResponseEntity<ApiResponse<Void>> revokeRoleByNameInternal(
             @PathVariable String userId,
             @PathVariable String roleName) {

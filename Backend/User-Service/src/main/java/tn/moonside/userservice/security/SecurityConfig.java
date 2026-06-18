@@ -77,10 +77,6 @@ public class SecurityConfig {
                 // collection and has no privileged read access.
                 .requestMatchers(HttpMethod.POST, "/audit-logs/internal").permitAll()
 
-                // ── Internal search reindex ──────────────────────────────────
-                // Called by the Search Service on startup to backfill ES index.
-                .requestMatchers(HttpMethod.POST, "/users/internal/reindex").permitAll()
-
                 // ── Everything else requires a valid JWT ────────────────────
                 // Fine-grained permission checks are handled by
                 // PermissionAuthorizationFilter via @RequiresPermission.

@@ -35,6 +35,12 @@
             <artifactId>spring-boot-starter-data-mongodb</artifactId>
         </dependency>
 
+        <!-- Spring Data Elasticsearch (keeps the global search index in sync) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-elasticsearch</artifactId>
+        </dependency>
+
         <!-- Spring Security -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -151,12 +157,6 @@
             <version>5.2.5</version>
         </dependency>
 
-
-        <!-- Kafka (search index publishing) -->
-        <dependency>
-            <groupId>org.springframework.kafka</groupId>
-            <artifactId>spring-kafka</artifactId>
-        </dependency>
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

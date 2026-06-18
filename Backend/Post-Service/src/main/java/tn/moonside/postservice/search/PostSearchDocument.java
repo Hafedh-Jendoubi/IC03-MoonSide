@@ -1,37 +1,42 @@
-package tn.moonside.searchservice.document;
+package tn.moonside.postservice.search;
 
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.Document;
 import org.springframework.data.elasticsearch.annotations.Field;
 import org.springframework.data.elasticsearch.annotations.FieldType;
-import org.springframework.data.elasticsearch.annotations.Setting;
 
+/**
+ * Denormalized, search-friendly view of a {@link tn.moonside.postservice.entities.Post}.
+ * Indexed into Elasticsearch (index "posts") so Search-Service can query it.
+ * Only PUBLIC posts are ever indexed — see {@link PostSearchSyncListener} —
+ * so private, team-only, department-only, or draft content never leaks
+ * through global search.
+ */
 @Document(indexName = "posts")
-@Setting(settingPath = "elasticsearch/user-settings.json")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PostDocument {
+public class PostSearchDocument {
 
     @Id
     private String id;
 
-    @Field(type = FieldType.Text, analyzer = "autocomplete", searchAnalyzer = "standard")
+    @Field(type = FieldType.Text)
     private String content;
 
     @Field(type = FieldType.Keyword)
     private String authorId;
 
     @Field(type = FieldType.Keyword)
-    private String authorName;
+    private String teamId;
 
     @Field(type = FieldType.Keyword)
     private String postType;
-
-    @Field(type = FieldType.Keyword)
-    private String postVisibility;
 
     @Field(type = FieldType.Keyword)
     private String createdAt;
