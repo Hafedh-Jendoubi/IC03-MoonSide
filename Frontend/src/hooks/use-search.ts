@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { searchApi } from '@/lib/api'
-import type { SearchResponse } from '@/lib/api/types/search'
+import type { SearchHistoryItem, SearchResponse } from '@/lib/api/types/search'
 
 const EMPTY_RESULTS: SearchResponse = { users: [], teams: [], posts: [] }
 const MIN_QUERY_LENGTH = 2
@@ -13,16 +13,57 @@ const DEBOUNCE_MS = 300
  * Waits for a short pause in typing before hitting the API, and ignores
  * any response that's no longer for the latest query (handles out-of-order
  * network responses gracefully).
+ *
+ * Also tracks the signed-in user's recent search terms (synced to their
+ * account via Search-Service), so the dropdown can offer them as soon as
+ * the field is focused, before anything is even typed.
  */
-export function useSearch() {
+export function useSearch(userId: string | undefined) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResponse>(EMPTY_RESULTS)
   const [isLoading, setIsLoading] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
+  const [history, setHistory] = useState<SearchHistoryItem[]>([])
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestQueryRef = useRef('')
 
+  // ── Recent searches ─────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!userId) {
+      setHistory([])
+      return
+    }
+    searchApi
+      .getHistory()
+      .then(setHistory)
+      .catch(() => {})
+  }, [userId])
+
+  /** Remembers a search term. Safe to call freely — no-ops while signed out or below the minimum length. */
+  const recordSearch = useCallback(
+    (q: string) => {
+      if (!userId || q.trim().length < MIN_QUERY_LENGTH) return
+      searchApi
+        .addHistoryEntry(q.trim())
+        .then(() => searchApi.getHistory())
+        .then(setHistory)
+        .catch(() => {})
+    },
+    [userId]
+  )
+
+  const removeHistoryEntry = useCallback((id: string) => {
+    setHistory((prev) => prev.filter((h) => h.id !== id)) // optimistic
+    searchApi.deleteHistoryEntry(id).catch(() => {})
+  }, [])
+
+  const clearHistory = useCallback(() => {
+    setHistory([]) // optimistic
+    searchApi.clearHistory().catch(() => {})
+  }, [])
+
+  // ── Search-as-you-type ──────────────────────────────────────────────────
   const runSearch = useCallback(async (q: string) => {
     setIsLoading(true)
     try {
@@ -42,18 +83,32 @@ export function useSearch() {
       latestQueryRef.current = trimmed
 
       if (debounceRef.current) clearTimeout(debounceRef.current)
+      // Stay open while the field is being edited — when empty, the
+      // dropdown shows recent searches instead of live results.
+      setIsOpen(true)
 
       if (trimmed.length < MIN_QUERY_LENGTH) {
         setResults(EMPTY_RESULTS)
         setIsLoading(false)
-        setIsOpen(trimmed.length > 0)
         return
       }
 
-      setIsOpen(true)
       debounceRef.current = setTimeout(() => runSearch(trimmed), DEBOUNCE_MS)
     },
     [runSearch]
+  )
+
+  /** Re-runs a past search term, e.g. when the user picks it from "Recent searches". */
+  const selectHistoryQuery = useCallback(
+    (q: string) => {
+      setQuery(q)
+      latestQueryRef.current = q
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      setIsOpen(true)
+      runSearch(q)
+      recordSearch(q)
+    },
+    [runSearch, recordSearch]
   )
 
   const clear = useCallback(() => {
@@ -83,5 +138,10 @@ export function useSearch() {
     hasResults,
     onQueryChange,
     clear,
+    history,
+    recordSearch,
+    selectHistoryQuery,
+    removeHistoryEntry,
+    clearHistory,
   }
 }

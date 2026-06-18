@@ -15,3 +15,11 @@ export interface SearchResponse {
   teams: SearchResultItem[]
   posts: SearchResultItem[]
 }
+
+/** A single remembered search term, shown in the navbar's "Recent searches" list. */
+export interface SearchHistoryItem {
+  id: string
+  query: string
+  /** ISO-8601 timestamp of when this term was last searched. */
+  searchedAt: string
+}
