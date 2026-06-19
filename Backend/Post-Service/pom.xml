@@ -106,6 +106,12 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
+        <!-- Redis – post/feed caching and reaction-count caching -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <!-- MinIO Java SDK — S3-compatible object storage client -->
         <dependency>
             <groupId>io.minio</groupId>

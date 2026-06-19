@@ -2,6 +2,9 @@ package tn.moonside.postservice.services;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.data.domain.*;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
@@ -43,9 +46,13 @@ public class PostService {
     private final AuditClient auditClient;
     private final UserClient userClient;
     private final NotificationEventPublisher notificationPublisher;
+    private final org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
 
     /* ── Create ───────────────────────────────────────────────────────────── */
 
+    @Caching(evict = {
+        @CacheEvict(value = "publicFeed", allEntries = true)
+    })
     public PostResponse createPost(PostRequest req, String authorId) {
         // ── Membership guard ───────────────────────────────────────────────────
         // A user may only post into a team or department they actually belong to.
@@ -118,14 +125,33 @@ public class PostService {
 
     /* ── Read ─────────────────────────────────────────────────────────────── */
 
+    /**
+     * Returns the post body, served from cache when possible.
+     *
+     * View counting is intentionally NOT done here — incrementing a Mongo
+     * document on every read would force a write on every cache hit too,
+     * defeating the point of caching. Instead, views are tracked as a
+     * separate Redis counter (see {@link #recordView}) and periodically
+     * flushed to Mongo, so a cached read costs nothing but a Redis GET.
+     */
+    @Cacheable(value = "posts", key = "#postId")
     public PostResponse getById(String postId) {
         Post post = findPost(postId);
-        post.setViewCount(post.getViewCount() + 1);
-        postRepository.save(post);
         String requesterId = currentUserId();
         return toResponse(post, requesterId);
     }
 
+    /**
+     * Increments the view counter for a post in Redis. Cheap, high-frequency,
+     * and doesn't need to touch Mongo or invalidate the "posts" cache on
+     * every single view — a background job (or the next cache-evicting
+     * write) is responsible for periodically flushing these into Mongo.
+     */
+    public void recordView(String postId) {
+        redisTemplate.opsForValue().increment("post:views:" + postId);
+    }
+
+    @Cacheable(value = "publicFeed", key = "#page + '-' + #size")
     public Page<PostResponse> getPublicFeed(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         String requesterId = currentUserId();
@@ -193,6 +219,10 @@ public class PostService {
 
     /* ── Update ───────────────────────────────────────────────────────────── */
 
+    @Caching(evict = {
+        @CacheEvict(value = "posts", key = "#postId"),
+        @CacheEvict(value = "publicFeed", allEntries = true)
+    })
     public PostResponse updatePost(String postId, PostRequest req, String requesterId, List<String> roles) {
         Post post = findPost(postId);
         assertCanEdit(post, requesterId, roles, "edit");
@@ -243,6 +273,7 @@ public class PostService {
 
     /* ── Pin / Unpin ──────────────────────────────────────────────────────── */
 
+    @CacheEvict(value = "posts", key = "#postId")
     public PostResponse togglePin(String postId, String requesterId, List<String> roles) {
         Post post = findPost(postId);
         assertCanEdit(post, requesterId, roles, "pin/unpin");
@@ -264,6 +295,11 @@ public class PostService {
 
     /* ── Delete ───────────────────────────────────────────────────────────── */
 
+    @Caching(evict = {
+        @CacheEvict(value = "posts", key = "#postId"),
+        @CacheEvict(value = "publicFeed", allEntries = true),
+        @CacheEvict(value = "reactionSummary", key = "'POST-' + #postId")
+    })
     @Transactional
     public void deletePost(String postId, String requesterId, List<String> roles) {
         Post post = findPost(postId);

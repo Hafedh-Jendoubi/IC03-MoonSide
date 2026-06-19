@@ -58,6 +58,24 @@ services:
       start_period: 30s
 
 
+  # Redis – caching (Post-Service feed/post/reaction caching) and
+  # short-lived OTP storage (User-Service email-verification / password-reset)
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - moonside-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
   # User Microservice
   user-service:
     build: ./User-Service
@@ -76,12 +94,16 @@ services:
       - MAIL_PASSWORD=${MAIL_PASSWORD}
       - APP_NAME=${APP_NAME}
       - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       mongodb:
         condition: service_healthy
       eureka:
         condition: service_healthy
       elasticsearch:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - moonside-network
@@ -236,6 +258,8 @@ services:
       - MINIO_PUBLIC_ENDPOINT=${MINIO_PUBLIC_ENDPOINT}
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
       - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       mongodb:
         condition: service_healthy
@@ -250,6 +274,8 @@ services:
       minio:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - moonside-network
@@ -317,6 +343,8 @@ volumes:
   kafka-data:
     driver: local
   es-data:
+    driver: local
+  redis-data:
     driver: local
 
 networks:

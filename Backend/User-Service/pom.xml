@@ -157,6 +157,12 @@
             <version>5.2.5</version>
         </dependency>
 
+        <!-- Redis – OTP and token blacklist storage -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

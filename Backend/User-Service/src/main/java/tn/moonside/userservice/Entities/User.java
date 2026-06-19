@@ -35,15 +35,9 @@ public class User {
     @Builder.Default
     private LocalDateTime updatedAt = LocalDateTime.now();
 
-    // ── Password Reset ────────────────────────────────────────────────────────
-    private String passwordResetOtp;
-    private LocalDateTime passwordResetOtpExpiry;
-
-    // ── Email Verification ───────────────────────────────────────────────────────
+    // ── Email Verification ───────────────────────────────────────────────────
     @Builder.Default
     private boolean emailVerified = false;
-    private String emailVerificationOtp;
-    private LocalDateTime emailVerificationOtpExpiry;
 
     // ── Two-Factor Authentication (TOTP) ──────────────────────────────────────
     @Builder.Default

@@ -30,13 +30,12 @@ import {
   Sun,
   Loader2,
   X,
-  Clock,
 } from 'lucide-react'
 import { NotificationType } from '@/lib/types'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useSearch } from '@/hooks/use-search'
 import { NotificationToast } from '@/components/notification-toast'
-import type { SearchResultItem, SearchHistoryItem } from '@/lib/api/types/search'
+import type { SearchResultItem } from '@/lib/api/types/search'
 
 function NotifIcon({ type }: { type: NotificationType }) {
   switch (type) {
@@ -88,35 +87,6 @@ function SearchResultRow({ item, onClick }: { item: SearchResultItem; onClick: (
   )
 }
 
-function RecentSearchRow({
-  item,
-  onSelect,
-  onRemove,
-}: {
-  item: SearchHistoryItem
-  onSelect: () => void
-  onRemove: () => void
-}) {
-  return (
-    <div className="group hover:bg-muted flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors">
-      <button onClick={onSelect} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-        <Clock size={14} className="text-muted-foreground flex-shrink-0" />
-        <span className="text-foreground truncate">{item.query}</span>
-      </button>
-      <button
-        onClick={(e) => {
-          e.stopPropagation()
-          onRemove()
-        }}
-        aria-label={`Remove "${item.query}" from recent searches`}
-        className="text-muted-foreground hover:text-foreground flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-      >
-        <X size={14} />
-      </button>
-    </div>
-  )
-}
-
 export function Navbar() {
   const { user, logout } = useAuth()
   const { theme, setTheme } = useTheme()
@@ -128,21 +98,8 @@ export function Navbar() {
   const notificationsRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  const {
-    query,
-    results,
-    isLoading,
-    isOpen,
-    setIsOpen,
-    hasResults,
-    onQueryChange,
-    clear,
-    history,
-    recordSearch,
-    selectHistoryQuery,
-    removeHistoryEntry,
-    clearHistory,
-  } = useSearch(user?.id)
+  const { query, results, isLoading, isOpen, setIsOpen, hasResults, onQueryChange, clear } =
+    useSearch()
 
   const { notifications, unreadCount, markAsRead, markAllAsRead, latestPush, clearLatestPush } =
     useNotifications(user?.id)
@@ -169,7 +126,6 @@ export function Navbar() {
   }
 
   const handleSelectResult = (item: SearchResultItem) => {
-    recordSearch(query)
     clear()
     if (item.type === 'USER') {
       router.push(`/profile/${item.id}`)
@@ -227,11 +183,8 @@ export function Navbar() {
                   type="text"
                   value={query}
                   onChange={(e) => onQueryChange(e.target.value)}
-                  onFocus={() => setIsOpen(true)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') setIsOpen(false)
-                    if (e.key === 'Enter') recordSearch(query)
-                  }}
+                  onFocus={() => query.trim().length > 0 && setIsOpen(true)}
+                  onKeyDown={(e) => e.key === 'Escape' && setIsOpen(false)}
                   placeholder="Search people, posts, teams..."
                   className="bg-muted pr-9 pl-10"
                 />
@@ -247,35 +200,7 @@ export function Navbar() {
 
                 {isOpen && (
                   <div className="border-border animate-slide-down bg-background absolute left-0 mt-2 max-h-96 w-full overflow-y-auto rounded-lg border shadow-lg dark:shadow-xl">
-                    {query.trim().length === 0 ? (
-                      history.length > 0 ? (
-                        <div className="p-2">
-                          <div className="flex items-center justify-between px-3 py-1">
-                            <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-                              Recent searches
-                            </p>
-                            <button
-                              onClick={clearHistory}
-                              className="text-primary text-xs hover:underline"
-                            >
-                              Clear all
-                            </button>
-                          </div>
-                          {history.map((item) => (
-                            <RecentSearchRow
-                              key={item.id}
-                              item={item}
-                              onSelect={() => selectHistoryQuery(item.query)}
-                              onRemove={() => removeHistoryEntry(item.id)}
-                            />
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground px-4 py-6 text-center text-sm">
-                          Start typing to search…
-                        </p>
-                      )
-                    ) : query.trim().length < 2 ? (
+                    {query.trim().length < 2 ? (
                       <p className="text-muted-foreground px-4 py-6 text-center text-sm">
                         Keep typing to search…
                       </p>

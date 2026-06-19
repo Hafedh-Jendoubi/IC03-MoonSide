@@ -2,6 +2,9 @@ package tn.moonside.postservice.services;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import tn.moonside.postservice.audit.AuditClient;
 import tn.moonside.postservice.audit.PostAuditAction;
@@ -42,6 +45,7 @@ public class ReactionService {
      * Toggle reaction: if the user already has the same reaction, remove it.
      * If they have a different reaction, switch it. Otherwise add new.
      */
+    @CacheEvict(value = "reactionSummary", key = "#reactableType + '-' + #reactableId")
     public ReactionResponse toggleReaction(String reactableType, String reactableId,
                                            ReactionRequest req, String userId) {
         ReactionType reactionType = reactionTypeRepository.findByCode(req.getReactionTypeCode())
@@ -115,6 +119,7 @@ public class ReactionService {
         return response;
     }
 
+    @Cacheable(value = "reactionSummary", key = "#reactableType + '-' + #reactableId")
     public ReactionSummaryResponse getSummary(String reactableType, String reactableId, String currentUserId) {
         List<Reaction> reactions = reactionRepository
                 .findByReactableTypeAndReactableId(reactableType, reactableId);
