@@ -39,7 +39,7 @@ import {
   ReactionResponse,
 } from '@/lib/api'
 import { PostViewModal } from '@/components/post-view-modal'
-import { openTeamsChat } from '@/lib/ms-teams'
+import { ContactOptionsModal } from '@/components/contact-options-modal'
 
 // --- Edit Profile Modal -------------------------------------------------------
 
@@ -567,6 +567,7 @@ export default function ProfilePage() {
   const [error, setError] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
   const [viewPostId, setViewPostId] = useState<string | null>(null)
+  const [showContactModal, setShowContactModal] = useState(false)
 
   // Avatar editing state (own profile only)
   const avatarInputRef = useRef<HTMLInputElement>(null)
@@ -655,6 +656,16 @@ export default function ProfilePage() {
     <AuthLayout>
       {/* Post View Modal */}
       {viewPostId && <PostViewModal postId={viewPostId} onClose={() => setViewPostId(null)} />}
+
+      {/* Contact Options Modal — choose Outlook email or Teams chat */}
+      {profileUser.email && (
+        <ContactOptionsModal
+          open={showContactModal}
+          onOpenChange={setShowContactModal}
+          recipientName={displayName}
+          recipientEmail={profileUser.email}
+        />
+      )}
 
       {/* Edit Profile Modal */}
       {showEditModal && isOwnProfile && (
@@ -769,13 +780,9 @@ export default function ProfilePage() {
                       <Button
                         variant="outline"
                         className="gap-2"
-                        onClick={() => openTeamsChat(profileUser.email)}
+                        onClick={() => setShowContactModal(true)}
                         disabled={!profileUser.email}
-                        title={
-                          profileUser.email
-                            ? `Message ${displayName} on Microsoft Teams`
-                            : 'No email on file'
-                        }
+                        title={profileUser.email ? `Message ${displayName}` : 'No email on file'}
                       >
                         <Mail size={18} />
                         Message
