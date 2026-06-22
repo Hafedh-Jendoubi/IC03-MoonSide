@@ -1,6 +1,6 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { AuthLayout } from '@/components/auth-layout'
@@ -38,8 +38,8 @@ import {
   PostResponse,
   ReactionResponse,
 } from '@/lib/api'
-import { useRouter } from 'next/navigation'
 import { PostViewModal } from '@/components/post-view-modal'
+import { openTeamsChat } from '@/lib/ms-teams'
 
 // --- Edit Profile Modal -------------------------------------------------------
 
@@ -766,7 +766,17 @@ export default function ProfilePage() {
                     </Button>
                   ) : (
                     <>
-                      <Button variant="outline" className="gap-2">
+                      <Button
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => openTeamsChat(profileUser.email)}
+                        disabled={!profileUser.email}
+                        title={
+                          profileUser.email
+                            ? `Message ${displayName} on Microsoft Teams`
+                            : 'No email on file'
+                        }
+                      >
                         <Mail size={18} />
                         Message
                       </Button>
