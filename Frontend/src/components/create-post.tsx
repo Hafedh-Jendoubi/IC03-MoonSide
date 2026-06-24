@@ -217,6 +217,7 @@ export function CreatePost({
     )
   }
   const [content, setContent] = useState('')
+  const [postMentions, setPostMentions] = useState<string[]>([])
   const [isExpanded, setIsExpanded] = useState(false)
   const [postType, setPostType] = useState<PostType>('DISCUSSION')
   const [visibility, setVisibility] = useState<ClientPostVisibility>(defaultVisibility ?? 'PUBLIC')
@@ -285,6 +286,7 @@ export function CreatePost({
         content: content.trim() || (isSurvey ? surveyQuestion.trim() : ''),
         postType,
         postVisibility: visibility,
+        mentionedUserIds: postMentions,
         ...(teamId ? { teamId } : {}),
         ...(departmentId ? { departmentId } : {}),
         ...(isSurvey
@@ -312,6 +314,7 @@ export function CreatePost({
 
       // Reset form
       setContent('')
+      setPostMentions([])
       setIsExpanded(false)
       setPostType('DISCUSSION')
       setPendingFiles([])
@@ -364,6 +367,7 @@ export function CreatePost({
               <MentionTextarea
                 value={content}
                 onChange={setContent}
+                onMentionsChange={setPostMentions}
                 placeholder={
                   isSurvey
                     ? `Add a description (optional)…`

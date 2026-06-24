@@ -499,6 +499,7 @@ function ReplyInput({
   depth: number
 }) {
   const [text, setText] = useState('')
+  const [replyMentions, setReplyMentions] = useState<string[]>([])
   const [submitting, setSubmitting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
@@ -512,9 +513,11 @@ function ReplyInput({
       const reply = await commentApi.addComment(postId, {
         content: text.trim(),
         parentId: parentCommentId,
+        mentionedUserIds: replyMentions,
       })
       onAdded(reply)
       setText('')
+      setReplyMentions([])
     } catch (err) {
       console.error('Failed to post reply:', err)
     } finally {
@@ -528,6 +531,7 @@ function ReplyInput({
         <MentionTextarea
           value={text}
           onChange={setText}
+          onMentionsChange={setReplyMentions}
           placeholder="Write a reply… (type @ to mention)"
           singleLine
           onSubmit={() => handleSubmit({ preventDefault: () => {} } as React.FormEvent)}
@@ -774,7 +778,7 @@ function CommentRow({
             </div>
           ) : (
             <p className="text-foreground mt-1 text-sm leading-relaxed">
-              {renderMentions(comment.content, usersMap)}
+              {renderMentions(comment.content)}
             </p>
           )}
         </div>
@@ -900,6 +904,7 @@ export function PostCard({
   const [showComments, setShowComments] = useState(false)
   const [loadingComments, setLoadingComments] = useState(false)
   const [newComment, setNewComment] = useState('')
+  const [newCommentMentions, setNewCommentMentions] = useState<string[]>([])
   const [submittingComment, setSubmittingComment] = useState(false)
   const [attachments, setAttachments] = useState<AttachmentResponse[]>(post.attachments ?? [])
   const [isEditingPost, setIsEditingPost] = useState(false)
@@ -1092,10 +1097,14 @@ export function PostCard({
     if (!newComment.trim() || submittingComment) return
     setSubmittingComment(true)
     try {
-      const comment = await commentApi.addComment(post.id, { content: newComment.trim() })
+      const comment = await commentApi.addComment(post.id, {
+        content: newComment.trim(),
+        mentionedUserIds: newCommentMentions,
+      })
       setComments((prev) => [...prev, comment])
       setCommentCount((c) => c + 1)
       setNewComment('')
+      setNewCommentMentions([])
       await resolveAuthors([comment.authorId])
     } catch (e) {
       console.error(e)
@@ -1211,7 +1220,7 @@ export function PostCard({
         <>
           {post.content && (
             <p className="text-foreground mb-2 leading-relaxed whitespace-pre-wrap">
-              {renderMentions(post.content, commentUsersMap)}
+              {renderMentions(post.content)}
             </p>
           )}
           {/* Survey panel — renders below content for SURVEY posts */}
@@ -1295,6 +1304,7 @@ export function PostCard({
                 <MentionTextarea
                   value={newComment}
                   onChange={setNewComment}
+                  onMentionsChange={setNewCommentMentions}
                   placeholder="Write a comment… (type @ to mention someone)"
                   singleLine
                   onSubmit={handleAddComment as unknown as () => void}

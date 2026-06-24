@@ -5,6 +5,9 @@ import jakarta.validation.constraints.Size;
 import lombok.Data;
 import tn.moonside.postservice.enums.VisibilityType;
 
+import java.util.Collections;
+import java.util.List;
+
 @Data
 public class CommentRequest {
 
@@ -16,4 +19,10 @@ public class CommentRequest {
 
     /** Null for top-level comments; set to parent comment ID for replies. */
     private String parentId;
+
+    /**
+     * IDs of users explicitly mentioned via @ in this comment.
+     * Populated by the frontend; used by the backend to fire MENTION notifications.
+     */
+    private List<String> mentionedUserIds = Collections.emptyList();
 }

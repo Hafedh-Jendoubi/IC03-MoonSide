@@ -37,6 +37,7 @@ public class PostController {
 
     @GetMapping("/{postId}")
     public ResponseEntity<ApiResponse<PostResponse>> getPost(@PathVariable String postId) {
+        postService.recordView(postId);
         return ResponseEntity.ok(ApiResponse.success(postService.getById(postId)));
     }
 

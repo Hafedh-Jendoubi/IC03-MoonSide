@@ -1,6 +1,6 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { AuthLayout } from '@/components/auth-layout'
@@ -38,8 +38,8 @@ import {
   PostResponse,
   ReactionResponse,
 } from '@/lib/api'
-import { useRouter } from 'next/navigation'
 import { PostViewModal } from '@/components/post-view-modal'
+import { ContactOptionsModal } from '@/components/contact-options-modal'
 
 // --- Edit Profile Modal -------------------------------------------------------
 
@@ -567,6 +567,7 @@ export default function ProfilePage() {
   const [error, setError] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
   const [viewPostId, setViewPostId] = useState<string | null>(null)
+  const [showContactModal, setShowContactModal] = useState(false)
 
   // Avatar editing state (own profile only)
   const avatarInputRef = useRef<HTMLInputElement>(null)
@@ -655,6 +656,16 @@ export default function ProfilePage() {
     <AuthLayout>
       {/* Post View Modal */}
       {viewPostId && <PostViewModal postId={viewPostId} onClose={() => setViewPostId(null)} />}
+
+      {/* Contact Options Modal — choose Outlook email or Teams chat */}
+      {profileUser.email && (
+        <ContactOptionsModal
+          open={showContactModal}
+          onOpenChange={setShowContactModal}
+          recipientName={displayName}
+          recipientEmail={profileUser.email}
+        />
+      )}
 
       {/* Edit Profile Modal */}
       {showEditModal && isOwnProfile && (
@@ -766,7 +777,13 @@ export default function ProfilePage() {
                     </Button>
                   ) : (
                     <>
-                      <Button variant="outline" className="gap-2">
+                      <Button
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => setShowContactModal(true)}
+                        disabled={!profileUser.email}
+                        title={profileUser.email ? `Message ${displayName}` : 'No email on file'}
+                      >
                         <Mail size={18} />
                         Message
                       </Button>

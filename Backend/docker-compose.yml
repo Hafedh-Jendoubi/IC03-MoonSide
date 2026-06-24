@@ -36,6 +36,46 @@ services:
       retries: 5
       start_period: 10s
 
+  # Elasticsearch – powers global search (users, posts, teams)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    networks:
+      - moonside-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:9200/_cluster/health | grep -Eq '\"status\":\"(green|yellow)\"'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+
+  # Redis – caching (Post-Service feed/post/reaction caching) and
+  # short-lived OTP storage (User-Service email-verification / password-reset)
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - moonside-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
   # User Microservice
   user-service:
     build: ./User-Service
@@ -53,10 +93,17 @@ services:
       - MAIL_USERNAME=${MAIL_USERNAME}
       - MAIL_PASSWORD=${MAIL_PASSWORD}
       - APP_NAME=${APP_NAME}
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       mongodb:
         condition: service_healthy
       eureka:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - moonside-network
@@ -125,10 +172,13 @@ services:
       - EUREKA_URI=http://eureka:8761/eureka/
       - JWT_SECRET=${JWT_SECRET}
       - USER_SERVICE_URL=http://user-service:8081
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
     depends_on:
       mongodb:
         condition: service_healthy
       eureka:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
       user-service:
         condition: service_started
@@ -207,10 +257,15 @@ services:
       - MINIO_POST_BUCKET=post-attachments
       - MINIO_PUBLIC_ENDPOINT=${MINIO_PUBLIC_ENDPOINT}
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     depends_on:
       mongodb:
         condition: service_healthy
       eureka:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
       user-service:
         condition: service_started
@@ -219,6 +274,26 @@ services:
       minio:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - moonside-network
+
+  # Search Microservice – Elasticsearch-backed global search (users, posts, teams)
+  search-service:
+    build: ./Search-Service
+    container_name: search-service
+    ports:
+      - "8087:8087"
+    environment:
+      - ELASTICSEARCH_URL=http://elasticsearch:9200
+      - EUREKA_URI=http://eureka:8761/eureka/
+      - JWT_SECRET=${JWT_SECRET}
+    depends_on:
+      eureka:
+        condition: service_healthy
+      elasticsearch:
         condition: service_healthy
     networks:
       - moonside-network
@@ -266,6 +341,10 @@ volumes:
   minio-data:
     driver: local
   kafka-data:
+    driver: local
+  es-data:
+    driver: local
+  redis-data:
     driver: local
 
 networks:
