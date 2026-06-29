@@ -14,4 +14,7 @@ public interface ReactionRepository extends MongoRepository<Reaction, String> {
     boolean existsByUserIdAndReactableTypeAndReactableId(
             String userId, String reactableType, String reactableId);
     void deleteByReactableTypeAndReactableId(String reactableType, String reactableId);
+
+    /** Reactions by any of the given users on a given target type — used by the connections feed. */
+    List<Reaction> findByUserIdInAndReactableType(List<String> userIds, String reactableType);
 }

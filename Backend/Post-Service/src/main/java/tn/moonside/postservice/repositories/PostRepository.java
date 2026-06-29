@@ -75,4 +75,32 @@ public interface PostRepository extends MongoRepository<Post, String> {
             List<String> teamIds,
             List<VisibilityType> visibilities,
             Pageable pageable);
+
+    // ── New: connections feed ──────────────────────────────────────────────────
+
+    /**
+     * Returns posts that were either AUTHORED by one of the given users, OR
+     * are among the given post IDs (posts a connection liked/commented on),
+     * filtered to the supplied visibility types.
+     *
+     * Used by the "Connections" feed tab: what your connections posted,
+     * commented on, or reacted to.
+     *
+     * @param authorIds IDs of the user's connections (never empty — caller guards this)
+     * @param postIds   IDs of posts a connection reacted to or commented on (may be a
+     *                  placeholder single-element list when there is no such activity)
+     * @param visibilities allowed visibility values
+     */
+    @Query("{ '$and': [ " +
+            "  { '$or': [ " +
+            "    { 'authorId': { '$in': ?0 } }, " +
+            "    { '_id':      { '$in': ?1 } }  " +
+            "  ] }, " +
+            "  { 'postVisibility': { '$in': ?2 } } " +
+            "] }")
+    Page<Post> findConnectionsFeed(
+            List<String> authorIds,
+            List<String> postIds,
+            List<VisibilityType> visibilities,
+            Pageable pageable);
 }

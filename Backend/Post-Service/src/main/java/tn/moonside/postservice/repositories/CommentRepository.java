@@ -23,4 +23,7 @@ public interface CommentRepository extends MongoRepository<Comment, String> {
 
     long countByPostId(String postId);
     void deleteByPostId(String postId);
+
+    /** Comments authored by any of the given users — used by the connections feed. */
+    List<Comment> findByAuthorIdIn(List<String> authorIds);
 }

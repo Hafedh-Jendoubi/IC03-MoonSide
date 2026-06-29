@@ -140,6 +140,7 @@ export function Navbar() {
     { href: '/feed', label: 'Feed', icon: Home },
     { href: '/messages', label: 'Messages', icon: Mail },
     { href: '/discover', label: 'Discover', icon: Compass },
+    { href: '/connections', label: 'My Network', icon: Users },
   ]
 
   const displayName = user ? getFullName(user) : ''
@@ -406,6 +407,15 @@ export function Navbar() {
                           >
                             <User size={16} />
                             View Profile
+                          </button>
+                        </Link>
+                        <Link href="/connections">
+                          <button
+                            onClick={() => setIsDropdownOpen(false)}
+                            className="text-foreground hover:bg-muted flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors"
+                          >
+                            <Users size={16} />
+                            My Network
                           </button>
                         </Link>
                         <Link href="/settings">

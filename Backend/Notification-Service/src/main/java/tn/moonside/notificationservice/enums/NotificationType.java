@@ -7,5 +7,7 @@ public enum NotificationType {
     FOLLOW,
     BADGE_EARNED,
     ANNOUNCEMENT,
-    POST_PINNED
+    POST_PINNED,
+    CONNECTION_REQUEST,
+    CONNECTION_ACCEPTED
 }

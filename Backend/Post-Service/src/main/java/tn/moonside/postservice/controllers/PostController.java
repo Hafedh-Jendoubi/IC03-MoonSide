@@ -77,6 +77,22 @@ public class PostController {
                 ApiResponse.success(postService.getFollowingFeed(userId, page, size)));
     }
 
+    /**
+     * GET /posts/feed/connections
+     *
+     * Feed of what the authenticated user's accepted connections have posted,
+     * commented on, or reacted to — newest first. Empty page when the user
+     * has no connections yet.
+     */
+    @GetMapping("/feed/connections")
+    public ResponseEntity<ApiResponse<Page<PostResponse>>> getConnectionsFeed(
+            @AuthenticationPrincipal String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(
+                ApiResponse.success(postService.getConnectionsFeed(userId, page, size)));
+    }
+
     @GetMapping("/author/{authorId}")
     public ResponseEntity<ApiResponse<Page<PostResponse>>> getByAuthor(
             @PathVariable String authorId,

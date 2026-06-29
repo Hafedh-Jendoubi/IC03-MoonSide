@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tn.moonside.postservice.audit.AuditClient;
 import tn.moonside.postservice.audit.PostAuditAction;
+import tn.moonside.postservice.clients.ConnectionClient;
 import tn.moonside.postservice.clients.OrganizationClient;
 import tn.moonside.postservice.clients.UserClient;
 import tn.moonside.postservice.dtos.requests.PostRequest;
@@ -42,6 +43,7 @@ public class PostService {
     private final ReactionTypeRepository reactionTypeRepository;
     private final SurveyVoteRepository surveyVoteRepository;
     private final OrganizationClient organizationClient;
+    private final ConnectionClient connectionClient;
     private final SurveyService surveyService;
     private final AuditClient auditClient;
     private final UserClient userClient;
@@ -186,6 +188,42 @@ public class PostService {
 
         return postRepository
                 .findFollowingFeed(deptIds, teamIds, allowedVisibilities, pageable)
+                .map(p -> toResponse(p, userId));
+    }
+
+    /**
+     * GET /posts/feed/connections
+     *
+     * Feed of what the user's accepted connections are up to: posts they
+     * authored, plus posts they reacted to or commented on. Restricted to
+     * PUBLIC posts only — a connection is a personal relationship, not an
+     * org-chart relationship, so it should never leak DEPARTMENT_ONLY or
+     * TEAM_ONLY content the viewer wouldn't otherwise be able to see.
+     *
+     * Returns an empty page (not an error) when the user has no connections.
+     */
+    public Page<PostResponse> getConnectionsFeed(String userId, int page, int size) {
+        List<String> connectionIds = connectionClient.getConnectionIds(userId);
+        if (connectionIds.isEmpty()) {
+            return Page.empty(PageRequest.of(page, size));
+        }
+
+        List<String> reactedPostIds = reactionRepository
+                .findByUserIdInAndReactableType(connectionIds, "POST")
+                .stream().map(Reaction::getReactableId).distinct().toList();
+
+        List<String> commentedPostIds = commentRepository
+                .findByAuthorIdIn(connectionIds)
+                .stream().map(Comment::getPostId).distinct().toList();
+
+        List<String> activityPostIds = Stream.concat(reactedPostIds.stream(), commentedPostIds.stream())
+                .distinct().toList();
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<String> postIds = activityPostIds.isEmpty() ? List.of("__no_activity__") : activityPostIds;
+
+        return postRepository
+                .findConnectionsFeed(connectionIds, postIds, List.of(VisibilityType.PUBLIC), pageable)
                 .map(p -> toResponse(p, userId));
     }
 

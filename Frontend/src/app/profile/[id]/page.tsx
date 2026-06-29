@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/lib/auth-context'
@@ -26,6 +27,7 @@ import {
   Activity,
   ChevronDown,
   ChevronUp,
+  Users,
 } from 'lucide-react'
 import { User, getFullName } from '@/lib/types'
 import {
@@ -37,9 +39,11 @@ import {
   commentApi,
   PostResponse,
   ReactionResponse,
+  connectionApi,
 } from '@/lib/api'
 import { PostViewModal } from '@/components/post-view-modal'
 import { ContactOptionsModal } from '@/components/contact-options-modal'
+import { ConnectButton } from '@/components/connect-button'
 
 // --- Edit Profile Modal -------------------------------------------------------
 
@@ -568,6 +572,16 @@ export default function ProfilePage() {
   const [showEditModal, setShowEditModal] = useState(false)
   const [viewPostId, setViewPostId] = useState<string | null>(null)
   const [showContactModal, setShowContactModal] = useState(false)
+  const [connectionCount, setConnectionCount] = useState<number | null>(null)
+
+  const refreshConnectionCount = async () => {
+    try {
+      const { count } = await connectionApi.getCount(userId)
+      setConnectionCount(count)
+    } catch {
+      // Non-critical — just leave the previous count/skeleton in place.
+    }
+  }
 
   // Avatar editing state (own profile only)
   const avatarInputRef = useRef<HTMLInputElement>(null)
@@ -625,7 +639,11 @@ export default function ProfilePage() {
         setIsLoading(false)
       }
     }
-    if (userId) fetchUser()
+    if (userId) {
+      fetchUser()
+      setConnectionCount(null)
+      refreshConnectionCount()
+    }
   }, [userId])
 
   if (isLoading) {
@@ -762,6 +780,20 @@ export default function ProfilePage() {
                     <MapPin size={16} />
                     {profileUser.active ? 'Active Member' : 'Inactive'}
                   </p>
+                  <Link
+                    href="/connections"
+                    className="text-muted-foreground hover:text-primary mt-1 flex items-center gap-1 text-sm transition-colors"
+                  >
+                    <Users size={15} />
+                    {connectionCount === null ? (
+                      <span className="bg-muted inline-block h-4 w-20 animate-pulse rounded" />
+                    ) : (
+                      <span>
+                        <span className="text-foreground font-semibold">{connectionCount}</span>{' '}
+                        connection{connectionCount === 1 ? '' : 's'}
+                      </span>
+                    )}
+                  </Link>
                 </div>
 
                 {/* Action buttons */}
@@ -787,10 +819,10 @@ export default function ProfilePage() {
                         <Mail size={18} />
                         Message
                       </Button>
-                      <Button className="bg-primary hover:bg-primary/90 gap-2 text-white">
-                        <MessageSquare size={18} />
-                        Connect
-                      </Button>
+                      <ConnectButton
+                        targetUserId={profileUser.id}
+                        onChange={() => refreshConnectionCount()}
+                      />
                     </>
                   )}
                 </div>
