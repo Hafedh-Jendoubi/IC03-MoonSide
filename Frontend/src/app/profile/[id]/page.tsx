@@ -789,7 +789,9 @@ export default function ProfilePage() {
                       <span className="bg-muted inline-block h-4 w-20 animate-pulse rounded" />
                     ) : (
                       <span>
-                        <span className="text-foreground font-semibold">{connectionCount}</span>{' '}
+                        <span className="text-foreground hover:text-primary font-semibold">
+                          {connectionCount}
+                        </span>{' '}
                         connection{connectionCount === 1 ? '' : 's'}
                       </span>
                     )}
