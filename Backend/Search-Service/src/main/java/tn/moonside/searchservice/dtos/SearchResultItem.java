@@ -17,7 +17,7 @@ public class SearchResultItem {
 
     private String id;
 
-    /** "USER" | "TEAM" | "POST" */
+    /** "USER" | "TEAM" | "DEPARTMENT" | "POST" */
     private String type;
 
     private String title;

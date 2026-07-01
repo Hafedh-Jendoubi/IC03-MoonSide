@@ -17,6 +17,7 @@ import {
   Settings,
   User,
   Users,
+  Building2,
   FileText,
   Shield,
   Compass,
@@ -74,7 +75,13 @@ function SearchResultRow({ item, onClick }: { item: SearchResultItem; onClick: (
         <Avatar className="h-8 w-8 flex-shrink-0">
           {item.imageUrl && <AvatarImage src={item.imageUrl} alt={item.title} />}
           <AvatarFallback className="text-xs font-semibold">
-            {item.type === 'TEAM' ? <Users size={14} /> : initials}
+            {item.type === 'TEAM' ? (
+              <Users size={14} />
+            ) : item.type === 'DEPARTMENT' ? (
+              <Building2 size={14} />
+            ) : (
+              initials
+            )}
           </AvatarFallback>
         </Avatar>
       )}
@@ -130,6 +137,8 @@ export function Navbar() {
       router.push(`/profile/${item.id}`)
     } else if (item.type === 'TEAM') {
       router.push(`/team/${item.id}`)
+    } else if (item.type === 'DEPARTMENT') {
+      router.push(`/department/${item.id}`)
     } else {
       router.push(item.teamId ? `/team/${item.teamId}` : '/feed')
     }
@@ -235,6 +244,20 @@ export function Navbar() {
                             {results.teams.map((item) => (
                               <SearchResultRow
                                 key={`team-${item.id}`}
+                                item={item}
+                                onClick={() => handleSelectResult(item)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {results.departments.length > 0 && (
+                          <div className="mb-1">
+                            <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
+                              Departments
+                            </p>
+                            {results.departments.map((item) => (
+                              <SearchResultRow
+                                key={`department-${item.id}`}
                                 item={item}
                                 onClick={() => handleSelectResult(item)}
                               />

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { searchApi } from '@/lib/api'
 import type { SearchResponse } from '@/lib/api/types/search'
 
-const EMPTY_RESULTS: SearchResponse = { users: [], teams: [], posts: [] }
+const EMPTY_RESULTS: SearchResponse = { users: [], teams: [], departments: [], posts: [] }
 const MIN_QUERY_LENGTH = 2
 const DEBOUNCE_MS = 300
 
@@ -72,7 +72,10 @@ export function useSearch() {
   }, [])
 
   const hasResults =
-    results.users.length > 0 || results.teams.length > 0 || results.posts.length > 0
+    results.users.length > 0 ||
+    results.teams.length > 0 ||
+    results.departments.length > 0 ||
+    results.posts.length > 0
 
   return {
     query,
