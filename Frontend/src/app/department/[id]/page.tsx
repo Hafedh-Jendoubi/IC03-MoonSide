@@ -230,6 +230,21 @@ function ManageDeptPanel({
 }: ManageDeptPanelProps) {
   const [section, setSection] = useState<DeptSection>('general')
 
+  // ── ADD THIS USEEFFECT TO LOCK BODY SCROLL ─────────────────────────────────
+  useEffect(() => {
+    // Save original body overflow style
+    const originalStyle = window.getComputedStyle(document.body).overflow
+
+    // Prevent scrolling on the background page
+    document.body.style.overflow = 'hidden'
+
+    // Restore original overflow when the panel closes
+    return () => {
+      document.body.style.overflow = originalStyle
+    }
+  }, [])
+  // ───────────────────────────────────────────────────────────────────────────
+
   const navItems: { id: DeptSection; label: string; icon: React.ReactNode }[] = [
     { id: 'general', label: 'General', icon: <LayoutDashboard className="h-4 w-4" /> },
     { id: 'teams', label: 'Teams & Members', icon: <Layers className="h-4 w-4" /> },

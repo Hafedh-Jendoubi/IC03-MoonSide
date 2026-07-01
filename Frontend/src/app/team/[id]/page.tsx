@@ -118,6 +118,16 @@ function ManageTeamPanel({
 }: ManageTeamPanelProps) {
   const [section, setSection] = useState<ManageSection>('general')
 
+  useEffect(() => {
+    const originalStyle = window.getComputedStyle(document.body).overflow
+
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = originalStyle
+    }
+  }, [])
+
   const navItems: { id: ManageSection; label: string; icon: React.ReactNode }[] = [
     { id: 'general', label: 'General', icon: <LayoutDashboard className="h-4 w-4" /> },
     { id: 'members', label: 'Members', icon: <Users className="h-4 w-4" /> },
