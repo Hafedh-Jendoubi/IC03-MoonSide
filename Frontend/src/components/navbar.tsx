@@ -18,6 +18,7 @@ import {
   User,
   Users,
   Building2,
+  Clock,
   FileText,
   Shield,
   Compass,
@@ -104,8 +105,20 @@ export function Navbar() {
   const notificationsRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  const { query, results, isLoading, isOpen, setIsOpen, hasResults, onQueryChange, clear } =
-    useSearch()
+  const {
+    query,
+    results,
+    isLoading,
+    isOpen,
+    setIsOpen,
+    hasResults,
+    onQueryChange,
+    clear,
+    recentSearches,
+    selectRecentSearch,
+    removeRecentSearch,
+    clearRecentSearches,
+  } = useSearch()
 
   const { notifications, unreadCount, markAsRead, markAllAsRead, latestPush, clearLatestPush } =
     useNotifications(user?.id)
@@ -190,7 +203,7 @@ export function Navbar() {
                   type="text"
                   value={query}
                   onChange={(e) => onQueryChange(e.target.value)}
-                  onFocus={() => query.trim().length > 0 && setIsOpen(true)}
+                  onFocus={() => setIsOpen(true)}
                   onKeyDown={(e) => e.key === 'Escape' && setIsOpen(false)}
                   placeholder="Search people, posts, teams..."
                   className="bg-muted pr-9 pl-10"
@@ -207,7 +220,48 @@ export function Navbar() {
 
                 {isOpen && (
                   <div className="border-border animate-slide-down bg-background absolute left-0 mt-2 max-h-96 w-full overflow-y-auto rounded-lg border shadow-lg dark:shadow-xl">
-                    {query.trim().length < 2 ? (
+                    {query.trim().length === 0 ? (
+                      recentSearches.length > 0 ? (
+                        <div className="p-2">
+                          <div className="flex items-center justify-between px-3 py-1">
+                            <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                              Recent searches
+                            </p>
+                            <button
+                              onClick={clearRecentSearches}
+                              className="text-muted-foreground hover:text-foreground text-xs"
+                            >
+                              Clear all
+                            </button>
+                          </div>
+                          {recentSearches.map((item) => (
+                            <div
+                              key={item.id}
+                              className="hover:bg-muted group flex items-center gap-3 rounded-md px-3 py-2 text-sm"
+                            >
+                              <button
+                                onClick={() => selectRecentSearch(item.query)}
+                                className="flex flex-1 items-center gap-3 text-left"
+                              >
+                                <Clock size={14} className="text-muted-foreground" />
+                                <span className="truncate">{item.query}</span>
+                              </button>
+                              <button
+                                onClick={() => removeRecentSearch(item.id)}
+                                aria-label="Remove from recent searches"
+                                className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground px-4 py-6 text-center text-sm">
+                          Start typing to search…
+                        </p>
+                      )
+                    ) : query.trim().length < 2 ? (
                       <p className="text-muted-foreground px-4 py-6 text-center text-sm">
                         Keep typing to search…
                       </p>

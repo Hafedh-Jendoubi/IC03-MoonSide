@@ -16,3 +16,9 @@ export interface SearchResponse {
   departments: SearchResultItem[]
   posts: SearchResultItem[]
 }
+
+export interface SearchHistoryItem {
+  id: string
+  query: string
+  searchedAt: string
+}
