@@ -236,6 +236,33 @@ services:
     networks:
       - moonside-network
 
+  # Badge Microservice
+  badge-service:
+    build: ./Badge-Service
+    container_name: badge-service
+    ports:
+      - "8088:8088"
+    environment:
+      - MONGODB_HOST=mongodb
+      - MONGO_ROOT_USERNAME=${MONGO_ROOT_USERNAME}
+      - MONGO_ROOT_PASSWORD=${MONGO_ROOT_PASSWORD}
+      - MONGO_BADGE_DATABASE=badge_db
+      - EUREKA_URI=http://eureka:8761/eureka/
+      - JWT_SECRET=${JWT_SECRET}
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - USER_SERVICE_URL=http://user-service:8081
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      eureka:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    networks:
+      - moonside-network
+
   # Post & Reactions Microservice
   post-service:
     build: ./Post-Service

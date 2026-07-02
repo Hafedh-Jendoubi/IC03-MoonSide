@@ -19,6 +19,5 @@ public class SearchResponse {
 
     private List<SearchResultItem> users;
     private List<SearchResultItem> teams;
-    private List<SearchResultItem> departments;
     private List<SearchResultItem> posts;
 }

@@ -11,6 +11,8 @@ import tn.moonside.userservice.repositories.RoleRepository;
 import tn.moonside.userservice.repositories.UserRepository;
 import tn.moonside.userservice.repositories.UserRoleRepository;
 import tn.moonside.userservice.security.JwtService;
+import tn.moonside.userservice.event.UserActivityEvent;
+import tn.moonside.userservice.kafka.UserActivityEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Base32;
@@ -33,6 +35,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Random;
@@ -54,6 +57,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuditLogService auditLogService;
     // ── Redis OTP service (replaces OTP fields on the User document) ──────────
     private final OtpRedisService otpRedisService;
+    private final UserActivityEventPublisher userActivityPublisher;
 
     @Value("${app.name:WorkSphere}")
     private String appName;
@@ -141,6 +145,12 @@ public class AuthServiceImpl implements AuthService {
         log.info("Email verified for {}", user.getEmail());
         auditLogService.log(user.getId(), user.getId(), "USER",
                 "EMAIL_VERIFY_SUCCESS", "Email verified for " + user.getEmail(), true, null, null, null);
+
+        // Publish badge-relevant activity event
+        userActivityPublisher.publish(UserActivityEvent.builder()
+                .userId(user.getId())
+                .activityType("EMAIL_VERIFIED")
+                .build());
     }
 
     @Override
@@ -183,8 +193,30 @@ public class AuthServiceImpl implements AuthService {
         }
 
         user.setLastLogin(LocalDateTime.now());
+
+        // ── Update login streak ──────────────────────────────────────────────
+        LocalDate today = LocalDate.now();
+        LocalDate lastDate = user.getLastLoginDate();
+        if (lastDate == null || lastDate.isBefore(today.minusDays(1))) {
+            user.setLoginStreak(1);
+        } else if (lastDate.isEqual(today.minusDays(1))) {
+            user.setLoginStreak(user.getLoginStreak() + 1);
+        }
+        // same-day re-login: streak unchanged
+        if (user.getLoginStreak() > user.getLongestLoginStreak()) {
+            user.setLongestLoginStreak(user.getLoginStreak());
+        }
+        user.setLastLoginDate(today);
+
         userRepository.save(user);
         log.info("User logged in: {}", user.getEmail());
+
+        // Publish badge-relevant activity event
+        userActivityPublisher.publish(UserActivityEvent.builder()
+                .userId(user.getId())
+                .activityType("LOGIN_STREAK")
+                .value(user.getLongestLoginStreak())
+                .build());
 
         if (user.isTwoFactorEnabled()) {
             auditLogService.log(user.getId(), user.getId(), "USER",

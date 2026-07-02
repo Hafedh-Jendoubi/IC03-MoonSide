@@ -31,6 +31,7 @@ import {
   Sun,
   Loader2,
   X,
+  Award,
 } from 'lucide-react'
 import { NotificationType } from '@/lib/types'
 import { useNotifications } from '@/hooks/use-notifications'
@@ -160,6 +161,7 @@ export function Navbar() {
   const navLinks = [
     { href: '/feed', label: 'Feed', icon: Home },
     { href: '/discover', label: 'Discover', icon: Compass },
+    { href: '/badges', label: 'Badges', icon: Award },
   ]
 
   const displayName = user ? getFullName(user) : ''

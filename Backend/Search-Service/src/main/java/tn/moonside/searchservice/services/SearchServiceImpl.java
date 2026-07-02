@@ -2,13 +2,11 @@ package tn.moonside.searchservice.services;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import tn.moonside.searchservice.documents.DepartmentSearchDocument;
 import tn.moonside.searchservice.documents.PostSearchDocument;
 import tn.moonside.searchservice.documents.TeamSearchDocument;
 import tn.moonside.searchservice.documents.UserSearchDocument;
 import tn.moonside.searchservice.dtos.SearchResponse;
 import tn.moonside.searchservice.dtos.SearchResultItem;
-import tn.moonside.searchservice.repositories.DepartmentSearchRepository;
 import tn.moonside.searchservice.repositories.PostSearchRepository;
 import tn.moonside.searchservice.repositories.TeamSearchRepository;
 import tn.moonside.searchservice.repositories.UserSearchRepository;
@@ -28,7 +26,6 @@ public class SearchServiceImpl implements SearchService {
     private final UserSearchRepository userSearchRepository;
     private final PostSearchRepository postSearchRepository;
     private final TeamSearchRepository teamSearchRepository;
-    private final DepartmentSearchRepository departmentSearchRepository;
 
     @Override
     public SearchResponse search(String query) {
@@ -36,7 +33,6 @@ public class SearchServiceImpl implements SearchService {
             return SearchResponse.builder()
                     .users(Collections.emptyList())
                     .teams(Collections.emptyList())
-                    .departments(Collections.emptyList())
                     .posts(Collections.emptyList())
                     .build();
         }
@@ -58,13 +54,6 @@ public class SearchServiceImpl implements SearchService {
                 .map(this::toTeamItem)
                 .collect(Collectors.toList());
 
-        List<SearchResultItem> departments = departmentSearchRepository
-                .findByNameStartingWithOrDescriptionContaining(q, q)
-                .stream()
-                .limit(MAX_RESULTS_PER_TYPE)
-                .map(this::toDepartmentItem)
-                .collect(Collectors.toList());
-
         List<SearchResultItem> posts = postSearchRepository
                 .findByContentContaining(q)
                 .stream()
@@ -72,7 +61,7 @@ public class SearchServiceImpl implements SearchService {
                 .map(this::toPostItem)
                 .collect(Collectors.toList());
 
-        return SearchResponse.builder().users(users).teams(teams).departments(departments).posts(posts).build();
+        return SearchResponse.builder().users(users).teams(teams).posts(posts).build();
     }
 
     private SearchResultItem toUserItem(UserSearchDocument u) {
@@ -96,16 +85,6 @@ public class SearchServiceImpl implements SearchService {
                 .title(t.getName())
                 .subtitle(t.getDescription())
                 .imageUrl(t.getAvatarUrl())
-                .build();
-    }
-
-    private SearchResultItem toDepartmentItem(DepartmentSearchDocument d) {
-        return SearchResultItem.builder()
-                .id(d.getId())
-                .type("DEPARTMENT")
-                .title(d.getName())
-                .subtitle(d.getDescription())
-                .imageUrl(d.getAvatarUrl())
                 .build();
     }
 

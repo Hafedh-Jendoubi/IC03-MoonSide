@@ -15,6 +15,8 @@ import tn.moonside.userservice.repositories.UserRoleRepository;
 import tn.moonside.userservice.repositories.PermissionRoleRepository;
 import tn.moonside.userservice.repositories.PermissionRepository;
 import tn.moonside.userservice.entities.PermissionRole;
+import tn.moonside.userservice.event.UserActivityEvent;
+import tn.moonside.userservice.kafka.UserActivityEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
@@ -51,6 +53,7 @@ public class UserServiceImpl implements UserService {
     private final AuditLogService auditLogService;
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender mailSender;
+    private final UserActivityEventPublisher userActivityPublisher;
 
     @Value("${app.name:WorkSphere}")
     private String appName;
@@ -324,6 +327,19 @@ public class UserServiceImpl implements UserService {
                 "PROFILE_UPDATE",
                 "Profile updated for " + updated.getEmail() + " by " + currentUserEmail,
                 true, oldSnapshot, toSnapshot(updated), null);
+
+        // Publish PROFILE_COMPLETED event if all key fields are now filled
+        boolean isProfileComplete = updated.getFirstName() != null && !updated.getFirstName().isBlank()
+                && updated.getLastName()    != null && !updated.getLastName().isBlank()
+                && updated.getJobTitle()    != null && !updated.getJobTitle().isBlank()
+                && updated.getBio()         != null && !updated.getBio().isBlank()
+                && updated.getAvatar()      != null && !updated.getAvatar().isBlank();
+        if (isProfileComplete) {
+            userActivityPublisher.publish(UserActivityEvent.builder()
+                    .userId(updated.getId())
+                    .activityType("PROFILE_COMPLETED")
+                    .build());
+        }
 
         return mapToUserResponse(updated);
     }

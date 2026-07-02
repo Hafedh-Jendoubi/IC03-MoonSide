@@ -47,4 +47,14 @@ public class User {
     // ── First-login password change ───────────────────────────────────────────
     @Builder.Default
     private boolean mustChangePassword = false;
+
+    // ── Daily-login streak (drives login-streak badges) ───────────────────────
+    /** Consecutive calendar days the user has logged in, ending today/yesterday. */
+    @Builder.Default
+    private int loginStreak = 0;
+    /** Highest streak ever reached — badges are awarded off this so they never get revoked. */
+    @Builder.Default
+    private int longestLoginStreak = 0;
+    /** Calendar date (no time) of the most recent login, used to compute the streak. */
+    private LocalDate lastLoginDate;
 }

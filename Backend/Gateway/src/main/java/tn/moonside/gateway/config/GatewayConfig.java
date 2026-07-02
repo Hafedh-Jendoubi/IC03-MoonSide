@@ -41,6 +41,7 @@ public class GatewayConfig {
                 // Badge Service: Badge, UserBadge, AuditLog
                 .route("badge-service", r -> r
                         .path("/badges/**")
+                        .filters(f -> f.dedupeResponseHeader("Access-Control-Allow-Origin Access-Control-Allow-Credentials", "RETAIN_FIRST"))
                         .uri("lb://BADGE-SERVICE"))
 
                 // Media Service: file uploads, avatar storage

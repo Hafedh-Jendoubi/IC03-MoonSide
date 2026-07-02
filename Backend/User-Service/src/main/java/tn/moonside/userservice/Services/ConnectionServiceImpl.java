@@ -10,10 +10,12 @@ import tn.moonside.userservice.entities.Connection;
 import tn.moonside.userservice.entities.ConnectionStatus;
 import tn.moonside.userservice.entities.User;
 import tn.moonside.userservice.event.NotificationEvent;
+import tn.moonside.userservice.event.UserActivityEvent;
 import tn.moonside.userservice.exceptions.DuplicateResourceException;
 import tn.moonside.userservice.exceptions.ResourceNotFoundException;
 import tn.moonside.userservice.exceptions.UnauthorizedException;
 import tn.moonside.userservice.kafka.NotificationEventPublisher;
+import tn.moonside.userservice.kafka.UserActivityEventPublisher;
 import tn.moonside.userservice.repositories.ConnectionRepository;
 import tn.moonside.userservice.repositories.UserRepository;
 
@@ -30,6 +32,7 @@ public class ConnectionServiceImpl implements ConnectionService {
     private final ConnectionRepository connectionRepository;
     private final UserRepository userRepository;
     private final NotificationEventPublisher notificationPublisher;
+    private final UserActivityEventPublisher userActivityPublisher;
 
     @Override
     public ConnectionResponse sendRequest(String requesterId, String receiverId) {
@@ -105,6 +108,20 @@ public class ConnectionServiceImpl implements ConnectionService {
                 .body("You and " + accepterName + " are now connected")
                 .resourceId(saved.getId())
                 .resourceType("CONNECTION")
+                .build());
+
+        // Publish badge-relevant events for both parties
+        long requesterCount = connectionRepository.countAcceptedForUser(conn.getRequesterId());
+        long accepterCount  = connectionRepository.countAcceptedForUser(currentUserId);
+        userActivityPublisher.publish(UserActivityEvent.builder()
+                .userId(conn.getRequesterId())
+                .activityType("CONNECTION_ACCEPTED")
+                .value((int) requesterCount)
+                .build());
+        userActivityPublisher.publish(UserActivityEvent.builder()
+                .userId(currentUserId)
+                .activityType("CONNECTION_ACCEPTED")
+                .value((int) accepterCount)
                 .build());
 
         return toResponse(saved, currentUserId, null);

@@ -22,7 +22,9 @@ import tn.moonside.postservice.entities.*;
 import tn.moonside.postservice.enums.TypePosts;
 import tn.moonside.postservice.enums.VisibilityType;
 import tn.moonside.postservice.event.NotificationEvent;
+import tn.moonside.postservice.event.PostActivityEvent;
 import tn.moonside.postservice.kafka.NotificationEventPublisher;
+import tn.moonside.postservice.kafka.PostActivityEventPublisher;
 import tn.moonside.postservice.repositories.*;
 
 import java.time.LocalDateTime;
@@ -48,6 +50,7 @@ public class PostService {
     private final AuditClient auditClient;
     private final UserClient userClient;
     private final NotificationEventPublisher notificationPublisher;
+    private final PostActivityEventPublisher postActivityPublisher;
     private final org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
 
     /* ── Create ───────────────────────────────────────────────────────────── */
@@ -121,6 +124,14 @@ public class PostService {
         auditClient.log(authorId, saved.getId(), "POST", PostAuditAction.POST_CREATED,
                 postCreatedDesc,
                 true, null, toJson(saved));
+
+        // Publish badge-relevant event (non-blocking; failures never break create)
+        long totalPosts = postRepository.countByAuthorId(authorId);
+        postActivityPublisher.publish(PostActivityEvent.builder()
+                .authorId(authorId)
+                .activityType("POST_CREATED")
+                .totalPosts(totalPosts)
+                .build());
 
         return toResponse(saved, authorId);
     }

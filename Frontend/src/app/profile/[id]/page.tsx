@@ -28,6 +28,7 @@ import {
   ChevronDown,
   ChevronUp,
   Users,
+  Award,
 } from 'lucide-react'
 import { User, getFullName } from '@/lib/types'
 import {
@@ -40,7 +41,9 @@ import {
   PostResponse,
   ReactionResponse,
   connectionApi,
+  badgeApi,
 } from '@/lib/api'
+import type { UserBadge } from '@/lib/api'
 import { PostViewModal } from '@/components/post-view-modal'
 import { ContactOptionsModal } from '@/components/contact-options-modal'
 import { ConnectButton } from '@/components/connect-button'
@@ -573,6 +576,7 @@ export default function ProfilePage() {
   const [viewPostId, setViewPostId] = useState<string | null>(null)
   const [showContactModal, setShowContactModal] = useState(false)
   const [connectionCount, setConnectionCount] = useState<number | null>(null)
+  const [userBadges, setUserBadges] = useState<UserBadge[]>([])
 
   const refreshConnectionCount = async () => {
     try {
@@ -639,8 +643,17 @@ export default function ProfilePage() {
         setIsLoading(false)
       }
     }
+    const fetchBadges = async () => {
+      try {
+        const badges = await badgeApi.getUserBadges(userId)
+        setUserBadges(badges)
+      } catch {
+        // Non-critical — badges section simply won't appear
+      }
+    }
     if (userId) {
       fetchUser()
+      fetchBadges()
       setConnectionCount(null)
       refreshConnectionCount()
     }
@@ -931,6 +944,50 @@ export default function ProfilePage() {
             )}
           </div>
         </Card>
+
+        {/* Badges ─────────────────────────────────────────────────────────── */}
+        {userBadges.length > 0 && (
+          <Card className="animate-slide-up mb-8 p-6" style={{ animationDelay: '80ms' }}>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-foreground text-2xl font-bold">Badges</h2>
+                <p className="text-muted-foreground mt-0.5 text-sm">
+                  {isOwnProfile ? 'Your' : `${getFullName(profileUser)}'s`} achievements
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-muted-foreground text-sm font-medium">
+                  {userBadges.length} earned
+                </span>
+                <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-full">
+                  <Award className="text-primary h-5 w-5" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {userBadges.map((b) => (
+                <Link
+                  key={b.badgeKey}
+                  href="/badges"
+                  title={`${b.displayName} — ${b.description}`}
+                  className="group bg-muted/40 hover:bg-muted flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors"
+                >
+                  <Award size={14} className="text-primary shrink-0" />
+                  <span>{b.displayName}</span>
+                </Link>
+              ))}
+            </div>
+
+            {isOwnProfile && (
+              <div className="mt-4">
+                <Link href="/badges" className="text-primary text-sm font-medium hover:underline">
+                  View all badges →
+                </Link>
+              </div>
+            )}
+          </Card>
+        )}
 
         {/* Recent Activity */}
         <Card className="animate-slide-up p-6" style={{ animationDelay: '100ms' }}>

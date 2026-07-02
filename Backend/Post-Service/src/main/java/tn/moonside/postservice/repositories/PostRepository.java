@@ -103,4 +103,6 @@ public interface PostRepository extends MongoRepository<Post, String> {
             List<String> postIds,
             List<VisibilityType> visibilities,
             Pageable pageable);
+
+    long countByAuthorId(String authorId);
 }
