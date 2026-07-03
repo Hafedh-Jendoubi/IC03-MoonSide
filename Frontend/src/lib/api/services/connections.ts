@@ -25,6 +25,10 @@ export const connectionApi = {
   /** All of your accepted connections. */
   getMyConnections: () => apiFetch<UserSummaryResponse[]>('/connections/me'),
 
+  /** All accepted connections for any user — used by the connections modal on a profile page. */
+  getUserConnections: (userId: string) =>
+    apiFetch<UserSummaryResponse[]>(`/connections/user/${userId}`),
+
   /** Requests you've received, awaiting your decision. */
   getPendingReceived: () => apiFetch<ConnectionResponse[]>('/connections/me/pending'),
 

@@ -93,6 +93,13 @@ public class ConnectionController {
                 connectionService.getPendingSent(currentUserId(userDetails))));
     }
 
+    /** GET /connections/user/{userId} — list of accepted connections for any user (profile page modal). */
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<ApiResponse<List<UserSummaryResponse>>> userConnections(
+            @PathVariable String userId) {
+        return ResponseEntity.ok(ApiResponse.success(connectionService.getConnections(userId)));
+    }
+
     /** GET /connections/count/{userId} — connection count shown on a profile page. */
     @GetMapping("/count/{userId}")
     public ResponseEntity<ApiResponse<Map<String, Long>>> count(@PathVariable String userId) {

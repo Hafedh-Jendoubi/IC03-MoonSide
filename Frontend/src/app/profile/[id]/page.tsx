@@ -47,6 +47,7 @@ import type { UserBadge } from '@/lib/api'
 import { PostViewModal } from '@/components/post-view-modal'
 import { ContactOptionsModal } from '@/components/contact-options-modal'
 import { ConnectButton } from '@/components/connect-button'
+import { UserConnectionsModal } from '@/components/user-connections-modal'
 
 // --- Edit Profile Modal -------------------------------------------------------
 
@@ -577,6 +578,7 @@ export default function ProfilePage() {
   const [showContactModal, setShowContactModal] = useState(false)
   const [connectionCount, setConnectionCount] = useState<number | null>(null)
   const [userBadges, setUserBadges] = useState<UserBadge[]>([])
+  const [showConnectionsModal, setShowConnectionsModal] = useState(false)
 
   const refreshConnectionCount = async () => {
     try {
@@ -698,6 +700,15 @@ export default function ProfilePage() {
         />
       )}
 
+      {/* Connections Modal — only for other users' profiles; your own count links to /connections */}
+      {showConnectionsModal && !isOwnProfile && (
+        <UserConnectionsModal
+          userId={profileUser.id}
+          displayName={displayName}
+          onClose={() => setShowConnectionsModal(false)}
+        />
+      )}
+
       {/* Edit Profile Modal */}
       {showEditModal && isOwnProfile && (
         <EditProfileModal
@@ -793,22 +804,43 @@ export default function ProfilePage() {
                     <MapPin size={16} />
                     {profileUser.active ? 'Active Member' : 'Inactive'}
                   </p>
-                  <Link
-                    href="/connections"
-                    className="text-muted-foreground hover:text-primary mt-1 flex items-center gap-1 text-sm transition-colors"
-                  >
-                    <Users size={15} />
-                    {connectionCount === null ? (
-                      <span className="bg-muted inline-block h-4 w-20 animate-pulse rounded" />
-                    ) : (
-                      <span>
-                        <span className="text-foreground hover:text-primary font-semibold">
-                          {connectionCount}
-                        </span>{' '}
-                        connection{connectionCount === 1 ? '' : 's'}
-                      </span>
-                    )}
-                  </Link>
+                  {isOwnProfile ? (
+                    <Link
+                      href="/connections"
+                      className="text-muted-foreground hover:text-primary mt-1 flex items-center gap-1 text-sm transition-colors"
+                    >
+                      <Users size={15} />
+                      {connectionCount === null ? (
+                        <span className="bg-muted inline-block h-4 w-20 animate-pulse rounded" />
+                      ) : (
+                        <span>
+                          <span className="text-foreground hover:text-primary font-semibold">
+                            {connectionCount}
+                          </span>{' '}
+                          connection{connectionCount === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowConnectionsModal(true)}
+                      disabled={connectionCount === null}
+                      className="text-muted-foreground hover:text-primary mt-1 flex items-center gap-1 text-sm transition-colors"
+                    >
+                      <Users size={15} />
+                      {connectionCount === null ? (
+                        <span className="bg-muted inline-block h-4 w-20 animate-pulse rounded" />
+                      ) : (
+                        <span>
+                          <span className="text-foreground hover:text-primary font-semibold">
+                            {connectionCount}
+                          </span>{' '}
+                          connection{connectionCount === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 {/* Action buttons */}
