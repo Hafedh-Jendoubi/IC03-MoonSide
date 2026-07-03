@@ -45,6 +45,7 @@ jobs:
           - { name: organization-service, path: Backend/Organization-Service, java: 17, mongo: true }
           - { name: post-service,         path: Backend/Post-Service,         java: 17, mongo: true }
           - { name: notification-service, path: Backend/Notification-Service, java: 17, mongo: true, kafka: true }
+          - { name: badge-service,        path: Backend/Badge-Service,        java: 17, mongo: true, kafka: true }
           - { name: search-service,       path: Backend/Search-Service,       java: 17, elastic: true }
           - { name: frontend,             path: Frontend,                     node: 20 }
 
