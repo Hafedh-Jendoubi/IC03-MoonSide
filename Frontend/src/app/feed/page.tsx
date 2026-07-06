@@ -31,7 +31,6 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [feedType, setFeedType] = useState<'following' | 'connections'>('following')
 
   // Refs to avoid stale closures in the IntersectionObserver callback
   const loadingMoreRef = useRef(false)
@@ -113,10 +112,7 @@ export default function FeedPage() {
         }
         setError(null)
 
-        const data =
-          feedType === 'connections'
-            ? await postApi.getConnectionsFeed(pageNum, PAGE_SIZE)
-            : await postApi.getFollowingFeed(pageNum, PAGE_SIZE)
+        const data = await postApi.getFeed(pageNum, PAGE_SIZE)
 
         if (pageNum === 0) {
           setPosts(data.content)
@@ -142,14 +138,14 @@ export default function FeedPage() {
         loadingMoreRef.current = false
       }
     },
-    [resolveAuthors, resolveOrigins, user, feedType]
+    [resolveAuthors, resolveOrigins, user]
   )
 
-  // Initial load + reload whenever the feed tab changes
+  // Initial load
   useEffect(() => {
     loadFeed(0, {})
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [feedType])
+  }, [])
 
   // ── Infinite scroll sentinel ───────────────────────────────────────────────
 
@@ -213,30 +209,6 @@ export default function FeedPage() {
       <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
         <CreatePost user={user} onPostCreate={handlePostCreate} />
 
-        {/* Feed tabs */}
-        <div className="mt-6 mb-2 flex gap-1 rounded-lg border p-1">
-          <button
-            onClick={() => setFeedType('following')}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              feedType === 'following'
-                ? 'bg-primary text-white'
-                : 'text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            Following
-          </button>
-          <button
-            onClick={() => setFeedType('connections')}
-            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-              feedType === 'connections'
-                ? 'bg-primary text-white'
-                : 'text-muted-foreground hover:bg-muted'
-            }`}
-          >
-            Connections
-          </button>
-        </div>
-
         {loading ? (
           <div className="flex flex-col items-center gap-4 py-16">
             <Loader2 className="text-primary h-8 w-8 animate-spin" />
@@ -269,8 +241,7 @@ export default function FeedPage() {
               ))}
             </div>
 
-            {posts.length === 0 &&
-              (feedType === 'connections' ? <ConnectionsEmptyState /> : <FollowingEmptyState />)}
+            {posts.length === 0 && <FeedEmptyState />}
 
             {/* Infinite scroll sentinel */}
             {hasMore && (
@@ -332,30 +303,9 @@ function PostOriginBadge({
   )
 }
 
-// ─── ConnectionsEmptyState ────────────────────────────────────────────────────
+// ─── FeedEmptyState ───────────────────────────────────────────────────────────
 
-function ConnectionsEmptyState() {
-  return (
-    <div className="py-12 text-center">
-      <div className="bg-muted mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
-        <Users className="text-muted-foreground h-8 w-8" />
-      </div>
-      <h2 className="text-foreground mb-2 text-xl font-semibold">Nothing here yet</h2>
-      <p className="text-muted-foreground mx-auto mb-6 max-w-sm text-sm">
-        Connect with colleagues to see what they post, comment on, and like, right here in your
-        feed.
-      </p>
-      <Button asChild>
-        <Link href="/connections">
-          <Users size={16} className="mr-2" />
-          Manage your network
-        </Link>
-      </Button>
-    </div>
-  )
-}
-
-function FollowingEmptyState() {
+function FeedEmptyState() {
   return (
     <div className="py-12 text-center">
       <div className="bg-muted mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
@@ -363,8 +313,8 @@ function FollowingEmptyState() {
       </div>
       <h2 className="text-foreground mb-2 text-xl font-semibold">Your feed is empty</h2>
       <p className="text-muted-foreground mx-auto mb-6 max-w-sm text-sm">
-        Follow departments or teams to see their posts here. Everything posted there will appear in
-        your personal feed.
+        Follow departments or teams and connect with colleagues to see their posts here. Everything
+        they post will appear in your personal feed.
       </p>
       <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
         <Button asChild>
@@ -374,9 +324,9 @@ function FollowingEmptyState() {
           </Link>
         </Button>
         <Button variant="outline" asChild>
-          <Link href="/organizations">
+          <Link href="/connections">
             <Users size={16} className="mr-2" />
-            View organisation
+            Manage your network
           </Link>
         </Button>
       </div>

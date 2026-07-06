@@ -13,6 +13,7 @@ import tn.moonside.postservice.clients.UserClient;
 import tn.moonside.postservice.clients.UserSummary;
 import tn.moonside.postservice.dtos.requests.PostRequest;
 import tn.moonside.postservice.dtos.responses.ApiResponse;
+import tn.moonside.postservice.dtos.responses.PagedResponse;
 import tn.moonside.postservice.dtos.responses.PostResponse;
 import tn.moonside.postservice.services.PostService;
 
@@ -47,7 +48,7 @@ public class PostController {
      * Not personalised; no authentication required beyond gateway filtering.
      */
     @GetMapping("/feed")
-    public ResponseEntity<ApiResponse<Page<PostResponse>>> getFeed(
+    public ResponseEntity<ApiResponse<PagedResponse<PostResponse>>> getFeed(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.success(postService.getPublicFeed(page, size)));

@@ -164,13 +164,19 @@ public class PostService {
         redisTemplate.opsForValue().increment("post:views:" + postId);
     }
 
+    // NOTE: this is cached in Redis via GenericJackson2JsonRedisSerializer, which
+    // cannot deserialize org.springframework.data.domain.PageImpl (no default
+    // constructor / Jackson creator on it). Returning PagedResponse<PostResponse>
+    // instead - a plain bean - keeps the same JSON shape for clients (see
+    // PagedResponse) while actually being deserializable on cache reads.
     @Cacheable(value = "publicFeed", key = "#page + '-' + #size")
-    public Page<PostResponse> getPublicFeed(int page, int size) {
+    public PagedResponse<PostResponse> getPublicFeed(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         String requesterId = currentUserId();
-        return postRepository
+        Page<PostResponse> result = postRepository
                 .findByPostVisibilityIn(List.of(VisibilityType.PUBLIC), pageable)
                 .map(p -> toResponse(p, requesterId));
+        return PagedResponse.from(result);
     }
 
     public Page<PostResponse> getFollowingFeed(String userId, int page, int size) {

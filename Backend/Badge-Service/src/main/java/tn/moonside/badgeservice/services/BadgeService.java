@@ -1,11 +1,18 @@
 package tn.moonside.badgeservice.services;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import tn.moonside.badgeservice.dtos.BadgeDefinitionResponse;
 import tn.moonside.badgeservice.dtos.UserBadgeResponse;
 import tn.moonside.badgeservice.entities.UserBadge;
@@ -158,10 +165,20 @@ public class BadgeService {
     @SuppressWarnings("unchecked")
     private UserInfo fetchUserInfo(String userId) {
         try {
-            Map<String, Object> resp = restTemplate.getForObject(
-                    userServiceUrl + "/users/internal/" + userId, Map.class);
-            if (resp == null) return new UserInfo(userId, null, null, null, null);
-            Map<String, Object> data = (Map<String, Object>) resp.get("data");
+            HttpHeaders headers = buildHeaders();
+            HttpEntity<Void> entity = new HttpEntity<>(headers);
+            ResponseEntity<Map> resp = restTemplate.exchange(
+                    userServiceUrl + "/users/internal/" + userId,
+                    HttpMethod.GET,
+                    entity,
+                    Map.class);
+
+            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
+                return new UserInfo(userId, null, null, null, null);
+            }
+
+            Map<String, Object> body = resp.getBody();
+            Map<String, Object> data = (Map<String, Object>) body.get("data");
             if (data == null) return new UserInfo(userId, null, null, null, null);
             return new UserInfo(
                     userId,
@@ -173,6 +190,31 @@ public class BadgeService {
             log.warn("Could not fetch user info for {}: {}", userId, e.getMessage());
             return new UserInfo(userId, null, null, null, null);
         }
+    }
+
+    private HttpHeaders buildHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        String token = extractBearerToken();
+        if (token != null) {
+            headers.set(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+        }
+        return headers;
+    }
+
+    private String extractBearerToken() {
+        try {
+            ServletRequestAttributes attrs =
+                    (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            if (attrs == null) return null;
+            HttpServletRequest request = attrs.getRequest();
+            String auth = request.getHeader(HttpHeaders.AUTHORIZATION);
+            if (auth != null && auth.startsWith("Bearer ")) {
+                return auth.substring(7);
+            }
+        } catch (Exception e) {
+            log.debug("Could not extract bearer token: {}", e.getMessage());
+        }
+        return null;
     }
 
     private String str(Map<String, Object> map, String key) {
