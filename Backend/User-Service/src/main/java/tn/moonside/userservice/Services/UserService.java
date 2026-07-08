@@ -15,6 +15,7 @@ public interface UserService {
     List<UserResponse> getAllUsers();
     UserResponse updateUser(String id, UpdateUserRequest request, String currentUserEmail);
     UserResponse updateAvatar(String email, String avatarUrl);
+    UserResponse updateBanner(String email, String bannerUrl);
     void deleteUser(String id);
     void assignRole(String userId, AssignRoleRequest request);
     void revokeRole(String userId, String roleId);

@@ -11,6 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 import tn.moonside.userservice.dtos.requests.AssignRoleRequest;
 import tn.moonside.userservice.dtos.requests.InviteUserRequest;
 import tn.moonside.userservice.dtos.requests.UpdateAvatarRequest;
+import tn.moonside.userservice.dtos.requests.UpdateBannerRequest;
 import tn.moonside.userservice.dtos.requests.UpdateUserRequest;
 import tn.moonside.userservice.dtos.responses.ApiResponse;
 import tn.moonside.userservice.dtos.responses.BulkInviteResult;
@@ -67,6 +68,25 @@ public class UserController {
             @AuthenticationPrincipal UserDetails userDetails) {
         UserResponse updated = userService.updateAvatar(userDetails.getUsername(), null);
         return ResponseEntity.ok(ApiResponse.success(updated, "Avatar removed successfully"));
+    }
+
+    /** Update own profile banner — requires USER_EDIT_OWN_BANNER permission */
+    @PatchMapping("/me/banner")
+    @RequiresPermission(AppPermission.USER_EDIT_OWN_BANNER)
+    public ResponseEntity<ApiResponse<UserResponse>> updateMyBanner(
+            @RequestBody UpdateBannerRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        UserResponse updated = userService.updateBanner(userDetails.getUsername(), request.getBannerUrl());
+        return ResponseEntity.ok(ApiResponse.success(updated, "Banner updated successfully"));
+    }
+
+    /** Delete own profile banner — requires USER_DELETE_OWN_BANNER permission */
+    @DeleteMapping("/me/banner")
+    @RequiresPermission(AppPermission.USER_DELETE_OWN_BANNER)
+    public ResponseEntity<ApiResponse<UserResponse>> deleteMyBanner(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        UserResponse updated = userService.updateBanner(userDetails.getUsername(), null);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Banner removed successfully"));
     }
 
     /** Get a user's roles — requires USER_READ_ROLES permission */

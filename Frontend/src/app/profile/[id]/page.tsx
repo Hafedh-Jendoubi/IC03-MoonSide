@@ -49,6 +49,7 @@ import { BadgeIcon } from '@/components/badge-icon'
 import { ContactOptionsModal } from '@/components/contact-options-modal'
 import { ConnectButton } from '@/components/connect-button'
 import { UserConnectionsModal } from '@/components/user-connections-modal'
+import { OrgBannerUpload } from '@/components/org-image-upload'
 
 // --- Edit Profile Modal -------------------------------------------------------
 
@@ -697,6 +698,25 @@ export default function ProfilePage() {
     }
   }
 
+  // Banner editing state (own profile only) — uses the same OrgBannerUpload
+  // component as team/department pages.
+  const [bannerError, setBannerError] = useState<string | null>(null)
+
+  const handleBannerUploaded = async (url: string | null) => {
+    if (!profileUser) return
+    setBannerError(null)
+    try {
+      if (url) {
+        await userApi.updateBanner(url)
+      } else {
+        await userApi.deleteBanner()
+      }
+      setProfileUser((u) => (u ? { ...u, bannerUrl: url } : u))
+    } catch (err) {
+      setBannerError(err instanceof Error ? err.message : 'Failed to update banner')
+    }
+  }
+
   useEffect(() => {
     const fetchUser = async () => {
       try {
@@ -786,11 +806,31 @@ export default function ProfilePage() {
       )}
 
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Cover Image */}
-        <div className="animate-fade-in from-primary/20 to-secondary/20 mb-6 h-48 rounded-xl bg-gradient-to-r"></div>
+        {/* Cover Banner */}
+        {isOwnProfile ? (
+          <div className="animate-fade-in mb-6">
+            <OrgBannerUpload
+              currentUrl={profileUser.bannerUrl}
+              onUploaded={handleBannerUploaded}
+              context="USER_BANNER"
+              heightClassName="h-56"
+            />
+            {bannerError && <p className="text-destructive mt-1 text-xs">{bannerError}</p>}
+          </div>
+        ) : profileUser.bannerUrl ? (
+          <div className="animate-fade-in mb-6 h-56 w-full overflow-hidden rounded-lg">
+            <img
+              src={profileUser.bannerUrl}
+              alt={`${displayName}'s banner`}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className="animate-fade-in from-primary/20 to-secondary/20 mb-6 h-56 rounded-lg bg-gradient-to-r"></div>
+        )}
 
         {/* Profile Card */}
-        <Card className="animate-scale-in relative -mt-24 mb-8 p-6">
+        <Card className="animate-scale-in relative -mt-16 mb-8 p-6">
           <div className="flex flex-col gap-6 sm:flex-row">
             {/* Avatar with hover controls (own profile only) */}
             <div className="relative flex-shrink-0 self-start">

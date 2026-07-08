@@ -26,6 +26,8 @@ public class User {
     private String jobTitle;
     private String bio;
     private String avatar;
+    /** URL to the user's profile banner image, stored in media-service. */
+    private String bannerUrl;
     @Builder.Default
     private boolean isActive = true;
     private String updatedBy;

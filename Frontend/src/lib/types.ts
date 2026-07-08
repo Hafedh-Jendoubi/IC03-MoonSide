@@ -43,6 +43,7 @@ export interface User {
   jobTitle: string | null
   bio: string | null
   avatar: string | null
+  bannerUrl: string | null
   active: boolean
   mustChangePassword: boolean
   lastLogin: string | null

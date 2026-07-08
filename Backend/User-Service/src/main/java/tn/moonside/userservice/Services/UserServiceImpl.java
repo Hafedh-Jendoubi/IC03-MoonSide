@@ -305,6 +305,27 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public UserResponse updateBanner(String email, String bannerUrl) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+        String oldBanner = user.getBannerUrl();
+        user.setBannerUrl(bannerUrl);
+        user.setUpdatedAt(LocalDateTime.now());
+        User saved = userRepository.save(user);
+        log.info("Updated banner for user: {}", saved.getId());
+
+        String action = (bannerUrl == null) ? "BANNER_DELETE" : "BANNER_UPDATE";
+        String desc   = (bannerUrl == null)
+                ? "Banner removed for " + email
+                : "Banner updated for " + email;
+        auditLogService.log(saved.getId(), saved.getId(), "USER",
+                action, desc, true, oldBanner, bannerUrl, null);
+
+        return mapToUserResponse(saved);
+    }
+
+    @Override
+    @Transactional
     public UserResponse updateUser(String id, UpdateUserRequest request, String currentUserEmail) {
         User user = findUserById(id);
 
@@ -504,6 +525,7 @@ public class UserServiceImpl implements UserService {
                 .jobTitle(user.getJobTitle())
                 .bio(user.getBio())
                 .avatar(user.getAvatar())
+                .bannerUrl(user.getBannerUrl())
                 .isActive(user.isActive())
                 .mustChangePassword(user.isMustChangePassword())
                 .lastLogin(user.getLastLogin())
