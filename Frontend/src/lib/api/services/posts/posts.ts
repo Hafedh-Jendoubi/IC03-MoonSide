@@ -17,6 +17,9 @@ export const postApi = {
   getConnectionsFeed: (page = 0, size = 20) =>
     apiFetch<PageResponse<PostResponse>>(`/posts/feed/connections?page=${page}&size=${size}`),
 
+  getPersonalizedFeed: (page = 0, size = 20) =>
+    apiFetch<PageResponse<PostResponse>>(`/posts/feed/personalized?page=${page}&size=${size}`),
+
   getByAuthor: (authorId: string, page = 0, size = 20) =>
     apiFetch<PageResponse<PostResponse>>(`/posts/author/${authorId}?page=${page}&size=${size}`),
 

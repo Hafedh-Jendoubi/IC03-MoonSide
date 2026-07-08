@@ -112,7 +112,7 @@ export default function FeedPage() {
         }
         setError(null)
 
-        const data = await postApi.getFeed(pageNum, PAGE_SIZE)
+        const data = await postApi.getPersonalizedFeed(pageNum, PAGE_SIZE)
 
         if (pageNum === 0) {
           setPosts(data.content)

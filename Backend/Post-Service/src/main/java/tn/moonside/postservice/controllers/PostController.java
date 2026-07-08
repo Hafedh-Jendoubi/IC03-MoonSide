@@ -94,6 +94,24 @@ public class PostController {
                 ApiResponse.success(postService.getConnectionsFeed(userId, page, size)));
     }
 
+    /**
+     * GET /posts/feed/personalized
+     *
+     * The single home-feed: posts from followed/joined departments and teams,
+     * plus posts from accepted connections, plus the viewer's own posts —
+     * merged and sorted newest-first. This is what the main Feed page should
+     * call so a post in a followed department/team and a connection's post
+     * both show up together, correctly paginated.
+     */
+    @GetMapping("/feed/personalized")
+    public ResponseEntity<ApiResponse<Page<PostResponse>>> getPersonalizedFeed(
+            @AuthenticationPrincipal String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(
+                ApiResponse.success(postService.getPersonalizedFeed(userId, page, size)));
+    }
+
     @GetMapping("/author/{authorId}")
     public ResponseEntity<ApiResponse<Page<PostResponse>>> getByAuthor(
             @PathVariable String authorId,

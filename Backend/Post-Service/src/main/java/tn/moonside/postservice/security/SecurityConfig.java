@@ -60,6 +60,8 @@ public class SecurityConfig {
                 // ── POST_VIEW — read feeds (every authenticated user) ─────────
                 .requestMatchers(HttpMethod.GET, "/posts/feed").authenticated()
                 .requestMatchers(HttpMethod.GET, "/posts/feed/following").authenticated()
+                .requestMatchers(HttpMethod.GET, "/posts/feed/connections").authenticated()
+                .requestMatchers(HttpMethod.GET, "/posts/feed/personalized").authenticated()
                 .requestMatchers(HttpMethod.GET, "/posts/author/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/posts/team/**").authenticated()
                 .requestMatchers(HttpMethod.GET, "/posts/department/**").authenticated()

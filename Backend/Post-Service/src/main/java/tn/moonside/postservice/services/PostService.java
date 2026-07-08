@@ -244,6 +244,67 @@ public class PostService {
                 .map(p -> toResponse(p, userId));
     }
 
+    /**
+     * GET /posts/feed/personalized
+     *
+     * The single home-feed a user actually wants: posts from the departments
+     * and teams they follow/belong to (following-feed rules), PLUS posts their
+     * accepted connections authored/reacted to/commented on (connections-feed
+     * rules), PLUS their own posts — merged, deduplicated, and sorted
+     * newest-first in one query so pagination is correct across all sources.
+     *
+     * Returns an empty page (not an error) when the user follows nothing,
+     * has no connections, and has posted nothing themselves.
+     */
+    public Page<PostResponse> getPersonalizedFeed(String userId, int page, int size) {
+        OrganizationClient.UserFollows follows = organizationClient.getUserFollows();
+
+        List<String> allDeptIds = Stream.concat(
+                        follows.departmentIds().stream(),
+                        follows.memberDepartmentIds().stream())
+                .distinct().toList();
+
+        List<String> allTeamIds = Stream.concat(
+                        follows.teamIds().stream(),
+                        follows.memberTeamIds().stream())
+                .distinct().toList();
+
+        List<String> connectionIds = connectionClient.getConnectionIds(userId);
+
+        List<String> reactedPostIds = connectionIds.isEmpty()
+                ? List.of()
+                : reactionRepository
+                    .findByUserIdInAndReactableType(connectionIds, "POST")
+                    .stream().map(Reaction::getReactableId).distinct().toList();
+
+        List<String> commentedPostIds = connectionIds.isEmpty()
+                ? List.of()
+                : commentRepository
+                    .findByAuthorIdIn(connectionIds)
+                    .stream().map(Comment::getPostId).distinct().toList();
+
+        List<String> activityPostIds = Stream.concat(reactedPostIds.stream(), commentedPostIds.stream())
+                .distinct().toList();
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        List<String> deptIds = allDeptIds.isEmpty() ? List.of("__no_dept__") : allDeptIds;
+        List<String> teamIds = allTeamIds.isEmpty() ? List.of("__no_team__") : allTeamIds;
+        List<String> connAuthorIds = connectionIds.isEmpty() ? List.of("__no_connection__") : connectionIds;
+        List<String> connPostIds = activityPostIds.isEmpty() ? List.of("__no_activity__") : activityPostIds;
+
+        List<VisibilityType> followVisibilities = List.of(
+                VisibilityType.PUBLIC, VisibilityType.DEPARTMENT_ONLY, VisibilityType.TEAM_ONLY);
+        List<VisibilityType> connectionVisibilities = List.of(VisibilityType.PUBLIC);
+
+        return postRepository
+                .findPersonalizedFeed(
+                        deptIds, teamIds, followVisibilities,
+                        connAuthorIds, connPostIds, connectionVisibilities,
+                        userId, pageable)
+                .map(p -> toResponse(p, userId));
+    }
+
     public Page<PostResponse> getByAuthor(String authorId, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         String requesterId = currentUserId();
