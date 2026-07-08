@@ -161,7 +161,6 @@ export function Navbar() {
   const navLinks = [
     { href: '/feed', label: 'Feed', icon: Home },
     { href: '/discover', label: 'Discover', icon: Compass },
-    { href: '/badges', label: 'Badges', icon: Award },
   ]
 
   const displayName = user ? getFullName(user) : ''
@@ -501,6 +500,15 @@ export function Navbar() {
                           >
                             <Bookmark size={16} />
                             Saved Posts
+                          </button>
+                        </Link>
+                        <Link href="/badges">
+                          <button
+                            onClick={() => setIsDropdownOpen(false)}
+                            className="text-foreground hover:bg-muted flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors"
+                          >
+                            <Award size={16} />
+                            Badges
                           </button>
                         </Link>
                         {canAccessBackOffice(user) && (

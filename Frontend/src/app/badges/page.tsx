@@ -8,75 +8,10 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Loader2, Search, ChevronDown, ChevronUp } from 'lucide-react'
+import { Loader2, Search, ChevronDown, ChevronUp, Award } from 'lucide-react'
 import { badgeApi } from '@/lib/api'
 import type { BadgeDefinition, BadgeCategory } from '@/lib/api'
-
-// ── Dynamic icon renderer ─────────────────────────────────────────────────────
-// We import every Lucide icon used by BadgeType so they're bundled at build time.
-import {
-  PenLine,
-  Handshake,
-  UserCheck,
-  ShieldCheck,
-  Pencil,
-  BookOpen,
-  Edit3,
-  FileText,
-  BookMarked,
-  Trophy,
-  Star,
-  Users,
-  Network,
-  Globe,
-  Building2,
-  Zap,
-  Flame,
-  Calendar,
-  CalendarCheck,
-  Award,
-  Medal,
-  Crown,
-} from 'lucide-react'
-
-const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-  PenLine,
-  Handshake,
-  UserCheck,
-  ShieldCheck,
-  Pencil,
-  BookOpen,
-  Edit3,
-  FileText,
-  BookMarked,
-  Trophy,
-  Star,
-  Users,
-  Network,
-  Globe,
-  Building2,
-  Zap,
-  Flame,
-  Calendar,
-  CalendarCheck,
-  Award,
-  Medal,
-  Crown,
-}
-
-function BadgeIcon({
-  name,
-  size = 28,
-  className,
-}: {
-  name: string
-  size?: number
-  className?: string
-}) {
-  const Icon = ICON_MAP[name]
-  if (!Icon) return <Award size={size} className={className} />
-  return <Icon size={size} className={className} />
-}
+import { BadgeIcon } from '@/components/badge-icon'
 
 // ── Colour theme per category ─────────────────────────────────────────────────
 const CATEGORY_THEME: Record<string, { bg: string; icon: string; border: string; pill: string }> = {

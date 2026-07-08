@@ -17,4 +17,8 @@ public interface ReactionRepository extends MongoRepository<Reaction, String> {
 
     /** Reactions by any of the given users on a given target type — used by the connections feed. */
     List<Reaction> findByUserIdInAndReactableType(List<String> userIds, String reactableType);
+
+    /** Paginated reactions made by a single user, newest first — used by the profile activity feed. */
+    org.springframework.data.domain.Page<Reaction> findByUserId(
+            String userId, org.springframework.data.domain.Pageable pageable);
 }

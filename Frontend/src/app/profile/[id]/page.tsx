@@ -39,12 +39,13 @@ import {
   reactionApi,
   commentApi,
   PostResponse,
-  ReactionResponse,
   connectionApi,
   badgeApi,
+  teamApi,
 } from '@/lib/api'
 import type { UserBadge } from '@/lib/api'
 import { PostViewModal } from '@/components/post-view-modal'
+import { BadgeIcon } from '@/components/badge-icon'
 import { ContactOptionsModal } from '@/components/contact-options-modal'
 import { ConnectButton } from '@/components/connect-button'
 import { UserConnectionsModal } from '@/components/user-connections-modal'
@@ -212,7 +213,7 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
 
 // --- Activity Types -----------------------------------------------------------
 
-type ActivityKind = 'POST' | 'COMMENT' | 'REACTION'
+type ActivityKind = 'POST' | 'COMMENT' | 'REACTION' | 'BADGE' | 'TEAM_JOIN'
 
 interface ActivityItem {
   id: string
@@ -228,12 +229,20 @@ interface ActivityItem {
   reactionEmoji?: string
   reactionPostId?: string
   reactionPostContent?: string
+  // BADGE
+  badgeName?: string
+  badgeIcon?: string
+  // TEAM_JOIN
+  teamId?: string
+  teamName?: string
+  departmentName?: string
 }
 
 // --- Recent Activity Section --------------------------------------------------
 
 const ACTIVITY_PAGE_SIZE = 5
 const POST_FETCH_LIMIT = 10 // posts to scan for reactions/comments
+const CONTENT_FETCH_LIMIT = 15 // comments/reactions to fetch directly for the timeline
 
 function formatRelativeTime(dateStr: string): string {
   const date = new Date(dateStr)
@@ -271,14 +280,25 @@ const ACTIVITY_ICON: Record<ActivityKind, { icon: React.ReactNode; label: string
       label: 'Reacted to a post',
       color: 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400',
     },
+    BADGE: {
+      icon: <Award size={14} />,
+      label: 'Earned a badge',
+      color: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
+    },
+    TEAM_JOIN: {
+      icon: <Users size={14} />,
+      label: 'Joined a team',
+      color: 'bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400',
+    },
   }
 
 interface RecentActivityProps {
   userId: string
+  badges: UserBadge[]
   onOpenPost: (postId: string) => void
 }
 
-function RecentActivity({ userId, onOpenPost }: RecentActivityProps) {
+function RecentActivity({ userId, badges, onOpenPost }: RecentActivityProps) {
   const [activities, setActivities] = useState<ActivityItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -292,11 +312,31 @@ function RecentActivity({ userId, onOpenPost }: RecentActivityProps) {
       setError(null)
 
       try {
-        // 1. Fetch user's own posts (most recent first)
-        const postsPage = await postApi.getByAuthor(userId, 0, POST_FETCH_LIMIT)
-        const userPosts: PostResponse[] = postsPage.content ?? []
+        // 1. Fetch this user's own posts, comments (on ANY post), reactions (on ANY
+        //    post), and team memberships, all in parallel. Each call is independent —
+        //    Promise.allSettled means one failing (e.g. a service being briefly down)
+        //    doesn't blank out the rest of the timeline.
+        const [postsResult, commentsResult, reactionsResult, teamsResult] =
+          await Promise.allSettled([
+            postApi.getByAuthor(userId, 0, POST_FETCH_LIMIT),
+            commentApi.getByAuthor(userId, 0, CONTENT_FETCH_LIMIT),
+            reactionApi.getByUser(userId, 0, CONTENT_FETCH_LIMIT),
+            teamApi.getUserTeams(userId),
+          ])
 
         if (cancelled) return
+
+        const userPosts: PostResponse[] =
+          postsResult.status === 'fulfilled' ? (postsResult.value.content ?? []) : []
+        const userComments =
+          commentsResult.status === 'fulfilled' ? (commentsResult.value.content ?? []) : []
+        // Post-level reactions only — comment-level reactions aren't tied to a single
+        // post here, so they're left out of the timeline rather than shown incorrectly.
+        const userReactions =
+          reactionsResult.status === 'fulfilled'
+            ? (reactionsResult.value.content ?? []).filter((r) => r.reactableType === 'POST')
+            : []
+        const userTeams = teamsResult.status === 'fulfilled' ? teamsResult.value : []
 
         // 2. Build POST activities
         const postActivities: ActivityItem[] = userPosts.map((p) => ({
@@ -306,72 +346,74 @@ function RecentActivity({ userId, onOpenPost }: RecentActivityProps) {
           post: p,
         }))
 
-        // 3. Fetch comments & reactions on each post in parallel (limited set)
-        const postsToScan = userPosts.slice(0, POST_FETCH_LIMIT)
-
-        const [commentsResults, reactionsResults] = await Promise.all([
-          // Comments on each post — filter to those authored by this user
-          Promise.allSettled(
-            postsToScan.map((p) =>
-              commentApi.getComments(p.id, 0, 50).then((page) => ({
-                postId: p.id,
-                postContent: p.content,
-                comments: (page.content ?? []).filter((c) => c.authorId === userId),
-              }))
-            )
-          ),
-          // Reactions on each post — filter to those by this user
-          Promise.allSettled(
-            postsToScan.map((p) =>
-              reactionApi.getPostReactors(p.id).then((reactors: ReactionResponse[]) => ({
-                postId: p.id,
-                postContent: p.content,
-                reactions: reactors.filter((r) => r.userId === userId),
-              }))
-            )
-          ),
-        ])
+        // 3. Comments and reactions reference posts by ID only — resolve the
+        //    content of any referenced post that isn't already among the user's
+        //    own posts (i.e. posts authored by someone else).
+        const knownPostContent = new Map<string, string>(userPosts.map((p) => [p.id, p.content]))
+        const missingPostIds = Array.from(
+          new Set(
+            [
+              ...userComments.map((c) => c.postId),
+              ...userReactions.map((r) => r.reactableId),
+            ].filter((id) => !knownPostContent.has(id))
+          )
+        )
+        if (missingPostIds.length > 0) {
+          const fetched = await Promise.allSettled(missingPostIds.map((id) => postApi.getById(id)))
+          fetched.forEach((r) => {
+            if (r.status === 'fulfilled') knownPostContent.set(r.value.id, r.value.content)
+          })
+        }
 
         if (cancelled) return
 
         // 4. Build COMMENT activities
-        const commentActivities: ActivityItem[] = []
-        for (const result of commentsResults) {
-          if (result.status === 'fulfilled') {
-            for (const c of result.value.comments) {
-              commentActivities.push({
-                id: `comment-${c.id}`,
-                kind: 'COMMENT',
-                timestamp: c.createdAt,
-                commentContent: c.content,
-                commentPostId: result.value.postId,
-                commentPostContent: result.value.postContent,
-              })
-            }
-          }
-        }
+        const commentActivities: ActivityItem[] = userComments.map((c) => ({
+          id: `comment-${c.id}`,
+          kind: 'COMMENT' as ActivityKind,
+          timestamp: c.createdAt,
+          commentContent: c.content,
+          commentPostId: c.postId,
+          commentPostContent: knownPostContent.get(c.postId),
+        }))
 
         // 5. Build REACTION activities
-        const reactionActivities: ActivityItem[] = []
-        for (const result of reactionsResults) {
-          if (result.status === 'fulfilled') {
-            for (const r of result.value.reactions) {
-              reactionActivities.push({
-                id: `reaction-${r.id}`,
-                kind: 'REACTION',
-                timestamp: r.createdAt,
-                reactionEmoji: r.reactionTypeEmoji,
-                reactionPostId: result.value.postId,
-                reactionPostContent: result.value.postContent,
-              })
-            }
-          }
-        }
+        const reactionActivities: ActivityItem[] = userReactions.map((r) => ({
+          id: `reaction-${r.id}`,
+          kind: 'REACTION' as ActivityKind,
+          timestamp: r.createdAt,
+          reactionEmoji: r.reactionTypeEmoji,
+          reactionPostId: r.reactableId,
+          reactionPostContent: knownPostContent.get(r.reactableId),
+        }))
 
-        // 6. Merge and sort by newest first
-        const all = [...postActivities, ...commentActivities, ...reactionActivities].sort(
-          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        )
+        // 6. Build BADGE activities
+        const badgeActivities: ActivityItem[] = badges.map((b) => ({
+          id: `badge-${b.id}`,
+          kind: 'BADGE' as ActivityKind,
+          timestamp: b.awardedAt,
+          badgeName: b.displayName,
+          badgeIcon: b.icon,
+        }))
+
+        // 7. Build TEAM_JOIN activities
+        const teamActivities: ActivityItem[] = userTeams.map((m) => ({
+          id: `team-${m.team.id}`,
+          kind: 'TEAM_JOIN' as ActivityKind,
+          timestamp: m.joinedAt,
+          teamId: m.team.id,
+          teamName: m.team.name,
+          departmentName: m.team.departmentName ?? undefined,
+        }))
+
+        // 8. Merge and sort by newest first
+        const all = [
+          ...postActivities,
+          ...commentActivities,
+          ...reactionActivities,
+          ...badgeActivities,
+          ...teamActivities,
+        ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
         if (!cancelled) {
           setActivities(all)
@@ -389,7 +431,7 @@ function RecentActivity({ userId, onOpenPost }: RecentActivityProps) {
     return () => {
       cancelled = true
     }
-  }, [userId])
+  }, [userId, badges])
 
   if (loading) {
     return (
@@ -430,22 +472,26 @@ function RecentActivity({ userId, onOpenPost }: RecentActivityProps) {
             { kind: 'POST', label: 'Posts', icon: <FileText size={13} /> },
             { kind: 'COMMENT', label: 'Comments', icon: <MessageCircle size={13} /> },
             { kind: 'REACTION', label: 'Reactions', icon: <Heart size={13} /> },
+            { kind: 'BADGE', label: 'Badges', icon: <Award size={13} /> },
+            { kind: 'TEAM_JOIN', label: 'Teams joined', icon: <Users size={13} /> },
           ] as const
-        ).map(({ kind, label, icon }) => {
-          const count = activities.filter((a) => a.kind === kind).length
-          const meta = ACTIVITY_ICON[kind]
-          return (
-            <div
-              key={kind}
-              className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${meta.color}`}
-            >
-              {icon}
-              <span>
-                {count} {label}
-              </span>
-            </div>
-          )
-        })}
+        )
+          .filter(({ kind }) => activities.some((a) => a.kind === kind))
+          .map(({ kind, label, icon }) => {
+            const count = activities.filter((a) => a.kind === kind).length
+            const meta = ACTIVITY_ICON[kind]
+            return (
+              <div
+                key={kind}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${meta.color}`}
+              >
+                {icon}
+                <span>
+                  {count} {label}
+                </span>
+              </div>
+            )
+          })}
       </div>
 
       {/* Timeline */}
@@ -524,6 +570,24 @@ function RecentActivity({ userId, onOpenPost }: RecentActivityProps) {
                         <span>on "{truncate(item.reactionPostContent, 60)}"</span>
                       )}
                     </button>
+                  )}
+
+                  {item.kind === 'BADGE' && (
+                    <span className="text-muted-foreground block text-sm">{item.badgeName}</span>
+                  )}
+
+                  {item.kind === 'TEAM_JOIN' && (
+                    <Link
+                      href={item.teamId ? `/team/${item.teamId}` : '#'}
+                      className="text-muted-foreground hover:text-primary block w-full text-sm transition-colors"
+                    >
+                      {item.teamName}
+                      {item.departmentName && (
+                        <span className="text-muted-foreground/70 ml-1 text-xs">
+                          · {item.departmentName}
+                        </span>
+                      )}
+                    </Link>
                   )}
                 </div>
               </div>
@@ -1005,7 +1069,7 @@ export default function ProfilePage() {
                   title={`${b.displayName} — ${b.description}`}
                   className="group bg-muted/40 hover:bg-muted flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors"
                 >
-                  <Award size={14} className="text-primary shrink-0" />
+                  <BadgeIcon name={b.icon} size={14} className="text-primary shrink-0" />
                   <span>{b.displayName}</span>
                 </Link>
               ))}
@@ -1034,7 +1098,11 @@ export default function ProfilePage() {
               <Activity className="text-primary h-5 w-5" />
             </div>
           </div>
-          <RecentActivity userId={userId} onOpenPost={(id) => setViewPostId(id)} />
+          <RecentActivity
+            userId={userId}
+            badges={userBadges}
+            onOpenPost={(id) => setViewPostId(id)}
+          />
         </Card>
       </div>
     </AuthLayout>

@@ -26,4 +26,7 @@ public interface CommentRepository extends MongoRepository<Comment, String> {
 
     /** Comments authored by any of the given users — used by the connections feed. */
     List<Comment> findByAuthorIdIn(List<String> authorIds);
+
+    /** Paginated comments authored by a single user, newest first — used by the profile activity feed. */
+    Page<Comment> findByAuthorId(String authorId, Pageable pageable);
 }

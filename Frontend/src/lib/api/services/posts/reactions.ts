@@ -1,5 +1,6 @@
 import { apiFetch } from '../../client'
 import type { ReactionResponse, ReactionSummaryResponse, ReactionRequest } from '../../types/posts'
+import type { PageResponse } from '../../types/common'
 
 export const reactionApi = {
   reactToPost: (postId: string, data: ReactionRequest) =>
@@ -25,4 +26,10 @@ export const reactionApi = {
 
   getCommentReactors: (postId: string, commentId: string) =>
     apiFetch<ReactionResponse[]>(`/posts/${postId}/comments/${commentId}/reactions/users`),
+
+  /** Every reaction (to posts and comments) made by this user — used by the profile activity feed. */
+  getByUser: (userId: string, page = 0, size = 20) =>
+    apiFetch<PageResponse<ReactionResponse>>(
+      `/posts/reactions/user/${userId}?page=${page}&size=${size}`
+    ),
 }
