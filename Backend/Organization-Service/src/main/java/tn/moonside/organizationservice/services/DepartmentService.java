@@ -66,17 +66,17 @@ public class DepartmentService {
         return toResponse(saved);
     }
 
-    public List<DepartmentResponse> getAllDepartments() {
+    public List<DepartmentResponse> getAllDepartments(String requestingUserId) {
         return departmentRepository.findAll()
                 .stream()
-                .map(this::toResponse)
+                .map(dept -> toResponse(dept, requestingUserId))
                 .collect(Collectors.toList());
     }
 
-    public List<DepartmentResponse> getActiveDepartments() {
+    public List<DepartmentResponse> getActiveDepartments(String requestingUserId) {
         return departmentRepository.findByIsActiveTrue()
                 .stream()
-                .map(this::toResponse)
+                .map(dept -> toResponse(dept, requestingUserId))
                 .collect(Collectors.toList());
     }
 
