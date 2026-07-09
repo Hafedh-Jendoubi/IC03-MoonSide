@@ -32,7 +32,6 @@ import {
   Loader2,
   X,
   Award,
-  Menu, // Added for mobile menu
 } from 'lucide-react'
 import { NotificationType } from '@/lib/types'
 import { useNotifications } from '@/hooks/use-notifications'
@@ -103,8 +102,6 @@ export function Navbar() {
   const pathname = usePathname()
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false) // Mobile drawer state
-
   const dropdownRef = useRef<HTMLDivElement>(null)
   const notificationsRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
@@ -143,11 +140,6 @@ export function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [setIsOpen])
 
-  // Close mobile menu on route change
-  useEffect(() => {
-    setIsMobileMenuOpen(false)
-  }, [pathname])
-
   const handleLogout = () => {
     logout()
     router.push('/login')
@@ -174,185 +166,23 @@ export function Navbar() {
   const displayName = user ? getFullName(user) : ''
   const avatarSrc = user?.avatar || '/placeholder-user.jpg'
 
-  // Reusable search inner input element to avoid duplicate markup
-  const renderSearchInput = () => (
-    <div className="relative w-full">
-      <Search
-        className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 transform"
-        size={18}
-      />
-      <Input
-        type="text"
-        value={query}
-        onChange={(e) => onQueryChange(e.target.value)}
-        onFocus={() => setIsOpen(true)}
-        onKeyDown={(e) => e.key === 'Escape' && setIsOpen(false)}
-        placeholder="Search people, posts, teams..."
-        className="bg-muted w-full pr-9 pl-10"
-      />
-      {query && (
-        <button
-          onClick={clear}
-          aria-label="Clear search"
-          className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transform"
-        >
-          <X size={16} />
-        </button>
-      )}
-
-      {isOpen && (
-        <div className="border-border animate-slide-down bg-background absolute left-0 z-50 mt-2 max-h-96 w-full overflow-y-auto rounded-lg border shadow-lg dark:shadow-xl">
-          {query.trim().length === 0 ? (
-            recentSearches.length > 0 ? (
-              <div className="p-2">
-                <div className="flex items-center justify-between px-3 py-1">
-                  <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-                    Recent searches
-                  </p>
-                  <button
-                    onClick={clearRecentSearches}
-                    className="text-muted-foreground hover:text-foreground text-xs"
-                  >
-                    Clear all
-                  </button>
-                </div>
-                {recentSearches.map((item) => (
-                  <div
-                    key={item.id}
-                    className="hover:bg-muted group flex items-center gap-3 rounded-md px-3 py-2 text-sm"
-                  >
-                    <button
-                      onClick={() => selectRecentSearch(item.query)}
-                      className="flex flex-1 items-center gap-3 text-left"
-                    >
-                      <Clock size={14} className="text-muted-foreground" />
-                      <span className="truncate">{item.query}</span>
-                    </button>
-                    <button
-                      onClick={() => removeRecentSearch(item.id)}
-                      aria-label="Remove from recent searches"
-                      className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground px-4 py-6 text-center text-sm">
-                Start typing to search…
-              </p>
-            )
-          ) : query.trim().length < 2 ? (
-            <p className="text-muted-foreground px-4 py-6 text-center text-sm">
-              Keep typing to search…
-            </p>
-          ) : isLoading ? (
-            <p className="text-muted-foreground flex items-center justify-center gap-2 px-4 py-6 text-center text-sm">
-              <Loader2 size={14} className="animate-spin" />
-              Searching…
-            </p>
-          ) : !hasResults ? (
-            <p className="text-muted-foreground px-4 py-6 text-center text-sm">
-              No results for &ldquo;{query}&rdquo;
-            </p>
-          ) : (
-            <div className="p-2">
-              {results.users.length > 0 && (
-                <div className="mb-1">
-                  <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
-                    People
-                  </p>
-                  {results.users.map((item) => (
-                    <SearchResultRow
-                      key={`user-${item.id}`}
-                      item={item}
-                      onClick={() => handleSelectResult(item)}
-                    />
-                  ))}
-                </div>
-              )}
-              {results.teams.length > 0 && (
-                <div className="mb-1">
-                  <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
-                    Teams
-                  </p>
-                  {results.teams.map((item) => (
-                    <SearchResultRow
-                      key={`team-${item.id}`}
-                      item={item}
-                      onClick={() => handleSelectResult(item)}
-                    />
-                  ))}
-                </div>
-              )}
-              {results.departments.length > 0 && (
-                <div className="mb-1">
-                  <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
-                    Departments
-                  </p>
-                  {results.departments.map((item) => (
-                    <SearchResultRow
-                      key={`department-${item.id}`}
-                      item={item}
-                      onClick={() => handleSelectResult(item)}
-                    />
-                  ))}
-                </div>
-              )}
-              {results.posts.length > 0 && (
-                <div>
-                  <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
-                    Posts
-                  </p>
-                  {results.posts.map((item) => (
-                    <SearchResultRow
-                      key={`post-${item.id}`}
-                      item={item}
-                      onClick={() => handleSelectResult(item)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-
   return (
     <>
       <NotificationToast notification={latestPush} onDismiss={clearLatestPush} />
 
       <nav className="border-border bg-background fixed top-0 right-0 left-0 z-50 border-b shadow-sm dark:shadow-lg">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="flex h-16 items-center justify-between gap-4">
-            {/* Left side: Mobile Toggle & Logo */}
-            <div className="flex items-center gap-2">
-              {/* Mobile Menu Button - visible below md */}
-              <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="text-foreground hover:bg-muted block rounded-md p-2 md:hidden"
-                aria-label="Toggle navigation menu"
-              >
-                {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
-              </button>
+          <div className="flex h-16 items-center justify-between">
+            {/* Logo */}
+            <Link href="/feed" className="text-primary flex items-center gap-2 text-xl font-bold">
+              <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold text-white">
+                WS
+              </div>
+              <span>WorkSphere</span>
+            </Link>
 
-              {/* Logo */}
-              <Link
-                href="/feed"
-                className="text-primary flex flex-shrink-0 items-center gap-2 text-xl font-bold"
-              >
-                <div className="bg-primary flex h-8 w-8 items-center justify-center rounded-lg text-sm font-bold text-white">
-                  WS
-                </div>
-                <span className="hidden sm:block">WorkSphere</span>
-              </Link>
-            </div>
-
-            {/* Navigation Links - hidden below md */}
-            <div className="hidden flex-shrink-0 items-center gap-2 md:flex">
+            {/* Navigation Links */}
+            <div className="hidden items-center gap-2 md:flex">
               {navLinks.map(({ href, label, icon: Icon }) => (
                 <Link key={href} href={href}>
                   <Button variant={pathname === href ? 'default' : 'ghost'} className="gap-2">
@@ -363,13 +193,155 @@ export function Navbar() {
               ))}
             </div>
 
-            {/* Search Bar - hidden below lg */}
-            <div className="mx-4 hidden max-w-xs flex-1 md:max-w-sm lg:flex" ref={searchRef}>
-              {renderSearchInput()}
+            {/* Search Bar */}
+            <div className="mx-8 hidden max-w-sm flex-1 lg:flex" ref={searchRef}>
+              <div className="relative w-full">
+                <Search
+                  className="text-muted-foreground absolute top-1/2 left-3 -translate-y-1/2 transform"
+                  size={18}
+                />
+                <Input
+                  type="text"
+                  value={query}
+                  onChange={(e) => onQueryChange(e.target.value)}
+                  onFocus={() => setIsOpen(true)}
+                  onKeyDown={(e) => e.key === 'Escape' && setIsOpen(false)}
+                  placeholder="Search people, posts, teams..."
+                  className="bg-muted pr-9 pl-10"
+                />
+                {query && (
+                  <button
+                    onClick={clear}
+                    aria-label="Clear search"
+                    className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2 transform"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+
+                {isOpen && (
+                  <div className="border-border animate-slide-down bg-background absolute left-0 mt-2 max-h-96 w-full overflow-y-auto rounded-lg border shadow-lg dark:shadow-xl">
+                    {query.trim().length === 0 ? (
+                      recentSearches.length > 0 ? (
+                        <div className="p-2">
+                          <div className="flex items-center justify-between px-3 py-1">
+                            <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                              Recent searches
+                            </p>
+                            <button
+                              onClick={clearRecentSearches}
+                              className="text-muted-foreground hover:text-foreground text-xs"
+                            >
+                              Clear all
+                            </button>
+                          </div>
+                          {recentSearches.map((item) => (
+                            <div
+                              key={item.id}
+                              className="hover:bg-muted group flex items-center gap-3 rounded-md px-3 py-2 text-sm"
+                            >
+                              <button
+                                onClick={() => selectRecentSearch(item.query)}
+                                className="flex flex-1 items-center gap-3 text-left"
+                              >
+                                <Clock size={14} className="text-muted-foreground" />
+                                <span className="truncate">{item.query}</span>
+                              </button>
+                              <button
+                                onClick={() => removeRecentSearch(item.id)}
+                                aria-label="Remove from recent searches"
+                                className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground px-4 py-6 text-center text-sm">
+                          Start typing to search…
+                        </p>
+                      )
+                    ) : query.trim().length < 2 ? (
+                      <p className="text-muted-foreground px-4 py-6 text-center text-sm">
+                        Keep typing to search…
+                      </p>
+                    ) : isLoading ? (
+                      <p className="text-muted-foreground flex items-center justify-center gap-2 px-4 py-6 text-center text-sm">
+                        <Loader2 size={14} className="animate-spin" />
+                        Searching…
+                      </p>
+                    ) : !hasResults ? (
+                      <p className="text-muted-foreground px-4 py-6 text-center text-sm">
+                        No results for &ldquo;{query}&rdquo;
+                      </p>
+                    ) : (
+                      <div className="p-2">
+                        {results.users.length > 0 && (
+                          <div className="mb-1">
+                            <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
+                              People
+                            </p>
+                            {results.users.map((item) => (
+                              <SearchResultRow
+                                key={`user-${item.id}`}
+                                item={item}
+                                onClick={() => handleSelectResult(item)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {results.teams.length > 0 && (
+                          <div className="mb-1">
+                            <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
+                              Teams
+                            </p>
+                            {results.teams.map((item) => (
+                              <SearchResultRow
+                                key={`team-${item.id}`}
+                                item={item}
+                                onClick={() => handleSelectResult(item)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {results.departments.length > 0 && (
+                          <div className="mb-1">
+                            <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
+                              Departments
+                            </p>
+                            {results.departments.map((item) => (
+                              <SearchResultRow
+                                key={`department-${item.id}`}
+                                item={item}
+                                onClick={() => handleSelectResult(item)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {results.posts.length > 0 && (
+                          <div>
+                            <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
+                              Posts
+                            </p>
+                            {results.posts.map((item) => (
+                              <SearchResultRow
+                                key={`post-${item.id}`}
+                                item={item}
+                                onClick={() => handleSelectResult(item)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Right Side Actions */}
-            <div className="ml-auto flex flex-shrink-0 items-center gap-2 sm:gap-4">
+            {/* Right Side */}
+            <div className="flex items-center gap-4">
               {/* Theme Toggle */}
               <button
                 onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -384,11 +356,11 @@ export function Navbar() {
                 <div className="relative" ref={notificationsRef}>
                   <button
                     onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                    className="relative p-2 transition-opacity hover:opacity-80"
+                    className="relative transition-opacity hover:opacity-80"
                   >
                     <Bell size={20} />
                     {unreadCount > 0 && (
-                      <span className="bg-destructive text-destructive-foreground absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold">
+                      <span className="bg-destructive text-destructive-foreground absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold">
                         {unreadCount > 9 ? '9+' : unreadCount}
                       </span>
                     )}
@@ -568,31 +540,6 @@ export function Navbar() {
             </div>
           </div>
         </div>
-
-        {/* Mobile Dropdown Panel - reveals links & search if toggled */}
-        {isMobileMenuOpen && (
-          <div className="border-border bg-background animate-slide-down border-t px-4 pt-2 pb-4 md:hidden">
-            <div className="space-y-3" ref={searchRef}>
-              {/* Search visible on mobile here */}
-              <div className="w-full pt-1 lg:hidden">{renderSearchInput()}</div>
-
-              {/* Nav links fallback */}
-              <div className="space-y-1 pt-2">
-                {navLinks.map(({ href, label, icon: Icon }) => (
-                  <Link key={href} href={href}>
-                    <Button
-                      variant={pathname === href ? 'default' : 'ghost'}
-                      className="my-1 w-full justify-start gap-3"
-                    >
-                      <Icon size={18} />
-                      {label}
-                    </Button>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </nav>
     </>
   )

@@ -182,6 +182,16 @@ export interface Notification {
   readAt?: string
 }
 
+export interface NotificationPreferences {
+  badgeEarnedNotifications: boolean
+  mentionNotifications: boolean
+  commentNotifications: boolean
+  reactionNotifications: boolean
+  followNotifications: boolean
+  connectionNotifications: boolean
+  announcementNotifications: boolean
+}
+
 export interface Message {
   id: string
   senderId: string

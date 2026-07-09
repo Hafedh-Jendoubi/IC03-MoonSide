@@ -14,9 +14,17 @@ import {
   Smartphone,
   AlertTriangle,
   CheckCircle2,
+  Award,
+  AtSign,
+  MessageCircle,
+  ThumbsUp,
+  UserPlus,
+  Link2,
+  Megaphone,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { authApi, TwoFactorSetupResponse } from '@/lib/api'
+import { authApi, notificationsApi, TwoFactorSetupResponse } from '@/lib/api'
+import { NotificationPreferences } from '@/lib/types'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 // --- 2FA sub-panel ------------------------------------------------------------
@@ -457,14 +465,96 @@ function SettingsContent() {
   const searchParams = useSearchParams()
   const forcedPasswordChange = searchParams.get('mustChangePassword') === 'true'
 
-  const [settings, setSettings] = useState({
-    emailNotifications: true,
-    pushNotifications: true,
-  })
+  const [preferences, setPreferences] = useState<NotificationPreferences | null>(null)
+  const [prefsLoading, setPrefsLoading] = useState(true)
+  const [prefsError, setPrefsError] = useState<string | null>(null)
+  const [savingKey, setSavingKey] = useState<keyof NotificationPreferences | null>(null)
 
-  const handleToggle = (key: keyof typeof settings) => {
-    setSettings((prev) => ({ ...prev, [key]: !prev[key] }))
+  useEffect(() => {
+    let cancelled = false
+    notificationsApi
+      .getPreferences()
+      .then((data) => {
+        if (!cancelled) setPreferences(data)
+      })
+      .catch(() => {
+        if (!cancelled) setPrefsError('Could not load notification settings. Please refresh.')
+      })
+      .finally(() => {
+        if (!cancelled) setPrefsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const handleToggle = async (key: keyof NotificationPreferences) => {
+    if (!preferences) return
+    const previous = preferences
+    const updated = { ...preferences, [key]: !preferences[key] }
+    setPreferences(updated)
+    setSavingKey(key)
+    setPrefsError(null)
+    try {
+      const saved = await notificationsApi.updatePreferences(updated)
+      setPreferences(saved)
+    } catch {
+      setPreferences(previous)
+      setPrefsError('Failed to save that change. Please try again.')
+    } finally {
+      setSavingKey(null)
+    }
   }
+
+  const notificationOptions: {
+    key: keyof NotificationPreferences
+    label: string
+    desc: string
+    icon: typeof Award
+  }[] = [
+    {
+      key: 'badgeEarnedNotifications',
+      label: 'Badge Earned',
+      desc: 'Get notified when you earn a new badge',
+      icon: Award,
+    },
+    {
+      key: 'mentionNotifications',
+      label: 'Tags & Mentions',
+      desc: 'Get notified when someone tags you in a post or comment',
+      icon: AtSign,
+    },
+    {
+      key: 'commentNotifications',
+      label: 'Comments',
+      desc: 'Get notified when someone comments on your post',
+      icon: MessageCircle,
+    },
+    {
+      key: 'reactionNotifications',
+      label: 'Reactions',
+      desc: 'Get notified when someone reacts to your post',
+      icon: ThumbsUp,
+    },
+    {
+      key: 'followNotifications',
+      label: 'New Followers',
+      desc: 'Get notified when someone starts following you',
+      icon: UserPlus,
+    },
+    {
+      key: 'connectionNotifications',
+      label: 'Connection Requests',
+      desc: 'Get notified about new and accepted connection requests',
+      icon: Link2,
+    },
+    {
+      key: 'announcementNotifications',
+      label: 'Announcements & Pinned Posts',
+      desc: 'Get notified about organization announcements and pinned posts',
+      icon: Megaphone,
+    },
+  ]
 
   return (
     <AuthLayout>
@@ -504,36 +594,44 @@ function SettingsContent() {
             <Bell size={24} className="text-primary" />
             Notifications
           </h2>
-          <div className="space-y-4">
-            {[
-              {
-                key: 'emailNotifications' as const,
-                label: 'Email Notifications',
-                desc: 'Get notified via email about activities',
-              },
-              {
-                key: 'pushNotifications' as const,
-                label: 'Push Notifications',
-                desc: 'Receive browser notifications in real-time',
-              },
-            ].map(({ key, label, desc }) => (
-              <label
-                key={key}
-                className="hover:bg-muted flex cursor-pointer items-center gap-4 rounded-lg p-3 transition-colors"
-              >
-                <input
-                  type="checkbox"
-                  checked={settings[key]}
-                  onChange={() => handleToggle(key)}
-                  className="border-border accent-primary h-5 w-5 rounded"
-                />
-                <div className="flex-1">
-                  <p className="text-foreground font-medium">{label}</p>
-                  <p className="text-muted-foreground text-sm">{desc}</p>
-                </div>
-              </label>
-            ))}
-          </div>
+
+          {prefsError && (
+            <div className="mb-4 flex items-start gap-2 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-400">
+              <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              {prefsError}
+            </div>
+          )}
+
+          {prefsLoading || !preferences ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="border-primary h-8 w-8 animate-spin rounded-full border-4 border-t-transparent"></div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {notificationOptions.map(({ key, label, desc, icon: Icon }) => (
+                <label
+                  key={key}
+                  className="hover:bg-muted flex cursor-pointer items-center gap-4 rounded-lg p-3 transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={preferences[key]}
+                    onChange={() => handleToggle(key)}
+                    disabled={savingKey === key}
+                    className="border-border accent-primary h-5 w-5 rounded disabled:opacity-50"
+                  />
+                  <Icon size={18} className="text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-foreground font-medium">{label}</p>
+                    <p className="text-muted-foreground text-sm">{desc}</p>
+                  </div>
+                  {savingKey === key && (
+                    <span className="border-primary h-4 w-4 flex-shrink-0 animate-spin rounded-full border-2 border-t-transparent" />
+                  )}
+                </label>
+              ))}
+            </div>
+          )}
         </Card>
 
         {/* Security Section */}

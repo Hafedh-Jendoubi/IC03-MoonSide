@@ -1,5 +1,5 @@
 import { apiFetch, tokenStorage } from '../client'
-import { Notification } from '../../types'
+import { Notification, NotificationPreferences } from '../../types'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
 
@@ -38,4 +38,24 @@ export const notificationsApi = {
 
   deleteNotification: (id: string): Promise<void> =>
     apiFetch<void>(`/api/notifications/${id}`, { method: 'DELETE' }),
+
+  getPreferences: async (): Promise<NotificationPreferences> => {
+    const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
+      headers: authHeader(),
+    })
+    if (!res.ok) throw new Error('Failed to load notification preferences')
+    return res.json()
+  },
+
+  updatePreferences: async (
+    preferences: NotificationPreferences
+  ): Promise<NotificationPreferences> => {
+    const res = await fetch(`${API_BASE}/api/notifications/preferences`, {
+      method: 'PUT',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(preferences),
+    })
+    if (!res.ok) throw new Error('Failed to update notification preferences')
+    return res.json()
+  },
 }
