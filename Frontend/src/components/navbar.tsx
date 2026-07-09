@@ -32,6 +32,8 @@ import {
   Loader2,
   X,
   Award,
+  UserPlus,
+  UserCheck,
 } from 'lucide-react'
 import { NotificationType } from '@/lib/types'
 import { useNotifications } from '@/hooks/use-notifications'
@@ -49,6 +51,10 @@ function NotifIcon({ type }: { type: NotificationType }) {
       return <AtSign size={14} className="text-purple-500" />
     case 'POST_PINNED':
       return <Pin size={14} className="text-amber-500" />
+    case 'CONNECTION_REQUEST':
+      return <UserPlus size={14} className="text-emerald-500" />
+    case 'CONNECTION_ACCEPTED':
+      return <UserCheck size={14} className="text-emerald-500" />
     default:
       return <Bell size={14} className="text-primary" />
   }
@@ -161,6 +167,7 @@ export function Navbar() {
   const navLinks = [
     { href: '/feed', label: 'Feed', icon: Home },
     { href: '/discover', label: 'Discover', icon: Compass },
+    { href: '/connections', label: 'Networks', icon: Users },
   ]
 
   const displayName = user ? getFullName(user) : ''

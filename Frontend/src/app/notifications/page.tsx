@@ -15,6 +15,8 @@ import {
   Trash2,
   CheckCheck,
   Loader2,
+  UserPlus,
+  UserCheck,
 } from 'lucide-react'
 import { NotificationType } from '@/lib/types'
 import { useNotifications } from '@/hooks/use-notifications'
@@ -33,6 +35,10 @@ function getIcon(type: NotificationType) {
       return <Star size={18} className="text-yellow-500" />
     case 'ANNOUNCEMENT':
       return <Megaphone size={18} className="text-emerald-500" />
+    case 'CONNECTION_REQUEST':
+      return <UserPlus size={18} className="text-emerald-500" />
+    case 'CONNECTION_ACCEPTED':
+      return <UserCheck size={18} className="text-emerald-500" />
     default:
       return <Bell size={18} className="text-primary" />
   }

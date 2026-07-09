@@ -167,6 +167,8 @@ export type NotificationType =
   | 'BADGE_EARNED'
   | 'ANNOUNCEMENT'
   | 'POST_PINNED'
+  | 'CONNECTION_REQUEST'
+  | 'CONNECTION_ACCEPTED'
 
 export interface Notification {
   id: string
