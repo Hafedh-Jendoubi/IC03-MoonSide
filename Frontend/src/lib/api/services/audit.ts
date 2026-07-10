@@ -1,5 +1,5 @@
 import { apiFetch } from '../client'
-import type { PageResponse, AuditLogResponse, AuditLogStats } from '../types/audit'
+import type { PageResponse, AuditLogResponse, AuditLogStats, ActivityStats } from '../types/audit'
 
 export const auditApi = {
   getLogs: (params?: {
@@ -19,4 +19,7 @@ export const auditApi = {
   },
 
   getStats: () => apiFetch<AuditLogStats>('/audit-logs/stats'),
+
+  /** Real "hours of activity on the website" — hourly/daily breakdown from the audit log. */
+  getActivityStats: () => apiFetch<ActivityStats>('/audit-logs/stats/activity'),
 }

@@ -12,6 +12,7 @@ export * from './types/posts'
 export * from './types/search'
 export * from './types/connections'
 export * from './types/badges'
+export * from './types/stats'
 
 // Re-export all services
 export { authApi } from './services/auth'
@@ -26,6 +27,7 @@ export { teamApi } from './services/organizations/teams'
 export { projectApi } from './services/organizations/projects'
 export { searchApi } from './services/search'
 export { badgeApi } from './services/badges'
+export { statsApi } from './services/stats'
 export {
   postApi,
   surveyApi,

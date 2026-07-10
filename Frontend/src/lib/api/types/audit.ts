@@ -20,8 +20,18 @@ export interface PageResponse<T> {
   size: number
 }
 
+import type { HourlyCount, DailyCount, NamedCount } from './stats'
+
 export interface AuditLogStats {
   total: number
   success: number
   failure: number
+}
+
+export interface ActivityStats {
+  activityByHour: HourlyCount[]
+  loginsPerDay: DailyCount[]
+  topActions: NamedCount[]
+  totalEventsLast30Days: number
+  totalLoginsLast30Days: number
 }

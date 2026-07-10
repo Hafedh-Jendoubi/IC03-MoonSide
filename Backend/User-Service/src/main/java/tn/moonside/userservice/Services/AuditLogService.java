@@ -1,5 +1,6 @@
 package tn.moonside.userservice.services;
 
+import tn.moonside.userservice.dtos.responses.ActivityStatsResponse;
 import tn.moonside.userservice.dtos.responses.AuditLogResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,4 +24,7 @@ public interface AuditLogService {
     long countTotal();
     long countSuccess();
     long countFailure();
+
+    /** Real "hours of activity on the website" — hourly/daily breakdown from the audit log. */
+    ActivityStatsResponse getActivityStats();
 }
