@@ -9,6 +9,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Loader2, Users, Check, X, UserX, UserPlus } from 'lucide-react'
 import { connectionApi, ConnectionResponse, UserSummaryResponse } from '@/lib/api'
+import { emitConnectionsUpdated } from '@/lib/connection-events'
 
 function initials(u: UserSummaryResponse) {
   const f = u.firstName?.[0] ?? ''
@@ -93,6 +94,7 @@ export default function ConnectionsPage() {
     try {
       await action()
       await loadAll()
+      emitConnectionsUpdated()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {

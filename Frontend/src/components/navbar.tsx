@@ -2,10 +2,12 @@
 
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTheme } from 'next-themes'
 import { useAuth } from '@/lib/auth-context'
 import { canAccessBackOffice, getFullName } from '@/lib/types'
+import { connectionApi } from '@/lib/api'
+import { subscribeConnectionsUpdated } from '@/lib/connection-events'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -130,6 +132,43 @@ export function Navbar() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, latestPush, clearLatestPush } =
     useNotifications(user?.id)
 
+  const [pendingReceivedCount, setPendingReceivedCount] = useState(0)
+
+  const refreshPendingReceived = useCallback(async () => {
+    if (!user?.id) return
+    try {
+      const received = await connectionApi.getPendingReceived()
+      setPendingReceivedCount(received.length)
+    } catch {
+      /* ignore — badge just won't update this time */
+    }
+  }, [user?.id])
+
+  // Initial load + whenever the logged-in user changes
+  useEffect(() => {
+    refreshPendingReceived()
+  }, [refreshPendingReceived])
+
+  // Refresh instantly when a new connection request notification comes in
+  useEffect(() => {
+    if (latestPush?.notificationType === 'CONNECTION_REQUEST') {
+      refreshPendingReceived()
+    }
+  }, [latestPush, refreshPendingReceived])
+
+  // Refresh instantly when the connections page accepts/declines a request
+  useEffect(() => {
+    return subscribeConnectionsUpdated(refreshPendingReceived)
+  }, [refreshPendingReceived])
+
+  useEffect(() => {
+    if (pathname !== '/connections') return
+    notifications
+      .filter((n) => n.notificationType === 'CONNECTION_REQUEST' && !n.isRead)
+      .forEach((n) => markAsRead(n.id))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, notifications])
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -192,9 +231,15 @@ export function Navbar() {
             <div className="hidden items-center gap-2 md:flex">
               {navLinks.map(({ href, label, icon: Icon }) => (
                 <Link key={href} href={href}>
-                  <Button variant={pathname === href ? 'default' : 'ghost'} className="gap-2">
+                  <Button
+                    variant={pathname === href ? 'default' : 'ghost'}
+                    className="relative gap-2"
+                  >
                     <Icon size={18} />
                     {label}
+                    {href === '/connections' && pendingReceivedCount > 0 && (
+                      <span className="ring-background absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 ring-2" />
+                    )}
                   </Button>
                 </Link>
               ))}
