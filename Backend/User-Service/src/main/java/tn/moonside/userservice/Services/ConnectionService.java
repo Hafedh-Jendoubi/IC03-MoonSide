@@ -27,6 +27,13 @@ public interface ConnectionService {
     /** All accepted connections for a user, as lightweight user summaries. */
     List<UserSummaryResponse> getConnections(String userId);
 
+    /**
+     * All accepted connections for a user, enriched with when each
+     * connection was made — used on the "My Network" page so it can show
+     * the connection date next to each person.
+     */
+    List<ConnectionResponse> getConnectionsWithDates(String userId);
+
     /** Just the IDs of a user's connections — used by other services (e.g. Post-Service feed). */
     List<String> getConnectionIds(String userId);
 

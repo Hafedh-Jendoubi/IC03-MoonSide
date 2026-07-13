@@ -1,15 +1,28 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { AuthLayout } from '@/components/auth-layout'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Loader2, Users, Check, X, UserX, UserPlus } from 'lucide-react'
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationPrevious,
+  PaginationNext,
+  PaginationEllipsis,
+} from '@/components/ui/pagination'
+import { Loader2, Users, Check, X, UserX, UserPlus, Search, SearchX } from 'lucide-react'
 import { connectionApi, ConnectionResponse, UserSummaryResponse } from '@/lib/api'
 import { emitConnectionsUpdated } from '@/lib/connection-events'
+
+/** People shown per page once a list grows past one page. */
+const PAGE_SIZE = 8
 
 function initials(u: UserSummaryResponse) {
   const f = u.firstName?.[0] ?? ''
@@ -22,14 +35,30 @@ function fullName(u: UserSummaryResponse) {
   return name || u.email || 'Unknown user'
 }
 
+function matchesQuery(u: UserSummaryResponse, query: string) {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return [fullName(u), u.email, u.jobTitle].some((field) => field?.toLowerCase().includes(q))
+}
+
+/** Formats an ISO date string as e.g. "Jan 5, 2024"; returns null if missing/invalid. */
+function formatDate(dateStr?: string | null) {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return null
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+}
+
 function PersonRow({
   user,
   subtitle,
   actions,
+  dateLabel,
 }: {
   user: UserSummaryResponse
   subtitle?: string
   actions?: React.ReactNode
+  dateLabel?: string | null
 }) {
   return (
     <div className="hover:bg-muted/50 flex items-center justify-between gap-3 rounded-lg border border-transparent p-3 transition-colors">
@@ -45,7 +74,14 @@ function PersonRow({
           </p>
         </div>
       </Link>
-      {actions && <div className="flex shrink-0 gap-2">{actions}</div>}
+      <div className="flex shrink-0 items-center gap-4">
+        {dateLabel && (
+          <span className="text-muted-foreground text-sm whitespace-nowrap">
+            Connected: {dateLabel}
+          </span>
+        )}
+        {actions && <div className="flex gap-2">{actions}</div>}
+      </div>
     </div>
   )
 }
@@ -59,9 +95,196 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
   )
 }
 
+/** Builds a compact page-number sequence with ellipses, e.g. 1 … 4 5 6 … 12 */
+function pageNumbers(current: number, total: number): (number | 'ellipsis')[] {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
+  const pages = new Set<number>([1, total, current, current - 1, current + 1])
+  const sorted = [...pages].filter((p) => p >= 1 && p <= total).sort((a, b) => a - b)
+  const withEllipses: (number | 'ellipsis')[] = []
+  sorted.forEach((p, i) => {
+    if (i > 0 && p - sorted[i - 1] > 1) withEllipses.push('ellipsis')
+    withEllipses.push(p)
+  })
+  return withEllipses
+}
+
+/**
+ * Shared search-filter + pagination logic for a tab's list.
+ * `getUser` extracts the person to match/display from each item, since
+ * "connections" holds UserSummaryResponse directly while "received"/"sent"
+ * hold ConnectionResponse wrappers.
+ */
+function usePeopleFilter<T>(items: T[], getUser: (item: T) => UserSummaryResponse | undefined) {
+  const [query, setQuery] = useState('')
+  const [page, setPage] = useState(1)
+
+  const filtered = useMemo(() => {
+    return items.filter((item) => {
+      const u = getUser(item)
+      return !!u && matchesQuery(u, query)
+    })
+  }, [items, query, getUser])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const paged = useMemo(
+    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
+    [filtered, safePage]
+  )
+
+  const setQueryAndReset = useCallback((q: string) => {
+    setQuery(q)
+    setPage(1)
+  }, [])
+
+  return {
+    query,
+    setQuery: setQueryAndReset,
+    page: safePage,
+    setPage,
+    totalPages,
+    filteredCount: filtered.length,
+    paged,
+  }
+}
+
+function SearchBox({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder: string
+}) {
+  return (
+    <div className="relative mb-3">
+      <Search
+        className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 -translate-y-1/2"
+        size={16}
+      />
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="pl-9"
+      />
+    </div>
+  )
+}
+
+function ListPagination({
+  page,
+  totalPages,
+  onPageChange,
+}: {
+  page: number
+  totalPages: number
+  onPageChange: (p: number) => void
+}) {
+  if (totalPages <= 1) return null
+
+  return (
+    <Pagination className="mt-4">
+      <PaginationContent>
+        <PaginationItem>
+          <PaginationPrevious
+            href="#"
+            aria-disabled={page === 1}
+            className={page === 1 ? 'pointer-events-none opacity-50' : ''}
+            onClick={(e) => {
+              e.preventDefault()
+              if (page > 1) onPageChange(page - 1)
+            }}
+          />
+        </PaginationItem>
+        {pageNumbers(page, totalPages).map((p, i) =>
+          p === 'ellipsis' ? (
+            <PaginationEllipsis key={`e-${i}`} />
+          ) : (
+            <PaginationItem key={p}>
+              <PaginationLink
+                href="#"
+                isActive={p === page}
+                onClick={(e) => {
+                  e.preventDefault()
+                  onPageChange(p)
+                }}
+              >
+                {p}
+              </PaginationLink>
+            </PaginationItem>
+          )
+        )}
+        <PaginationItem>
+          <PaginationNext
+            href="#"
+            aria-disabled={page === totalPages}
+            className={page === totalPages ? 'pointer-events-none opacity-50' : ''}
+            onClick={(e) => {
+              e.preventDefault()
+              if (page < totalPages) onPageChange(page + 1)
+            }}
+          />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  )
+}
+
+/** Renders one tab's body: empty state, search box, paginated rows, pagination bar. */
+function PeopleTabBody<T>({
+  items,
+  getUser,
+  emptyIcon,
+  emptyText,
+  searchPlaceholder,
+  renderActions,
+}: {
+  items: T[]
+  getUser: (item: T) => UserSummaryResponse | undefined
+  emptyIcon: React.ReactNode
+  emptyText: string
+  searchPlaceholder: string
+  renderActions?: (item: T) => {
+    subtitle?: string
+    actions?: React.ReactNode
+    dateLabel?: string | null
+  }
+}) {
+  const filter = usePeopleFilter(items, getUser)
+
+  if (items.length === 0) {
+    return <EmptyState icon={emptyIcon} text={emptyText} />
+  }
+
+  return (
+    <div className="p-1">
+      <SearchBox value={filter.query} onChange={filter.setQuery} placeholder={searchPlaceholder} />
+      {filter.filteredCount === 0 ? (
+        <EmptyState icon={<SearchX size={32} />} text="No one matches your search." />
+      ) : (
+        <div className="divide-y">
+          {filter.paged.map((item, idx) => {
+            const user = getUser(item)
+            if (!user) return null
+            const extra = renderActions?.(item) ?? {}
+            return <PersonRow key={user.id ?? idx} user={user} {...extra} />
+          })}
+        </div>
+      )}
+      <ListPagination
+        page={filter.page}
+        totalPages={filter.totalPages}
+        onPageChange={filter.setPage}
+      />
+    </div>
+  )
+}
+
 export default function ConnectionsPage() {
   const [loading, setLoading] = useState(true)
-  const [connections, setConnections] = useState<UserSummaryResponse[]>([])
+  const [connections, setConnections] = useState<ConnectionResponse[]>([])
   const [received, setReceived] = useState<ConnectionResponse[]>([])
   const [sent, setSent] = useState<ConnectionResponse[]>([])
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -102,6 +325,8 @@ export default function ConnectionsPage() {
     }
   }
 
+  const getUserFromConnection = useCallback((c: ConnectionResponse) => c.otherUser ?? undefined, [])
+
   return (
     <AuthLayout>
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -137,105 +362,87 @@ export default function ConnectionsPage() {
 
             <TabsContent value="connections">
               <Card className="p-2">
-                {connections.length === 0 ? (
-                  <EmptyState
-                    icon={<Users size={36} />}
-                    text="You haven't connected with anyone yet."
-                  />
-                ) : (
-                  <div className="divide-y">
-                    {connections.map((u) => (
-                      <PersonRow key={u.id} user={u} />
-                    ))}
-                  </div>
-                )}
+                <PeopleTabBody
+                  items={connections}
+                  getUser={getUserFromConnection}
+                  emptyIcon={<Users size={36} />}
+                  emptyText="You haven't connected with anyone yet."
+                  searchPlaceholder="Search your connections by name, email, or title..."
+                  renderActions={(c) => ({
+                    dateLabel: formatDate(c.respondedAt ?? c.createdAt),
+                  })}
+                />
               </Card>
             </TabsContent>
 
             <TabsContent value="received">
               <Card className="p-2">
-                {received.length === 0 ? (
-                  <EmptyState
-                    icon={<UserPlus size={36} />}
-                    text="No pending connection requests."
-                  />
-                ) : (
-                  <div className="divide-y">
-                    {received.map((c) =>
-                      c.otherUser ? (
-                        <PersonRow
-                          key={c.id}
-                          user={c.otherUser}
-                          subtitle="Wants to connect with you"
-                          actions={
-                            <>
-                              <Button
-                                size="sm"
-                                className="gap-1 bg-green-600 text-white hover:bg-green-700"
-                                disabled={busyId === c.id}
-                                onClick={() => withBusy(c.id, () => connectionApi.accept(c.id))}
-                              >
-                                {busyId === c.id ? (
-                                  <Loader2 size={14} className="animate-spin" />
-                                ) : (
-                                  <Check size={14} />
-                                )}
-                                Accept
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={busyId === c.id}
-                                onClick={() => withBusy(c.id, () => connectionApi.decline(c.id))}
-                              >
-                                <X size={14} />
-                              </Button>
-                            </>
-                          }
-                        />
-                      ) : null
-                    )}
-                  </div>
-                )}
+                <PeopleTabBody
+                  items={received}
+                  getUser={getUserFromConnection}
+                  emptyIcon={<UserPlus size={36} />}
+                  emptyText="No pending connection requests."
+                  searchPlaceholder="Search pending requests by name, email, or title..."
+                  renderActions={(c) => ({
+                    subtitle: 'Wants to connect with you',
+                    actions: (
+                      <>
+                        <Button
+                          size="sm"
+                          className="gap-1 bg-green-600 text-white hover:bg-green-700"
+                          disabled={busyId === c.id}
+                          onClick={() => withBusy(c.id, () => connectionApi.accept(c.id))}
+                        >
+                          {busyId === c.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <Check size={14} />
+                          )}
+                          Accept
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busyId === c.id}
+                          onClick={() => withBusy(c.id, () => connectionApi.decline(c.id))}
+                        >
+                          <X size={14} />
+                        </Button>
+                      </>
+                    ),
+                  })}
+                />
               </Card>
             </TabsContent>
 
             <TabsContent value="sent">
               <Card className="p-2">
-                {sent.length === 0 ? (
-                  <EmptyState
-                    icon={<UserPlus size={36} />}
-                    text="You have no pending sent requests."
-                  />
-                ) : (
-                  <div className="divide-y">
-                    {sent.map((c) =>
-                      c.otherUser ? (
-                        <PersonRow
-                          key={c.id}
-                          user={c.otherUser}
-                          subtitle="Request pending"
-                          actions={
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="gap-1"
-                              disabled={busyId === c.id}
-                              onClick={() => withBusy(c.id, () => connectionApi.remove(c.id))}
-                            >
-                              {busyId === c.id ? (
-                                <Loader2 size={14} className="animate-spin" />
-                              ) : (
-                                <UserX size={14} />
-                              )}
-                              Cancel
-                            </Button>
-                          }
-                        />
-                      ) : null
-                    )}
-                  </div>
-                )}
+                <PeopleTabBody
+                  items={sent}
+                  getUser={getUserFromConnection}
+                  emptyIcon={<UserPlus size={36} />}
+                  emptyText="You have no pending sent requests."
+                  searchPlaceholder="Search sent requests by name, email, or title..."
+                  renderActions={(c) => ({
+                    subtitle: 'Request pending',
+                    actions: (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1"
+                        disabled={busyId === c.id}
+                        onClick={() => withBusy(c.id, () => connectionApi.remove(c.id))}
+                      >
+                        {busyId === c.id ? (
+                          <Loader2 size={14} className="animate-spin" />
+                        ) : (
+                          <UserX size={14} />
+                        )}
+                        Cancel
+                      </Button>
+                    ),
+                  })}
+                />
               </Card>
             </TabsContent>
           </Tabs>

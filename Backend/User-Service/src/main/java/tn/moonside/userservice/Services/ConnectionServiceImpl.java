@@ -172,6 +172,12 @@ public class ConnectionServiceImpl implements ConnectionService {
     }
 
     @Override
+    public List<ConnectionResponse> getConnectionsWithDates(String userId) {
+        List<Connection> accepted = connectionRepository.findAllAcceptedForUser(userId);
+        return enrichWithOtherUser(accepted, userId);
+    }
+
+    @Override
     public List<String> getConnectionIds(String userId) {
         return connectionRepository.findAllAcceptedForUser(userId).stream()
                 .map(c -> c.getRequesterId().equals(userId) ? c.getReceiverId() : c.getRequesterId())

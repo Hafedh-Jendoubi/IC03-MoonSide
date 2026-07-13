@@ -69,12 +69,12 @@ public class ConnectionController {
         return ResponseEntity.ok(ApiResponse.success(null, "Connection removed"));
     }
 
-    /** GET /connections/me — list of all your accepted connections. */
+    /** GET /connections/me — list of all your accepted connections, with the date each was made. */
     @GetMapping("/me")
-    public ResponseEntity<ApiResponse<List<UserSummaryResponse>>> myConnections(
+    public ResponseEntity<ApiResponse<List<ConnectionResponse>>> myConnections(
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.success(
-                connectionService.getConnections(currentUserId(userDetails))));
+                connectionService.getConnectionsWithDates(currentUserId(userDetails))));
     }
 
     /** GET /connections/me/pending — requests received, awaiting your decision. */

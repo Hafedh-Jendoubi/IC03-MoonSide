@@ -22,8 +22,8 @@ export const connectionApi = {
   remove: (connectionId: string) =>
     apiFetch<void>(`/connections/${connectionId}`, { method: 'DELETE' }),
 
-  /** All of your accepted connections. */
-  getMyConnections: () => apiFetch<UserSummaryResponse[]>('/connections/me'),
+  /** All of your accepted connections, including the date each was made. */
+  getMyConnections: () => apiFetch<ConnectionResponse[]>('/connections/me'),
 
   /** All accepted connections for any user — used by the connections modal on a profile page. */
   getUserConnections: (userId: string) =>
