@@ -24,6 +24,7 @@ jobs:
           - { name: notification-service, path: Backend/Notification-Service, java: 17, mongo: true, kafka: true }
           - { name: badge-service,        path: Backend/Badge-Service,        java: 17, mongo: true, kafka: true }
           - { name: search-service,       path: Backend/Search-Service,       java: 17, elastic: true }
+          - { name: ai-service,           path: Backend/AI-Service,           python: '3.12' }
 
     services:
       mongodb:
@@ -70,13 +71,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
+      # Java services
+      - if: matrix.service.java
+        uses: actions/setup-java@v4
         with:
           java-version: ${{ matrix.service.java }}
           distribution: temurin
           cache: maven
 
-      - working-directory: ${{ matrix.service.path }}
+      - if: matrix.service.java
+        working-directory: ${{ matrix.service.path }}
         env:
           MONGO_ROOT_USERNAME: admin
           MONGO_ROOT_PASSWORD: admin123
@@ -89,3 +93,25 @@ jobs:
         run: |
           chmod +x mvnw
           ./mvnw verify -B
+
+      # AI-Service (Python)
+      - if: matrix.service.python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.service.python }}
+          cache: pip
+          cache-dependency-path: ${{ matrix.service.path }}/requirements.txt
+
+      - if: matrix.service.python
+        working-directory: ${{ matrix.service.path }}
+        env:
+          JWT_SECRET: 3cfa76ef14937c1c0ea519f8fc057a80fcd04a7420f8e8bcd0a7567c272e007b
+          EUREKA_URI: http://localhost:8761/eureka/
+          EUREKA_INSTANCE_HOST: localhost
+          PORT: 8089
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir pytest flake8
+          flake8 app --max-line-length=120 --extend-ignore=E203,W503
+          python -c "import app.main"
+          if find . -maxdepth 3 -iname "test_*.py" -o -iname "*_test.py" | grep -q .; then pytest -q; else echo "No tests found yet — skipping pytest"; fi

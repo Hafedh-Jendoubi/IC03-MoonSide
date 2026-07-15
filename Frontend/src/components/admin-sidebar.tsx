@@ -2,15 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import {
-  Users,
-  Shield,
-  BarChart3,
-  Settings,
-  ArrowLeft,
-  ClipboardList,
-  Building2,
-} from 'lucide-react'
+import { Users, Shield, BarChart3, ArrowLeft, ClipboardList, Building2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth-context'
@@ -72,14 +64,6 @@ export function AdminSidebar({ isOpen = true }: AdminSidebarProps) {
       label: 'Audit Logs',
       icon: ClipboardList,
       description: 'Activity & security trail',
-      // CEO only
-      requiredPermissions: [PERM.ANYTHING],
-    },
-    {
-      href: '/admin/settings',
-      label: 'Settings',
-      icon: Settings,
-      description: 'System settings',
       // CEO only
       requiredPermissions: [PERM.ANYTHING],
     },
