@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { MentionTextarea } from '@/components/mention-textarea'
+import { AiWritingTools } from '@/components/ai-writing-tools'
 import { Badge } from '@/components/ui/badge'
 import {
   Globe,
@@ -219,6 +220,7 @@ export function CreatePost({
   const [surveyQuestion, setSurveyQuestion] = useState('')
   const [surveyOptions, setSurveyOptions] = useState<string[]>(['', ''])
   const [pendingFiles, setPendingFiles] = useState<File[]>([])
+  const [usedAI, setUsedAI] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const firstName = user.firstName || getFullName(user).split(' ')[0]
@@ -252,6 +254,7 @@ export function CreatePost({
     setSurveyQuestion('')
     setSurveyOptions(['', ''])
     setError(null)
+    setUsedAI(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -277,6 +280,7 @@ export function CreatePost({
         postType,
         postVisibility: visibility,
         mentionedUserIds: postMentions,
+        isAIGenerated: usedAI,
         ...(teamId && { teamId }),
         ...(departmentId && { departmentId }),
         ...(isSurvey && {
@@ -393,6 +397,25 @@ export function CreatePost({
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* AI Writing Assistance */}
+              {!isSurvey && (
+                <div className="border-border/60 flex items-center justify-between gap-3 border-t pt-3">
+                  <AiWritingTools
+                    content={content}
+                    onApply={(newText) => {
+                      setContent(newText)
+                      setUsedAI(true)
+                    }}
+                    postType={postType}
+                  />
+                  {usedAI && (
+                    <Badge className="h-6 gap-1 border-0 bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700 shadow-none dark:bg-violet-950/40 dark:text-violet-300">
+                      AI-assisted
+                    </Badge>
+                  )}
                 </div>
               )}
 

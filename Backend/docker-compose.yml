@@ -328,6 +328,32 @@ services:
     networks:
       - moonside-network
 
+  # AI Microservice – Groq-powered grammar fixing, rewriting, paragraph
+  # generation, and comment suggestions
+  ai-service:
+    build: ./AI-Service
+    container_name: ai-service
+    ports:
+      - "8089:8089"
+    environment:
+      - PORT=8089
+      - EUREKA_URI=http://eureka:8761/eureka/
+      - EUREKA_INSTANCE_HOST=ai-service
+      - JWT_SECRET=${JWT_SECRET}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL:-openai/gpt-oss-120b}
+    depends_on:
+      eureka:
+        condition: service_healthy
+    networks:
+      - moonside-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8089/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # API Gateway
   gateway:
     build: ./Gateway

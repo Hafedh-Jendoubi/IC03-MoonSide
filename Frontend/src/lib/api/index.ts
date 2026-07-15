@@ -13,6 +13,7 @@ export * from './types/search'
 export * from './types/connections'
 export * from './types/badges'
 export * from './types/stats'
+export * from './types/ai'
 
 // Re-export all services
 export { authApi } from './services/auth'
@@ -28,6 +29,7 @@ export { projectApi } from './services/organizations/projects'
 export { searchApi } from './services/search'
 export { badgeApi } from './services/badges'
 export { statsApi } from './services/stats'
+export { aiApi } from './services/ai'
 export {
   postApi,
   surveyApi,

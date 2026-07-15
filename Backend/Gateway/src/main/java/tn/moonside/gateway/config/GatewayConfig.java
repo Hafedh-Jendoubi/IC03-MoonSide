@@ -54,6 +54,11 @@ public class GatewayConfig {
                         .path("/search/**")
                         .uri("lb://SEARCH-SERVICE"))
 
+                // AI Service: grammar fixing, rewriting, paragraph generation, comment suggestions
+                .route("ai-service", r -> r
+                        .path("/ai/**")
+                        .uri("lb://AI-SERVICE"))
+
                 .build();
     }
 }
