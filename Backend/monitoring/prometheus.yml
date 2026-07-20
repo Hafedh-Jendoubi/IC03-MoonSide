@@ -53,8 +53,3 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ["badge-service:8088"]
-
-  - job_name: "ai-service"
-    metrics_path: /health
-    static_configs:
-      - targets: ["ai-service:8089"]

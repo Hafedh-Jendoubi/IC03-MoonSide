@@ -48,7 +48,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
 
                 // ── Actuator ─────────────────────────────────────────────────
-                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
 
                 // ── Reaction Types ────────────────────────────────────────────
                 // POST_REACT / REACTION_TYPE_VIEW: every authenticated user
