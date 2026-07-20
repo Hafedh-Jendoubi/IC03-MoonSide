@@ -75,6 +75,12 @@ public final class AppPermission {
     /** DELETE /users/me/avatar — remove own avatar */
     public static final String USER_DELETE_OWN_AVATAR   = "USER_DELETE_OWN_AVATAR";
 
+    /** PATCH /users/me/banner — upload / change own profile banner */
+    public static final String USER_EDIT_OWN_BANNER      = "USER_EDIT_OWN_BANNER";
+
+    /** DELETE /users/me/banner — remove own profile banner */
+    public static final String USER_DELETE_OWN_BANNER    = "USER_DELETE_OWN_BANNER";
+
     // ── Viewing other users (EMPLOYEE) ────────────────────────────────────────
 
     /** GET /users/{id}  — view any user's public profile */

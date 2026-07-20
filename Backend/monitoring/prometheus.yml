@@ -1,0 +1,64 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # Spring Boot services (require the micrometer-registry-prometheus
+  # dependency + `management.endpoints.web.exposure.include: prometheus`
+  # in application.yml before these actually return metrics)
+  - job_name: "gateway"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["gateway:8080"]
+
+  - job_name: "eureka"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["eureka:8761"]
+
+  - job_name: "user-service"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["user-service:8081"]
+
+  - job_name: "media-service"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["media-service:8082"]
+
+  - job_name: "organization-service"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["organization-service:8084"]
+
+  - job_name: "post-service"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["post-service:8085"]
+
+  - job_name: "notification-service"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["notification-service:8086"]
+
+  - job_name: "search-service"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["search-service:8087"]
+
+  - job_name: "badge-service"
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["badge-service:8088"]
+
+  - job_name: "mongodb"
+    static_configs:
+      - targets: ["mongodb-exporter:9216"]
+
+  # ai-service is not scraped: it's a Node.js app with no Prometheus
+  # metrics endpoint yet (/health returns JSON, not the Prometheus
+  # text-exposition format). Add prom-client and expose /metrics
+  # there if you want it instrumented later.

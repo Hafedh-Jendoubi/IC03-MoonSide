@@ -25,4 +25,10 @@ export const commentApi = {
 
   deleteComment: (postId: string, commentId: string) =>
     apiFetch<void>(`/posts/${postId}/comments/${commentId}`, { method: 'DELETE' }),
+
+  /** Every comment authored by this user, across all posts — used by the profile activity feed. */
+  getByAuthor: (authorId: string, page = 0, size = 20) =>
+    apiFetch<PageResponse<CommentResponse>>(
+      `/posts/comments/author/${authorId}?page=${page}&size=${size}`
+    ),
 }

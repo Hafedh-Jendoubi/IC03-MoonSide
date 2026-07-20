@@ -22,6 +22,17 @@ export const postApi = {
   getFollowingFeed: (page = 0, size = 20) =>
     apiFetch<PageResponse<PostResponse>>(`/posts/feed/following?page=${page}&size=${size}`),
 
+  getConnectionsFeed: (page = 0, size = 20) =>
+    apiFetch<PageResponse<PostResponse>>(`/posts/feed/connections?page=${page}&size=${size}`),
+
+  /**
+   * The main home feed: posts from followed/joined departments and teams,
+   * plus posts from accepted connections, plus the user's own posts —
+   * merged and sorted newest-first server-side.
+   */
+  getPersonalizedFeed: (page = 0, size = 20) =>
+    apiFetch<PageResponse<PostResponse>>(`/posts/feed/personalized?page=${page}&size=${size}`),
+
   getByAuthor: (authorId: string, page = 0, size = 20) =>
     apiFetch<PageResponse<PostResponse>>(`/posts/author/${authorId}?page=${page}&size=${size}`),
 
@@ -81,6 +92,12 @@ export const commentApi = {
 
   deleteComment: (postId: string, commentId: string) =>
     apiFetch<void>(`/posts/${postId}/comments/${commentId}`, { method: 'DELETE' }),
+
+  /** Every comment authored by this user, across all posts — used by the profile activity feed. */
+  getByAuthor: (authorId: string, page = 0, size = 20) =>
+    apiFetch<PageResponse<CommentResponse>>(
+      `/posts/comments/author/${authorId}?page=${page}&size=${size}`
+    ),
 }
 
 export const reactionApi = {
@@ -107,4 +124,10 @@ export const reactionApi = {
 
   getCommentReactors: (postId: string, commentId: string) =>
     apiFetch<ReactionResponse[]>(`/posts/${postId}/comments/${commentId}/reactions/users`),
+
+  /** Every reaction (to posts and comments) made by this user — used by the profile activity feed. */
+  getByUser: (userId: string, page = 0, size = 20) =>
+    apiFetch<PageResponse<ReactionResponse>>(
+      `/posts/reactions/user/${userId}?page=${page}&size=${size}`
+    ),
 }

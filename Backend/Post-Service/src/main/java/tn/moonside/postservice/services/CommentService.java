@@ -134,6 +134,16 @@ public class CommentService {
     }
 
     /**
+     * Returns all comments authored by a single user across every post, newest first.
+     * Used by the "Recent Activity" section on a user's profile page.
+     */
+    public Page<CommentResponse> getByAuthor(String authorId, int page, int size) {
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        return commentRepository.findByAuthorId(authorId, pageable)
+                .map(this::toResponse);
+    }
+
+    /**
      * Returns all direct replies to a given comment, sorted oldest-first.
      * Replies can themselves have replies (infinitely nested) — the client
      * decides how deep to recurse.

@@ -4,6 +4,7 @@ import type {
   TeamRequest,
   UserTeamResponse,
   UserSummary,
+  TeamMembershipResponse,
 } from '../../types/organizations'
 
 export const teamApi = {
@@ -21,6 +22,10 @@ export const teamApi = {
     apiFetch<TeamResponse[]>(`/organizations/teams/search?q=${encodeURIComponent(q)}`),
 
   getMy: () => apiFetch<TeamResponse[]>('/organizations/teams/my'),
+
+  /** Teams a given user belongs to, with join dates — used by the profile activity feed. */
+  getUserTeams: (userId: string) =>
+    apiFetch<TeamMembershipResponse[]>(`/organizations/teams/user/${userId}`),
 
   getByDepartment: (departmentId: string) =>
     apiFetch<TeamResponse[]>(`/organizations/teams/department/${departmentId}`),

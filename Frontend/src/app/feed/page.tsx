@@ -112,7 +112,7 @@ export default function FeedPage() {
         }
         setError(null)
 
-        const data = await postApi.getFollowingFeed(pageNum, PAGE_SIZE)
+        const data = await postApi.getPersonalizedFeed(pageNum, PAGE_SIZE)
 
         if (pageNum === 0) {
           setPosts(data.content)
@@ -241,7 +241,7 @@ export default function FeedPage() {
               ))}
             </div>
 
-            {posts.length === 0 && <FollowingEmptyState />}
+            {posts.length === 0 && <FeedEmptyState />}
 
             {/* Infinite scroll sentinel */}
             {hasMore && (
@@ -303,9 +303,9 @@ function PostOriginBadge({
   )
 }
 
-// ─── FollowingEmptyState ──────────────────────────────────────────────────────
+// ─── FeedEmptyState ───────────────────────────────────────────────────────────
 
-function FollowingEmptyState() {
+function FeedEmptyState() {
   return (
     <div className="py-12 text-center">
       <div className="bg-muted mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full">
@@ -313,8 +313,8 @@ function FollowingEmptyState() {
       </div>
       <h2 className="text-foreground mb-2 text-xl font-semibold">Your feed is empty</h2>
       <p className="text-muted-foreground mx-auto mb-6 max-w-sm text-sm">
-        Follow departments or teams to see their posts here. Everything posted there will appear in
-        your personal feed.
+        Follow departments or teams and connect with colleagues to see their posts here. Everything
+        they post will appear in your personal feed.
       </p>
       <div className="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
         <Button asChild>
@@ -324,9 +324,9 @@ function FollowingEmptyState() {
           </Link>
         </Button>
         <Button variant="outline" asChild>
-          <Link href="/organizations">
+          <Link href="/connections">
             <Users size={16} className="mr-2" />
-            View organisation
+            Manage your network
           </Link>
         </Button>
       </div>

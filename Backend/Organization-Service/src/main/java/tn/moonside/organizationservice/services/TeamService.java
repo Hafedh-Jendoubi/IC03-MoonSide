@@ -424,6 +424,27 @@ public class TeamService {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Returns every team a given user belongs to, together with the date they
+     * joined — newest join first. Used by the "Recent Activity" section on a
+     * user's profile page (works for any user, not just the caller).
+     */
+    public List<tn.moonside.organizationservice.dtos.responses.TeamMembershipResponse> getUserTeams(
+            String userId, String requestingUserId) {
+        return userTeamRepository.findByUserId(userId).stream()
+                .map(ut -> {
+                    Team t = teamRepository.findById(ut.getTeamId()).orElse(null);
+                    if (t == null) return null;
+                    return tn.moonside.organizationservice.dtos.responses.TeamMembershipResponse.builder()
+                            .team(toResponse(t, requestingUserId))
+                            .joinedAt(ut.getJoinedAt())
+                            .build();
+                })
+                .filter(m -> m != null)
+                .sorted((a, b) -> b.getJoinedAt().compareTo(a.getJoinedAt()))
+                .collect(Collectors.toList());
+    }
+
     // ── Members (admin) ───────────────────────────────────────────────────────
 
     public List<UserTeamResponse> getTeamMembers(String teamId) {

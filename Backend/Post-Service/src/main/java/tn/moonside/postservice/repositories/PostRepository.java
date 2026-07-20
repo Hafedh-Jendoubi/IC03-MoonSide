@@ -75,4 +75,84 @@ public interface PostRepository extends MongoRepository<Post, String> {
             List<String> teamIds,
             List<VisibilityType> visibilities,
             Pageable pageable);
+
+    // ── New: connections feed ──────────────────────────────────────────────────
+
+    /**
+     * Returns posts that were either AUTHORED by one of the given users, OR
+     * are among the given post IDs (posts a connection liked/commented on),
+     * filtered to the supplied visibility types.
+     *
+     * Used by the "Connections" feed tab: what your connections posted,
+     * commented on, or reacted to.
+     *
+     * @param authorIds IDs of the user's connections (never empty — caller guards this)
+     * @param postIds   IDs of posts a connection reacted to or commented on (may be a
+     *                  placeholder single-element list when there is no such activity)
+     * @param visibilities allowed visibility values
+     */
+    @Query("{ '$and': [ " +
+            "  { '$or': [ " +
+            "    { 'authorId': { '$in': ?0 } }, " +
+            "    { '_id':      { '$in': ?1 } }  " +
+            "  ] }, " +
+            "  { 'postVisibility': { '$in': ?2 } } " +
+            "] }")
+    Page<Post> findConnectionsFeed(
+            List<String> authorIds,
+            List<String> postIds,
+            List<VisibilityType> visibilities,
+            Pageable pageable);
+
+    long countByAuthorId(String authorId);
+
+    // ── New: unified personalised home feed ────────────────────────────────────
+
+    /**
+     * The single "For You" home feed: everything the following-feed would show
+     * (posts in followed/joined departments and teams, respecting
+     * DEPARTMENT_ONLY / TEAM_ONLY / PUBLIC visibility) UNIONED with everything
+     * the connections-feed would show (posts authored by, or reacted to /
+     * commented on by, an accepted connection — PUBLIC only) UNIONED with the
+     * viewer's own posts, deduplicated and sorted newest-first by Mongo itself
+     * so pagination stays correct across both sources.
+     *
+     * Any list may be a single placeholder element (e.g. "__no_dept__") when
+     * that source has nothing to contribute — the service layer guards this,
+     * mirroring the existing findFollowingFeed / findConnectionsFeed contract.
+     *
+     * @param departmentIds       department IDs the user follows or belongs to
+     * @param teamIds             team IDs the user follows or belongs to
+     * @param followVisibilities  visibilities allowed for the dept/team branch
+     * @param connectionAuthorIds IDs of the user's accepted connections
+     * @param connectionPostIds   posts a connection reacted to / commented on
+     * @param connectionVisibilities visibilities allowed for the connections branch (PUBLIC only)
+     * @param selfAuthorId        the viewer's own user ID, so their own posts always appear
+     */
+    @Query("{ '$or': [ " +
+            "  { '$and': [ " +
+            "    { '$or': [ " +
+            "      { 'departmentId': { '$in': ?0 } }, " +
+            "      { 'teamId':       { '$in': ?1 } }  " +
+            "    ] }, " +
+            "    { 'postVisibility': { '$in': ?2 } } " +
+            "  ] }, " +
+            "  { '$and': [ " +
+            "    { '$or': [ " +
+            "      { 'authorId': { '$in': ?3 } }, " +
+            "      { '_id':      { '$in': ?4 } }  " +
+            "    ] }, " +
+            "    { 'postVisibility': { '$in': ?5 } } " +
+            "  ] }, " +
+            "  { 'authorId': ?6 } " +
+            "] }")
+    Page<Post> findPersonalizedFeed(
+            List<String> departmentIds,
+            List<String> teamIds,
+            List<VisibilityType> followVisibilities,
+            List<String> connectionAuthorIds,
+            List<String> connectionPostIds,
+            List<VisibilityType> connectionVisibilities,
+            String selfAuthorId,
+            Pageable pageable);
 }

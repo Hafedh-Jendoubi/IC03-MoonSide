@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import tn.moonside.notificationservice.dto.NotificationPreferenceDto;
 import tn.moonside.notificationservice.dto.NotificationResponse;
 import tn.moonside.notificationservice.service.NotificationService;
 
@@ -66,5 +67,20 @@ public class NotificationController {
             @AuthenticationPrincipal String userId) {
         notificationService.deleteNotification(id, userId);
         return ResponseEntity.noContent().build();
+    }
+
+    /** Get the authenticated user's notification preferences (defaults to all-enabled). */
+    @GetMapping("/preferences")
+    public ResponseEntity<NotificationPreferenceDto> getPreferences(
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(notificationService.getPreferences(userId));
+    }
+
+    /** Update the authenticated user's notification preferences. */
+    @PutMapping("/preferences")
+    public ResponseEntity<NotificationPreferenceDto> updatePreferences(
+            @AuthenticationPrincipal String userId,
+            @RequestBody NotificationPreferenceDto preferences) {
+        return ResponseEntity.ok(notificationService.updatePreferences(userId, preferences));
     }
 }

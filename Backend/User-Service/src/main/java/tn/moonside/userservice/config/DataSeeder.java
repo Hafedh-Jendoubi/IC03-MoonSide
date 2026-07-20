@@ -114,6 +114,10 @@ public class DataSeeder implements CommandLineRunner {
                 "PATCH /users/me/avatar — upload or change own avatar"),
             perm(AppPermission.USER_DELETE_OWN_AVATAR,
                 "DELETE /users/me/avatar — remove own avatar"),
+            perm(AppPermission.USER_EDIT_OWN_BANNER,
+                "PATCH /users/me/banner — upload or change own profile banner"),
+            perm(AppPermission.USER_DELETE_OWN_BANNER,
+                "DELETE /users/me/banner — remove own profile banner"),
 
             // ── Viewing other users (EMPLOYEE) ────────────────────────────────
             perm(AppPermission.USER_VIEW,
@@ -292,6 +296,8 @@ public class DataSeeder implements CommandLineRunner {
             AppPermission.USER_EDIT_OWN,
             AppPermission.USER_EDIT_OWN_AVATAR,
             AppPermission.USER_DELETE_OWN_AVATAR,
+            AppPermission.USER_EDIT_OWN_BANNER,
+            AppPermission.USER_DELETE_OWN_BANNER,
             // Browse other users & roles
             AppPermission.USER_VIEW,
             AppPermission.USER_VIEW_ALL,
@@ -329,6 +335,8 @@ public class DataSeeder implements CommandLineRunner {
             AppPermission.USER_EDIT_OWN,
             AppPermission.USER_EDIT_OWN_AVATAR,
             AppPermission.USER_DELETE_OWN_AVATAR,
+            AppPermission.USER_EDIT_OWN_BANNER,
+            AppPermission.USER_DELETE_OWN_BANNER,
             AppPermission.USER_VIEW,
             AppPermission.USER_VIEW_ALL,
             AppPermission.USER_VIEW_ROLES,

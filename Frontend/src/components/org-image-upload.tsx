@@ -139,6 +139,8 @@ interface OrgBannerUploadProps {
   /** MinIO context tag */
   context: string
   disabled?: boolean
+  /** Tailwind height class for the banner box. Defaults to the compact form-field size (h-36). */
+  heightClassName?: string
 }
 
 /**
@@ -150,6 +152,7 @@ export function OrgBannerUpload({
   onUploaded,
   context,
   disabled = false,
+  heightClassName = 'h-36',
 }: OrgBannerUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [preview, setPreview] = useState<string | null>(null)
@@ -195,7 +198,7 @@ export function OrgBannerUpload({
 
   return (
     <div className="space-y-1">
-      <div className="group relative h-36 w-full overflow-hidden rounded-lg">
+      <div className={`group relative ${heightClassName} w-full overflow-hidden rounded-lg`}>
         {/* Background */}
         {src ? (
           <img src={src} alt="Banner" className="h-full w-full object-cover" />

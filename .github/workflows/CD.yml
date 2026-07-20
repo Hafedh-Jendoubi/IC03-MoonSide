@@ -45,7 +45,9 @@ jobs:
           - { name: organization-service, path: Backend/Organization-Service, java: 17, mongo: true }
           - { name: post-service,         path: Backend/Post-Service,         java: 17, mongo: true }
           - { name: notification-service, path: Backend/Notification-Service, java: 17, mongo: true, kafka: true }
+          - { name: badge-service,        path: Backend/Badge-Service,        java: 17, mongo: true, kafka: true }
           - { name: search-service,       path: Backend/Search-Service,       java: 17, elastic: true }
+          - { name: ai-service,           path: Backend/AI-Service,           python: '3.12' }
           - { name: frontend,             path: Frontend,                     node: 20 }
 
     services:
@@ -129,6 +131,28 @@ jobs:
         run: |
           npm ci
           npm test -- --passWithNoTests
+
+      # AI-Service (Python)
+      - if: matrix.service.python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.service.python }}
+          cache: pip
+          cache-dependency-path: ${{ matrix.service.path }}/requirements.txt
+
+      - if: matrix.service.python
+        working-directory: ${{ matrix.service.path }}
+        env:
+          JWT_SECRET: 3cfa76ef14937c1c0ea519f8fc057a80fcd04a7420f8e8bcd0a7567c272e007b
+          EUREKA_URI: http://localhost:8761/eureka/
+          EUREKA_INSTANCE_HOST: localhost
+          PORT: 8089
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir pytest flake8
+          flake8 app --max-line-length=120 --extend-ignore=E203,W503
+          python -c "import app.main"
+          if find . -maxdepth 3 -iname "test_*.py" -o -iname "*_test.py" | grep -q .; then pytest -q; else echo "No tests found yet — skipping pytest"; fi
 
       # Docker
       - uses: docker/setup-buildx-action@v3

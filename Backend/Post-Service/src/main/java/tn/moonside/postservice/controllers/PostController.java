@@ -13,6 +13,7 @@ import tn.moonside.postservice.clients.UserClient;
 import tn.moonside.postservice.clients.UserSummary;
 import tn.moonside.postservice.dtos.requests.PostRequest;
 import tn.moonside.postservice.dtos.responses.ApiResponse;
+import tn.moonside.postservice.dtos.responses.PagedResponse;
 import tn.moonside.postservice.dtos.responses.PostResponse;
 import tn.moonside.postservice.services.PostService;
 
@@ -47,7 +48,7 @@ public class PostController {
      * Not personalised; no authentication required beyond gateway filtering.
      */
     @GetMapping("/feed")
-    public ResponseEntity<ApiResponse<Page<PostResponse>>> getFeed(
+    public ResponseEntity<ApiResponse<PagedResponse<PostResponse>>> getFeed(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(ApiResponse.success(postService.getPublicFeed(page, size)));
@@ -75,6 +76,40 @@ public class PostController {
             @RequestParam(defaultValue = "20") int size) {
         return ResponseEntity.ok(
                 ApiResponse.success(postService.getFollowingFeed(userId, page, size)));
+    }
+
+    /**
+     * GET /posts/feed/connections
+     *
+     * Feed of what the authenticated user's accepted connections have posted,
+     * commented on, or reacted to — newest first. Empty page when the user
+     * has no connections yet.
+     */
+    @GetMapping("/feed/connections")
+    public ResponseEntity<ApiResponse<Page<PostResponse>>> getConnectionsFeed(
+            @AuthenticationPrincipal String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(
+                ApiResponse.success(postService.getConnectionsFeed(userId, page, size)));
+    }
+
+    /**
+     * GET /posts/feed/personalized
+     *
+     * The single home-feed: posts from followed/joined departments and teams,
+     * plus posts from accepted connections, plus the viewer's own posts —
+     * merged and sorted newest-first. This is what the main Feed page should
+     * call so a post in a followed department/team and a connection's post
+     * both show up together, correctly paginated.
+     */
+    @GetMapping("/feed/personalized")
+    public ResponseEntity<ApiResponse<Page<PostResponse>>> getPersonalizedFeed(
+            @AuthenticationPrincipal String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(
+                ApiResponse.success(postService.getPersonalizedFeed(userId, page, size)));
     }
 
     @GetMapping("/author/{authorId}")

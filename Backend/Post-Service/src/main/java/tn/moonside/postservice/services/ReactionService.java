@@ -145,6 +145,20 @@ public class ReactionService {
                 .build();
     }
 
+    /**
+     * Returns all reactions (to posts and comments) made by a single user, newest first.
+     * Used by the "Recent Activity" section on a user's profile page.
+     */
+    public org.springframework.data.domain.Page<ReactionResponse> getByUser(String userId, int page, int size) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                page, size, org.springframework.data.domain.Sort.by(
+                        org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        return reactionRepository.findByUserId(userId, pageable)
+                .map(r -> reactionTypeRepository.findById(r.getReactionTypeId())
+                        .map(rt -> toResponse(r, rt))
+                        .orElse(null));
+    }
+
     public List<ReactionResponse> getReactors(String reactableType, String reactableId) {
         return reactionRepository.findByReactableTypeAndReactableId(reactableType, reactableId)
                 .stream()

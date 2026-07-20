@@ -6,9 +6,13 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.data.domain.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import tn.moonside.notificationservice.dto.NotificationPreferenceDto;
 import tn.moonside.notificationservice.dto.NotificationResponse;
 import tn.moonside.notificationservice.entity.Notification;
+import tn.moonside.notificationservice.entity.NotificationPreference;
+import tn.moonside.notificationservice.enums.NotificationType;
 import tn.moonside.notificationservice.event.NotificationEvent;
+import tn.moonside.notificationservice.repository.NotificationPreferenceRepository;
 import tn.moonside.notificationservice.repository.NotificationRepository;
 
 import java.io.IOException;
@@ -24,6 +28,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
+    private final NotificationPreferenceRepository notificationPreferenceRepository;
 
     /**
      * Active SSE emitters keyed by userId.
@@ -70,6 +75,13 @@ public class NotificationService {
             return;
         }
 
+        // Respect the recipient's notification preferences for this category
+        if (!isCategoryEnabled(event.getRecipientId(), event.getNotificationType())) {
+            log.debug("Notification suppressed by user preference: type={} recipient={}",
+                    event.getNotificationType(), event.getRecipientId());
+            return;
+        }
+
         Notification notification = Notification.builder()
                 .recipientId(event.getRecipientId())
                 .senderId(event.getSenderId())
@@ -86,6 +98,61 @@ public class NotificationService {
 
         // Push real-time to connected SSE clients
         pushToUser(saved.getRecipientId(), toResponse(saved));
+    }
+
+    // ── Notification preferences ──────────────────────────────────────────────
+
+    /** Returns the user's saved preferences, or the all-enabled defaults if none exist yet. */
+    public NotificationPreferenceDto getPreferences(String userId) {
+        return toDto(notificationPreferenceRepository.findByUserId(userId)
+                .orElseGet(() -> NotificationPreference.builder().userId(userId).build()));
+    }
+
+    /** Upserts the user's preferences and returns the saved state. */
+    public NotificationPreferenceDto updatePreferences(String userId, NotificationPreferenceDto dto) {
+        NotificationPreference preference = notificationPreferenceRepository.findByUserId(userId)
+                .orElseGet(() -> NotificationPreference.builder().userId(userId).build());
+
+        preference.setBadgeEarnedNotifications(dto.isBadgeEarnedNotifications());
+        preference.setMentionNotifications(dto.isMentionNotifications());
+        preference.setCommentNotifications(dto.isCommentNotifications());
+        preference.setReactionNotifications(dto.isReactionNotifications());
+        preference.setFollowNotifications(dto.isFollowNotifications());
+        preference.setConnectionNotifications(dto.isConnectionNotifications());
+        preference.setAnnouncementNotifications(dto.isAnnouncementNotifications());
+
+        return toDto(notificationPreferenceRepository.save(preference));
+    }
+
+    /** Whether notifications of the given type should be created/delivered for this user. */
+    private boolean isCategoryEnabled(String userId, NotificationType type) {
+        if (type == null) return true;
+
+        NotificationPreference preference = notificationPreferenceRepository.findByUserId(userId)
+                .orElse(null);
+        if (preference == null) return true; // no record yet -> default to enabled
+
+        return switch (type) {
+            case BADGE_EARNED -> preference.isBadgeEarnedNotifications();
+            case MENTION -> preference.isMentionNotifications();
+            case COMMENT -> preference.isCommentNotifications();
+            case REACTION -> preference.isReactionNotifications();
+            case FOLLOW -> preference.isFollowNotifications();
+            case CONNECTION_REQUEST, CONNECTION_ACCEPTED -> preference.isConnectionNotifications();
+            case ANNOUNCEMENT, POST_PINNED -> preference.isAnnouncementNotifications();
+        };
+    }
+
+    private NotificationPreferenceDto toDto(NotificationPreference p) {
+        return NotificationPreferenceDto.builder()
+                .badgeEarnedNotifications(p.isBadgeEarnedNotifications())
+                .mentionNotifications(p.isMentionNotifications())
+                .commentNotifications(p.isCommentNotifications())
+                .reactionNotifications(p.isReactionNotifications())
+                .followNotifications(p.isFollowNotifications())
+                .connectionNotifications(p.isConnectionNotifications())
+                .announcementNotifications(p.isAnnouncementNotifications())
+                .build();
     }
 
     // ── REST API helpers ──────────────────────────────────────────────────────

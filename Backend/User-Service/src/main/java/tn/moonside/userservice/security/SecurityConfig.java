@@ -67,7 +67,7 @@ public class SecurityConfig {
                 ).permitAll()
 
                 // ── Actuator ────────────────────────────────────────────────
-                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
 
                 // ── Internal inter-service audit ingestion ──────────────────
                 // Called by organization-service, post-service, and any future

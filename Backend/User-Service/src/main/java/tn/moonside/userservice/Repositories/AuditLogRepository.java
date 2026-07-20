@@ -27,4 +27,7 @@ public interface AuditLogRepository extends MongoRepository<AuditLog, String> {
     long countBySuccess(boolean success);
 
     long countByAction(String action);
+
+    /** All log entries since a given timestamp — used to compute hourly/daily activity charts. */
+    java.util.List<AuditLog> findByCreatedAtGreaterThanEqual(LocalDateTime from);
 }

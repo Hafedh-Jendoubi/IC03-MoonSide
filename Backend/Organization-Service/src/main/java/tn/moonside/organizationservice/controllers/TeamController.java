@@ -84,6 +84,18 @@ public class TeamController {
         return ResponseEntity.ok(ApiResponse.success(teamService.getMyTeams(userId)));
     }
 
+    /**
+     * GET /organizations/teams/user/{userId}
+     * All teams the given user belongs to, with the date they joined each one.
+     * Used by the "Recent Activity" section on a user's profile page.
+     */
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<ApiResponse<List<tn.moonside.organizationservice.dtos.responses.TeamMembershipResponse>>> getUserTeams(
+            @PathVariable String userId,
+            @AuthenticationPrincipal String requestingUserId) {
+        return ResponseEntity.ok(ApiResponse.success(teamService.getUserTeams(userId, requestingUserId)));
+    }
+
     @GetMapping("/department/{departmentId}")
     public ResponseEntity<ApiResponse<List<TeamResponse>>> getByDepartment(
             @PathVariable String departmentId,

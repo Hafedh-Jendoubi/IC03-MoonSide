@@ -72,6 +72,12 @@ export interface UserTeamResponse {
   joinedAt: string
 }
 
+/** A team paired with the date a given user joined it — used by the profile activity feed. */
+export interface TeamMembershipResponse {
+  team: TeamResponse
+  joinedAt: string
+}
+
 export type ProjectStatus =
   | 'PLANNING'
   | 'IN_PROGRESS'

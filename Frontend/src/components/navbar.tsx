@@ -2,22 +2,25 @@
 
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useTheme } from 'next-themes'
 import { useAuth } from '@/lib/auth-context'
 import { canAccessBackOffice, getFullName } from '@/lib/types'
+import { connectionApi } from '@/lib/api'
+import { subscribeConnectionsUpdated } from '@/lib/connection-events'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import {
   Home,
-  Mail,
   Bell,
   Search,
   LogOut,
   Settings,
   User,
   Users,
+  Building2,
+  Clock,
   FileText,
   Shield,
   Compass,
@@ -30,6 +33,9 @@ import {
   Sun,
   Loader2,
   X,
+  Award,
+  UserPlus,
+  UserCheck,
 } from 'lucide-react'
 import { NotificationType } from '@/lib/types'
 import { useNotifications } from '@/hooks/use-notifications'
@@ -47,6 +53,10 @@ function NotifIcon({ type }: { type: NotificationType }) {
       return <AtSign size={14} className="text-purple-500" />
     case 'POST_PINNED':
       return <Pin size={14} className="text-amber-500" />
+    case 'CONNECTION_REQUEST':
+      return <UserPlus size={14} className="text-emerald-500" />
+    case 'CONNECTION_ACCEPTED':
+      return <UserCheck size={14} className="text-emerald-500" />
     default:
       return <Bell size={14} className="text-primary" />
   }
@@ -75,7 +85,13 @@ function SearchResultRow({ item, onClick }: { item: SearchResultItem; onClick: (
         <Avatar className="h-8 w-8 flex-shrink-0">
           {item.imageUrl && <AvatarImage src={item.imageUrl} alt={item.title} />}
           <AvatarFallback className="text-xs font-semibold">
-            {item.type === 'TEAM' ? <Users size={14} /> : initials}
+            {item.type === 'TEAM' ? (
+              <Users size={14} />
+            ) : item.type === 'DEPARTMENT' ? (
+              <Building2 size={14} />
+            ) : (
+              initials
+            )}
           </AvatarFallback>
         </Avatar>
       )}
@@ -98,11 +114,60 @@ export function Navbar() {
   const notificationsRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  const { query, results, isLoading, isOpen, setIsOpen, hasResults, onQueryChange, clear } =
-    useSearch()
+  const {
+    query,
+    results,
+    isLoading,
+    isOpen,
+    setIsOpen,
+    hasResults,
+    onQueryChange,
+    clear,
+    recentSearches,
+    selectRecentSearch,
+    removeRecentSearch,
+    clearRecentSearches,
+  } = useSearch()
 
   const { notifications, unreadCount, markAsRead, markAllAsRead, latestPush, clearLatestPush } =
     useNotifications(user?.id)
+
+  const [pendingReceivedCount, setPendingReceivedCount] = useState(0)
+
+  const refreshPendingReceived = useCallback(async () => {
+    if (!user?.id) return
+    try {
+      const received = await connectionApi.getPendingReceived()
+      setPendingReceivedCount(received.length)
+    } catch {
+      /* ignore — badge just won't update this time */
+    }
+  }, [user?.id])
+
+  // Initial load + whenever the logged-in user changes
+  useEffect(() => {
+    refreshPendingReceived()
+  }, [refreshPendingReceived])
+
+  // Refresh instantly when a new connection request notification comes in
+  useEffect(() => {
+    if (latestPush?.notificationType === 'CONNECTION_REQUEST') {
+      refreshPendingReceived()
+    }
+  }, [latestPush, refreshPendingReceived])
+
+  // Refresh instantly when the connections page accepts/declines a request
+  useEffect(() => {
+    return subscribeConnectionsUpdated(refreshPendingReceived)
+  }, [refreshPendingReceived])
+
+  useEffect(() => {
+    if (pathname !== '/connections') return
+    notifications
+      .filter((n) => n.notificationType === 'CONNECTION_REQUEST' && !n.isRead)
+      .forEach((n) => markAsRead(n.id))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname, notifications])
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -131,6 +196,8 @@ export function Navbar() {
       router.push(`/profile/${item.id}`)
     } else if (item.type === 'TEAM') {
       router.push(`/team/${item.id}`)
+    } else if (item.type === 'DEPARTMENT') {
+      router.push(`/department/${item.id}`)
     } else {
       router.push(item.teamId ? `/team/${item.teamId}` : '/feed')
     }
@@ -138,8 +205,8 @@ export function Navbar() {
 
   const navLinks = [
     { href: '/feed', label: 'Feed', icon: Home },
-    { href: '/messages', label: 'Messages', icon: Mail },
     { href: '/discover', label: 'Discover', icon: Compass },
+    { href: '/connections', label: 'Networks', icon: Users },
   ]
 
   const displayName = user ? getFullName(user) : ''
@@ -164,9 +231,15 @@ export function Navbar() {
             <div className="hidden items-center gap-2 md:flex">
               {navLinks.map(({ href, label, icon: Icon }) => (
                 <Link key={href} href={href}>
-                  <Button variant={pathname === href ? 'default' : 'ghost'} className="gap-2">
+                  <Button
+                    variant={pathname === href ? 'default' : 'ghost'}
+                    className="relative gap-2"
+                  >
                     <Icon size={18} />
                     {label}
+                    {href === '/connections' && pendingReceivedCount > 0 && (
+                      <span className="ring-background absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500 ring-2" />
+                    )}
                   </Button>
                 </Link>
               ))}
@@ -183,7 +256,7 @@ export function Navbar() {
                   type="text"
                   value={query}
                   onChange={(e) => onQueryChange(e.target.value)}
-                  onFocus={() => query.trim().length > 0 && setIsOpen(true)}
+                  onFocus={() => setIsOpen(true)}
                   onKeyDown={(e) => e.key === 'Escape' && setIsOpen(false)}
                   placeholder="Search people, posts, teams..."
                   className="bg-muted pr-9 pl-10"
@@ -200,7 +273,48 @@ export function Navbar() {
 
                 {isOpen && (
                   <div className="border-border animate-slide-down bg-background absolute left-0 mt-2 max-h-96 w-full overflow-y-auto rounded-lg border shadow-lg dark:shadow-xl">
-                    {query.trim().length < 2 ? (
+                    {query.trim().length === 0 ? (
+                      recentSearches.length > 0 ? (
+                        <div className="p-2">
+                          <div className="flex items-center justify-between px-3 py-1">
+                            <p className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
+                              Recent searches
+                            </p>
+                            <button
+                              onClick={clearRecentSearches}
+                              className="text-muted-foreground hover:text-foreground text-xs"
+                            >
+                              Clear all
+                            </button>
+                          </div>
+                          {recentSearches.map((item) => (
+                            <div
+                              key={item.id}
+                              className="hover:bg-muted group flex items-center gap-3 rounded-md px-3 py-2 text-sm"
+                            >
+                              <button
+                                onClick={() => selectRecentSearch(item.query)}
+                                className="flex flex-1 items-center gap-3 text-left"
+                              >
+                                <Clock size={14} className="text-muted-foreground" />
+                                <span className="truncate">{item.query}</span>
+                              </button>
+                              <button
+                                onClick={() => removeRecentSearch(item.id)}
+                                aria-label="Remove from recent searches"
+                                className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground px-4 py-6 text-center text-sm">
+                          Start typing to search…
+                        </p>
+                      )
+                    ) : query.trim().length < 2 ? (
                       <p className="text-muted-foreground px-4 py-6 text-center text-sm">
                         Keep typing to search…
                       </p>
@@ -237,6 +351,20 @@ export function Navbar() {
                             {results.teams.map((item) => (
                               <SearchResultRow
                                 key={`team-${item.id}`}
+                                item={item}
+                                onClick={() => handleSelectResult(item)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                        {results.departments.length > 0 && (
+                          <div className="mb-1">
+                            <p className="text-muted-foreground px-3 py-1 text-xs font-semibold tracking-wide uppercase">
+                              Departments
+                            </p>
+                            {results.departments.map((item) => (
+                              <SearchResultRow
+                                key={`department-${item.id}`}
                                 item={item}
                                 onClick={() => handleSelectResult(item)}
                               />
@@ -424,6 +552,15 @@ export function Navbar() {
                           >
                             <Bookmark size={16} />
                             Saved Posts
+                          </button>
+                        </Link>
+                        <Link href="/badges">
+                          <button
+                            onClick={() => setIsDropdownOpen(false)}
+                            className="text-foreground hover:bg-muted flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors"
+                          >
+                            <Award size={16} />
+                            Badges
                           </button>
                         </Link>
                         {canAccessBackOffice(user) && (

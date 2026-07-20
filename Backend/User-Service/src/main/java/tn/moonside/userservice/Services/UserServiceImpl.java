@@ -15,6 +15,8 @@ import tn.moonside.userservice.repositories.UserRoleRepository;
 import tn.moonside.userservice.repositories.PermissionRoleRepository;
 import tn.moonside.userservice.repositories.PermissionRepository;
 import tn.moonside.userservice.entities.PermissionRole;
+import tn.moonside.userservice.event.UserActivityEvent;
+import tn.moonside.userservice.kafka.UserActivityEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
@@ -51,6 +53,7 @@ public class UserServiceImpl implements UserService {
     private final AuditLogService auditLogService;
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender mailSender;
+    private final UserActivityEventPublisher userActivityPublisher;
 
     @Value("${app.name:WorkSphere}")
     private String appName;
@@ -302,6 +305,27 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public UserResponse updateBanner(String email, String bannerUrl) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+        String oldBanner = user.getBannerUrl();
+        user.setBannerUrl(bannerUrl);
+        user.setUpdatedAt(LocalDateTime.now());
+        User saved = userRepository.save(user);
+        log.info("Updated banner for user: {}", saved.getId());
+
+        String action = (bannerUrl == null) ? "BANNER_DELETE" : "BANNER_UPDATE";
+        String desc   = (bannerUrl == null)
+                ? "Banner removed for " + email
+                : "Banner updated for " + email;
+        auditLogService.log(saved.getId(), saved.getId(), "USER",
+                action, desc, true, oldBanner, bannerUrl, null);
+
+        return mapToUserResponse(saved);
+    }
+
+    @Override
+    @Transactional
     public UserResponse updateUser(String id, UpdateUserRequest request, String currentUserEmail) {
         User user = findUserById(id);
 
@@ -324,6 +348,19 @@ public class UserServiceImpl implements UserService {
                 "PROFILE_UPDATE",
                 "Profile updated for " + updated.getEmail() + " by " + currentUserEmail,
                 true, oldSnapshot, toSnapshot(updated), null);
+
+        // Publish PROFILE_COMPLETED event if all key fields are now filled
+        boolean isProfileComplete = updated.getFirstName() != null && !updated.getFirstName().isBlank()
+                && updated.getLastName()    != null && !updated.getLastName().isBlank()
+                && updated.getJobTitle()    != null && !updated.getJobTitle().isBlank()
+                && updated.getBio()         != null && !updated.getBio().isBlank()
+                && updated.getAvatar()      != null && !updated.getAvatar().isBlank();
+        if (isProfileComplete) {
+            userActivityPublisher.publish(UserActivityEvent.builder()
+                    .userId(updated.getId())
+                    .activityType("PROFILE_COMPLETED")
+                    .build());
+        }
 
         return mapToUserResponse(updated);
     }
@@ -488,6 +525,7 @@ public class UserServiceImpl implements UserService {
                 .jobTitle(user.getJobTitle())
                 .bio(user.getBio())
                 .avatar(user.getAvatar())
+                .bannerUrl(user.getBannerUrl())
                 .isActive(user.isActive())
                 .mustChangePassword(user.isMustChangePassword())
                 .lastLogin(user.getLastLogin())

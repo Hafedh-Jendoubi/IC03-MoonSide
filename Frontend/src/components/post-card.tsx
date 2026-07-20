@@ -36,6 +36,8 @@ import {
   BarChart2,
   Users,
   CheckCircle2,
+  Sparkles,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -906,6 +908,9 @@ export function PostCard({
   const [newComment, setNewComment] = useState('')
   const [newCommentMentions, setNewCommentMentions] = useState<string[]>([])
   const [submittingComment, setSubmittingComment] = useState(false)
+  const [commentSuggestions, setCommentSuggestions] = useState<string[]>([])
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null)
   const [attachments, setAttachments] = useState<AttachmentResponse[]>(post.attachments ?? [])
   const [isEditingPost, setIsEditingPost] = useState(false)
   const [editPostContent, setEditPostContent] = useState(post.content)
@@ -1092,6 +1097,26 @@ export function PostCard({
     }
   }
 
+  const handleSuggestComments = async () => {
+    if (loadingSuggestions) return
+    setLoadingSuggestions(true)
+    setSuggestionsError(null)
+    try {
+      const { aiApi } = await import('@/lib/api')
+      const res = await aiApi.suggestComments({
+        postContent: post.content,
+        postType: post.postType,
+        count: 3,
+      })
+      setCommentSuggestions(res.suggestions)
+    } catch (e) {
+      console.error('Failed to fetch comment suggestions:', e)
+      setSuggestionsError('Could not load suggestions. Please try again.')
+    } finally {
+      setLoadingSuggestions(false)
+    }
+  }
+
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newComment.trim() || submittingComment) return
@@ -1105,6 +1130,7 @@ export function PostCard({
       setCommentCount((c) => c + 1)
       setNewComment('')
       setNewCommentMentions([])
+      setCommentSuggestions([])
       await resolveAuthors([comment.authorId])
     } catch (e) {
       console.error(e)
@@ -1298,7 +1324,7 @@ export function PostCard({
         {/* Comment section */}
         {showComments && (
           <div className="border-border mt-2 border-t pt-4 dark:border-slate-700">
-            <form onSubmit={handleAddComment} className="mb-4 flex items-start gap-3">
+            <form onSubmit={handleAddComment} className="mb-2 flex items-start gap-3">
               <UserAvatar user={commentUsersMap[currentUserId]} size="sm" />
               <div className="flex flex-1 items-start gap-2">
                 <MentionTextarea
@@ -1311,6 +1337,21 @@ export function PostCard({
                   className="flex-1 rounded-full px-4 py-2"
                 />
                 <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleSuggestComments}
+                  disabled={loadingSuggestions}
+                  className="text-muted-foreground hover:text-foreground mt-0.5 h-8 w-8 shrink-0"
+                  title="Suggest comments with AI"
+                >
+                  {loadingSuggestions ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                </Button>
+                <Button
                   type="submit"
                   size="icon"
                   disabled={!newComment.trim() || submittingComment}
@@ -1320,6 +1361,28 @@ export function PostCard({
                 </Button>
               </div>
             </form>
+
+            {suggestionsError && (
+              <p className="text-destructive mb-3 pl-11 text-xs">{suggestionsError}</p>
+            )}
+
+            {commentSuggestions.length > 0 && (
+              <div className="mb-4 flex flex-wrap gap-1.5 pl-11">
+                {commentSuggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      setNewComment(s)
+                      setCommentSuggestions([])
+                    }}
+                    className="bg-muted/60 text-foreground/90 hover:bg-muted rounded-full border px-3 py-1 text-left text-xs transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
             {loadingComments ? (
               <div className="space-y-3">
                 {[1, 2].map((i) => (

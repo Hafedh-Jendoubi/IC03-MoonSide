@@ -55,7 +55,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
 
                 // ── Actuator ──────────────────────────────────────────────────
-                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
 
                 // ── TEAM_VIEW — browse teams (every authenticated user) ────────
                 .requestMatchers(HttpMethod.GET, "/organizations/teams/public").authenticated()

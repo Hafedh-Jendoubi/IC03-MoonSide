@@ -19,6 +19,15 @@ export const userApi = {
     apiFetch<UserResponse>('/users/me/avatar', {
       method: 'DELETE',
     }),
+  updateBanner: (bannerUrl: string) =>
+    apiFetch<UserResponse>('/users/me/banner', {
+      method: 'PATCH',
+      body: JSON.stringify({ bannerUrl }),
+    }),
+  deleteBanner: () =>
+    apiFetch<UserResponse>('/users/me/banner', {
+      method: 'DELETE',
+    }),
   delete: (id: string) => apiFetch<void>(`/users/${id}`, { method: 'DELETE' }),
   bulkInvite: (file: File) => {
     const form = new FormData()

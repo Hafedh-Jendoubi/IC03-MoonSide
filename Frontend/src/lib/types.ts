@@ -43,6 +43,7 @@ export interface User {
   jobTitle: string | null
   bio: string | null
   avatar: string | null
+  bannerUrl: string | null
   active: boolean
   mustChangePassword: boolean
   lastLogin: string | null
@@ -166,6 +167,8 @@ export type NotificationType =
   | 'BADGE_EARNED'
   | 'ANNOUNCEMENT'
   | 'POST_PINNED'
+  | 'CONNECTION_REQUEST'
+  | 'CONNECTION_ACCEPTED'
 
 export interface Notification {
   id: string
@@ -179,6 +182,16 @@ export interface Notification {
   isRead: boolean
   createdAt: string
   readAt?: string
+}
+
+export interface NotificationPreferences {
+  badgeEarnedNotifications: boolean
+  mentionNotifications: boolean
+  commentNotifications: boolean
+  reactionNotifications: boolean
+  followNotifications: boolean
+  connectionNotifications: boolean
+  announcementNotifications: boolean
 }
 
 export interface Message {

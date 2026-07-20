@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { X, Bell, MessageCircle, Heart, Pin } from 'lucide-react'
+import { X, Bell, MessageCircle, Heart, Pin, UserPlus, UserCheck } from 'lucide-react'
 import { Notification, NotificationType } from '@/lib/types'
 
 interface NotificationToastProps {
@@ -17,6 +17,10 @@ function getIcon(type: NotificationType) {
       return <Heart size={18} className="text-rose-500" />
     case 'POST_PINNED':
       return <Pin size={18} className="text-amber-500" />
+    case 'CONNECTION_REQUEST':
+      return <UserPlus size={18} className="text-emerald-500" />
+    case 'CONNECTION_ACCEPTED':
+      return <UserCheck size={18} className="text-emerald-500" />
     default:
       return <Bell size={18} className="text-primary" />
   }

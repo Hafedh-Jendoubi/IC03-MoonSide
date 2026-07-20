@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tn.moonside.postservice.audit.AuditClient;
 import tn.moonside.postservice.audit.PostAuditAction;
+import tn.moonside.postservice.clients.ConnectionClient;
 import tn.moonside.postservice.clients.OrganizationClient;
 import tn.moonside.postservice.clients.UserClient;
 import tn.moonside.postservice.dtos.requests.PostRequest;
@@ -21,7 +22,9 @@ import tn.moonside.postservice.entities.*;
 import tn.moonside.postservice.enums.TypePosts;
 import tn.moonside.postservice.enums.VisibilityType;
 import tn.moonside.postservice.event.NotificationEvent;
+import tn.moonside.postservice.event.PostActivityEvent;
 import tn.moonside.postservice.kafka.NotificationEventPublisher;
+import tn.moonside.postservice.kafka.PostActivityEventPublisher;
 import tn.moonside.postservice.repositories.*;
 
 import java.time.LocalDateTime;
@@ -42,10 +45,12 @@ public class PostService {
     private final ReactionTypeRepository reactionTypeRepository;
     private final SurveyVoteRepository surveyVoteRepository;
     private final OrganizationClient organizationClient;
+    private final ConnectionClient connectionClient;
     private final SurveyService surveyService;
     private final AuditClient auditClient;
     private final UserClient userClient;
     private final NotificationEventPublisher notificationPublisher;
+    private final PostActivityEventPublisher postActivityPublisher;
     private final org.springframework.data.redis.core.RedisTemplate<String, Object> redisTemplate;
 
     /* ── Create ───────────────────────────────────────────────────────────── */
@@ -120,6 +125,14 @@ public class PostService {
                 postCreatedDesc,
                 true, null, toJson(saved));
 
+        // Publish badge-relevant event (non-blocking; failures never break create)
+        long totalPosts = postRepository.countByAuthorId(authorId);
+        postActivityPublisher.publish(PostActivityEvent.builder()
+                .authorId(authorId)
+                .activityType("POST_CREATED")
+                .totalPosts(totalPosts)
+                .build());
+
         return toResponse(saved, authorId);
     }
 
@@ -151,13 +164,19 @@ public class PostService {
         redisTemplate.opsForValue().increment("post:views:" + postId);
     }
 
+    // NOTE: this is cached in Redis via GenericJackson2JsonRedisSerializer, which
+    // cannot deserialize org.springframework.data.domain.PageImpl (no default
+    // constructor / Jackson creator on it). Returning PagedResponse<PostResponse>
+    // instead - a plain bean - keeps the same JSON shape for clients (see
+    // PagedResponse) while actually being deserializable on cache reads.
     @Cacheable(value = "publicFeed", key = "#page + '-' + #size")
-    public Page<PostResponse> getPublicFeed(int page, int size) {
+    public PagedResponse<PostResponse> getPublicFeed(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
         String requesterId = currentUserId();
-        return postRepository
+        Page<PostResponse> result = postRepository
                 .findByPostVisibilityIn(List.of(VisibilityType.PUBLIC), pageable)
                 .map(p -> toResponse(p, requesterId));
+        return PagedResponse.from(result);
     }
 
     public Page<PostResponse> getFollowingFeed(String userId, int page, int size) {
@@ -186,6 +205,103 @@ public class PostService {
 
         return postRepository
                 .findFollowingFeed(deptIds, teamIds, allowedVisibilities, pageable)
+                .map(p -> toResponse(p, userId));
+    }
+
+    /**
+     * GET /posts/feed/connections
+     *
+     * Feed of what the user's accepted connections are up to: posts they
+     * authored, plus posts they reacted to or commented on. Restricted to
+     * PUBLIC posts only — a connection is a personal relationship, not an
+     * org-chart relationship, so it should never leak DEPARTMENT_ONLY or
+     * TEAM_ONLY content the viewer wouldn't otherwise be able to see.
+     *
+     * Returns an empty page (not an error) when the user has no connections.
+     */
+    public Page<PostResponse> getConnectionsFeed(String userId, int page, int size) {
+        List<String> connectionIds = connectionClient.getConnectionIds(userId);
+        if (connectionIds.isEmpty()) {
+            return Page.empty(PageRequest.of(page, size));
+        }
+
+        List<String> reactedPostIds = reactionRepository
+                .findByUserIdInAndReactableType(connectionIds, "POST")
+                .stream().map(Reaction::getReactableId).distinct().toList();
+
+        List<String> commentedPostIds = commentRepository
+                .findByAuthorIdIn(connectionIds)
+                .stream().map(Comment::getPostId).distinct().toList();
+
+        List<String> activityPostIds = Stream.concat(reactedPostIds.stream(), commentedPostIds.stream())
+                .distinct().toList();
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        List<String> postIds = activityPostIds.isEmpty() ? List.of("__no_activity__") : activityPostIds;
+
+        return postRepository
+                .findConnectionsFeed(connectionIds, postIds, List.of(VisibilityType.PUBLIC), pageable)
+                .map(p -> toResponse(p, userId));
+    }
+
+    /**
+     * GET /posts/feed/personalized
+     *
+     * The single home-feed a user actually wants: posts from the departments
+     * and teams they follow/belong to (following-feed rules), PLUS posts their
+     * accepted connections authored/reacted to/commented on (connections-feed
+     * rules), PLUS their own posts — merged, deduplicated, and sorted
+     * newest-first in one query so pagination is correct across all sources.
+     *
+     * Returns an empty page (not an error) when the user follows nothing,
+     * has no connections, and has posted nothing themselves.
+     */
+    public Page<PostResponse> getPersonalizedFeed(String userId, int page, int size) {
+        OrganizationClient.UserFollows follows = organizationClient.getUserFollows();
+
+        List<String> allDeptIds = Stream.concat(
+                        follows.departmentIds().stream(),
+                        follows.memberDepartmentIds().stream())
+                .distinct().toList();
+
+        List<String> allTeamIds = Stream.concat(
+                        follows.teamIds().stream(),
+                        follows.memberTeamIds().stream())
+                .distinct().toList();
+
+        List<String> connectionIds = connectionClient.getConnectionIds(userId);
+
+        List<String> reactedPostIds = connectionIds.isEmpty()
+                ? List.of()
+                : reactionRepository
+                    .findByUserIdInAndReactableType(connectionIds, "POST")
+                    .stream().map(Reaction::getReactableId).distinct().toList();
+
+        List<String> commentedPostIds = connectionIds.isEmpty()
+                ? List.of()
+                : commentRepository
+                    .findByAuthorIdIn(connectionIds)
+                    .stream().map(Comment::getPostId).distinct().toList();
+
+        List<String> activityPostIds = Stream.concat(reactedPostIds.stream(), commentedPostIds.stream())
+                .distinct().toList();
+
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        List<String> deptIds = allDeptIds.isEmpty() ? List.of("__no_dept__") : allDeptIds;
+        List<String> teamIds = allTeamIds.isEmpty() ? List.of("__no_team__") : allTeamIds;
+        List<String> connAuthorIds = connectionIds.isEmpty() ? List.of("__no_connection__") : connectionIds;
+        List<String> connPostIds = activityPostIds.isEmpty() ? List.of("__no_activity__") : activityPostIds;
+
+        List<VisibilityType> followVisibilities = List.of(
+                VisibilityType.PUBLIC, VisibilityType.DEPARTMENT_ONLY, VisibilityType.TEAM_ONLY);
+        List<VisibilityType> connectionVisibilities = List.of(VisibilityType.PUBLIC);
+
+        return postRepository
+                .findPersonalizedFeed(
+                        deptIds, teamIds, followVisibilities,
+                        connAuthorIds, connPostIds, connectionVisibilities,
+                        userId, pageable)
                 .map(p -> toResponse(p, userId));
     }
 

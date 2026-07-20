@@ -1,4 +1,4 @@
-export type SearchResultType = 'USER' | 'TEAM' | 'POST'
+export type SearchResultType = 'USER' | 'TEAM' | 'DEPARTMENT' | 'POST'
 
 export interface SearchResultItem {
   id: string
@@ -13,5 +13,12 @@ export interface SearchResultItem {
 export interface SearchResponse {
   users: SearchResultItem[]
   teams: SearchResultItem[]
+  departments: SearchResultItem[]
   posts: SearchResultItem[]
+}
+
+export interface SearchHistoryItem {
+  id: string
+  query: string
+  searchedAt: string
 }
