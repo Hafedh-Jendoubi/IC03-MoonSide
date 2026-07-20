@@ -110,8 +110,8 @@ jobs:
           EUREKA_INSTANCE_HOST: localhost
           PORT: 8089
         run: |
-          pip install --no-cache-dir -r requirements.txt
-          pip install --no-cache-dir pytest flake8
+          pip install -r requirements.txt
+          pip install pytest flake8
           flake8 app --max-line-length=120 --extend-ignore=E203,W503
           python -c "import app.main"
           if find . -maxdepth 3 -iname "test_*.py" -o -iname "*_test.py" | grep -q .; then pytest -q; else echo "No tests found yet — skipping pytest"; fi
