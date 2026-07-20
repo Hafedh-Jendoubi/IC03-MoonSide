@@ -53,3 +53,12 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ["badge-service:8088"]
+
+  - job_name: "mongodb"
+    static_configs:
+      - targets: ["mongodb-exporter:9216"]
+
+  # ai-service is not scraped: it's a Node.js app with no Prometheus
+  # metrics endpoint yet (/health returns JSON, not the Prometheus
+  # text-exposition format). Add prom-client and expose /metrics
+  # there if you want it instrumented later.

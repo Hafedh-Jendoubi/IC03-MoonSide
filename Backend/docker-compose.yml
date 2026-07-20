@@ -21,6 +21,20 @@ services:
       retries: 5
       start_period: 10s
 
+  # MongoDB Exporter - exposes Mongo stats in Prometheus format
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.44
+    container_name: mongodb-exporter
+    command:
+      - "--mongodb.uri=mongodb://${MONGO_ROOT_USERNAME}:${MONGO_ROOT_PASSWORD}@mongodb:27017/admin?ssl=false"
+      - "--collect-all"
+    ports:
+      - "9216:9216"
+    depends_on:
+      - mongodb
+    networks:
+      - ${NETWORK_NAME}
+
   # Eureka Service Discovery
   eureka:
     build: ./Eureka
