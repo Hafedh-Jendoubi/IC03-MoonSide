@@ -17,8 +17,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Base32;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import tn.moonside.userservice.email.EmailTemplates;
+
+import jakarta.mail.internet.MimeMessage;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -470,35 +473,48 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private void sendEmailVerificationOtpEmail(String to, String name, String otp) {
-        SimpleMailMessage msg = new SimpleMailMessage();
-        msg.setFrom(mailFrom);
-        msg.setTo(to);
-        msg.setSubject(appName + " — Verify your email address");
-        msg.setText(
+        String html = EmailTemplates.verifyEmail(appName, name, otp, 15);
+        String textFallback =
             "Hi " + name + ",\n\n" +
             "Welcome to " + appName + "! Please verify your email address by entering the code below:\n\n" +
             "  " + otp + "\n\n" +
             "This code expires in 15 minutes.\n\n" +
             "If you did not create an account, you can safely ignore this email.\n\n" +
-            "— The " + appName + " Team"
-        );
-        mailSender.send(msg);
+            "— The " + appName + " Team";
+
+        sendHtmlEmail(to, appName + " — Verify your email address", textFallback, html);
     }
 
     private void sendOtpEmail(String to, String name, String otp) {
-        SimpleMailMessage msg = new SimpleMailMessage();
-        msg.setFrom(mailFrom);
-        msg.setTo(to);
-        msg.setSubject(appName + " — Password Reset Code");
-        msg.setText(
+        String html = EmailTemplates.resetPasswordEmail(appName, name, otp, 15);
+        String textFallback =
             "Hi " + name + ",\n\n" +
             "Your password reset code is:\n\n" +
             "  " + otp + "\n\n" +
             "This code expires in 15 minutes.\n\n" +
             "If you did not request a password reset, please ignore this email.\n\n" +
-            "— The " + appName + " Team"
-        );
-        mailSender.send(msg);
+            "— The " + appName + " Team";
+
+        sendHtmlEmail(to, appName + " — Password Reset Code", textFallback, html);
+    }
+
+    /**
+     * Sends a multipart/alternative email: an HTML version for modern clients
+     * with a plain-text fallback for clients that don't render HTML.
+     */
+    private void sendHtmlEmail(String to, String subject, String textFallback, String html) {
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setFrom(mailFrom);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(textFallback, html);
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            log.error("Failed to send email to {}: {}", to, e.getMessage(), e);
+            throw new RuntimeException("Failed to send email", e);
+        }
     }
 
     private String generateTotpSecret() {

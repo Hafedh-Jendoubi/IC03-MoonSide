@@ -21,8 +21,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import tn.moonside.userservice.email.EmailTemplates;
+
+import jakarta.mail.internet.MimeMessage;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -233,11 +236,9 @@ public class UserServiceImpl implements UserService {
     }
 
     private void sendInvitationEmail(String to, String firstName, String rawPassword) {
-        SimpleMailMessage msg = new SimpleMailMessage();
-        msg.setFrom(mailFrom);
-        msg.setTo(to);
-        msg.setSubject(appName + " — Your account has been created");
-        msg.setText(
+        String loginUrl = frontendUrl + "/login";
+        String html = EmailTemplates.invitationEmail(appName, firstName, to, rawPassword, loginUrl);
+        String textFallback =
             "Hi " + firstName + ",\n\n" +
             "An administrator has created an account for you on " + appName + ".\n\n" +
             "Your login credentials are:\n" +
@@ -245,12 +246,23 @@ public class UserServiceImpl implements UserService {
             "  Password: " + rawPassword + "\n\n" +
             "For security reasons, please change your password after your first login.\n\n" +
             "Click the link below to log in:\n" +
-            "  " + frontendUrl + "/login\n\n" +
+            "  " + loginUrl + "\n\n" +
             "If you did not expect this email, please contact your administrator.\n\n" +
-            "— The " + appName + " Team"
-        );
-        mailSender.send(msg);
-        log.info("Invitation email sent to {}", to);
+            "— The " + appName + " Team";
+
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setFrom(mailFrom);
+            helper.setTo(to);
+            helper.setSubject(appName + " — Your account has been created");
+            helper.setText(textFallback, html);
+            mailSender.send(mimeMessage);
+            log.info("Invitation email sent to {}", to);
+        } catch (Exception e) {
+            log.error("Failed to send invitation email to {}: {}", to, e.getMessage(), e);
+            throw new RuntimeException("Failed to send invitation email", e);
+        }
     }
 
     @Override
