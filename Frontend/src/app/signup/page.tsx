@@ -21,6 +21,11 @@ const PASSWORD_RULES = [
     label: 'One special character (!@#$…)',
     test: (p: string) => /[@$!%*?&_.\-#]/.test(p),
   },
+  {
+    id: 'nospace',
+    label: 'No spaces',
+    test: (p: string) => p.length > 0 && !/\s/.test(p),
+  },
 ]
 
 function PasswordStrengthIndicator({ password }: { password: string }) {
@@ -412,24 +417,6 @@ export default function SignupPage() {
                 required
                 className="w-full"
               />
-              <p className="text-muted-foreground mt-1 text-xs">
-                You must be at least 13 years old to register.
-              </p>
-            </div>
-
-            {/* Job Title */}
-            <div>
-              <label htmlFor="jobTitle" className="text-foreground mb-2 block text-sm font-medium">
-                Job Title <span className="text-muted-foreground">(optional)</span>
-              </label>
-              <Input
-                id="jobTitle"
-                type="text"
-                placeholder="e.g. Software Engineer"
-                value={jobTitle}
-                onChange={(e) => setJobTitle(e.target.value)}
-                className="w-full"
-              />
             </div>
 
             {/* Password */}
@@ -443,7 +430,17 @@ export default function SignupPage() {
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Create a strong password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value.replace(/\s/g, ''))}
+                  onKeyDown={(e) => {
+                    if (e.key === ' ') e.preventDefault()
+                  }}
+                  onPaste={(e) => {
+                    const text = e.clipboardData.getData('text')
+                    if (/\s/.test(text)) {
+                      e.preventDefault()
+                      setPassword((prev) => prev + text.replace(/\s/g, ''))
+                    }
+                  }}
                   required
                   className="w-full pr-10"
                 />
@@ -473,7 +470,10 @@ export default function SignupPage() {
                   type={showConfirm ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onChange={(e) => setConfirmPassword(e.target.value.replace(/\s/g, ''))}
+                  onKeyDown={(e) => {
+                    if (e.key === ' ') e.preventDefault()
+                  }}
                   required
                   className={`w-full pr-10 ${
                     confirmPassword && confirmPassword !== password

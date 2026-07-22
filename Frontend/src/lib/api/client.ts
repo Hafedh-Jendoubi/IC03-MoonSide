@@ -79,6 +79,15 @@ export async function apiFetch<T>(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
+    // Field-level validation errors come back as { message: "Validation failed", data: { field: "reason" } }
+    if (err.data && typeof err.data === 'object' && !Array.isArray(err.data)) {
+      const fieldMessages = Object.values(err.data).filter(
+        (v): v is string => typeof v === 'string'
+      )
+      if (fieldMessages.length > 0) {
+        throw new Error(fieldMessages.join(' '))
+      }
+    }
     throw new Error(err.message || `Request failed: ${res.status}`)
   }
 
