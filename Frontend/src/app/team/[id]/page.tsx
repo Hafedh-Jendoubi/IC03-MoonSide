@@ -25,6 +25,13 @@ import {
   MoreVertical,
   Crown,
   LogOut,
+  FolderKanban,
+  ExternalLink,
+  Github,
+  CalendarDays,
+  Circle,
+  Plus,
+  Pencil,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -37,10 +44,15 @@ import { Button } from '@/components/ui/button'
 import {
   teamApi,
   departmentApi,
+  projectApi,
   TeamResponse,
   DepartmentResponse,
   UserTeamResponse,
   UserResponse,
+  PostResponse,
+  ProjectResponse,
+  ProjectRequest,
+  ProjectStatus,
   userApi,
 } from '@/lib/api'
 import { AuthLayout } from '@/components/auth-layout'
@@ -48,7 +60,10 @@ import { CreatePost } from '@/components/create-post'
 import { PostCard } from '@/components/post-card'
 import { OrgAvatarUpload, OrgBannerUpload } from '@/components/org-image-upload'
 import { useAuth } from '@/lib/auth-context'
-import { Post, User, hasRole } from '@/lib/types'
+import { usePostFeed } from '@/hooks/use-post-feed'
+import { User, hasRole } from '@/lib/types'
+import { UsersModal } from '@/components/users-modal'
+import { PostViewModal } from '@/components/post-view-modal'
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -80,7 +95,7 @@ function canAssignMember(
 
 // ── Manage Team Panel ─────────────────────────────────────────────────────────
 
-type ManageSection = 'general' | 'members' | 'settings'
+type ManageSection = 'general' | 'members' | 'projects' | 'settings'
 
 interface ManageTeamPanelProps {
   team: TeamResponse
@@ -103,17 +118,27 @@ function ManageTeamPanel({
 }: ManageTeamPanelProps) {
   const [section, setSection] = useState<ManageSection>('general')
 
+  useEffect(() => {
+    const originalStyle = window.getComputedStyle(document.body).overflow
+
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = originalStyle
+    }
+  }, [])
+
   const navItems: { id: ManageSection; label: string; icon: React.ReactNode }[] = [
     { id: 'general', label: 'General', icon: <LayoutDashboard className="h-4 w-4" /> },
     { id: 'members', label: 'Members', icon: <Users className="h-4 w-4" /> },
+    { id: 'projects', label: 'Projects', icon: <FolderKanban className="h-4 w-4" /> },
     { id: 'settings', label: 'Settings', icon: <Settings className="h-4 w-4" /> },
   ]
 
   return (
     <div className="bg-background fixed inset-0 z-50 flex">
-      {/* Left Sidebar */}
-      <aside className="bg-muted/30 flex w-72 flex-shrink-0 flex-col border-r">
-        {/* Header */}
+      {/* Left Sidebar - Fixed width (same as Department: w-60) */}
+      <aside className="bg-muted/30 flex w-60 flex-shrink-0 flex-col border-r">
         <div className="flex items-center gap-3 border-b px-5 py-4">
           <div className="bg-muted flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-full border">
             {team.avatarUrl ? (
@@ -130,7 +155,6 @@ function ManageTeamPanel({
           </div>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 space-y-0.5 px-3 py-4">
           {navItems.map((item) => (
             <button
@@ -151,7 +175,6 @@ function ManageTeamPanel({
           ))}
         </nav>
 
-        {/* Back button */}
         <div className="border-t px-3 py-4">
           <button
             onClick={onClose}
@@ -163,16 +186,20 @@ function ManageTeamPanel({
         </div>
       </aside>
 
-      {/* Main Content */}
+      {/* Main Content - Now using full width with responsive max-width for better readability (matches Department) */}
       <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-2xl px-8 py-8">
-          {section === 'general' && <GeneralSection team={team} user={user} onSaved={onSaved} />}
-          {section === 'members' && (
-            <MembersSection team={team} canKick={canKick} onMemberChange={onMemberChange} />
-          )}
-          {section === 'settings' && (
-            <SettingsSection team={team} onSaved={onSaved} onDeleted={onDeleted} />
-          )}
+        <div className="w-full px-4 py-8 md:px-8 lg:px-12 xl:px-16">
+          {/* For very large screens, add a max-width to maintain readability */}
+          <div className="mx-auto w-full max-w-5xl xl:max-w-6xl 2xl:max-w-7xl">
+            {section === 'general' && <GeneralSection team={team} user={user} onSaved={onSaved} />}
+            {section === 'members' && (
+              <MembersSection team={team} canKick={canKick} onMemberChange={onMemberChange} />
+            )}
+            {section === 'projects' && <TeamProjectsSection team={team} user={user} />}
+            {section === 'settings' && (
+              <SettingsSection team={team} onSaved={onSaved} onDeleted={onDeleted} />
+            )}
+          </div>
         </div>
       </main>
     </div>
@@ -1133,6 +1160,718 @@ function TeamMembersModal({ team, onClose }: TeamMembersModalProps) {
   )
 }
 
+// ── Team Projects Section (Manage Panel) ─────────────────────────────────────
+
+const PROJECT_STATUS_OPTIONS: { value: ProjectStatus; label: string }[] = [
+  { value: 'PLANNING', label: 'Planning' },
+  { value: 'IN_PROGRESS', label: 'In Progress' },
+  { value: 'ON_HOLD', label: 'On Hold' },
+  { value: 'COMPLETED', label: 'Completed' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'ARCHIVED', label: 'Archived' },
+]
+
+function TeamProjectsSection({ team, user }: { team: TeamResponse; user: User }) {
+  const [projects, setProjects] = useState<ProjectResponse[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showForm, setShowForm] = useState(false)
+  const [editingProject, setEditingProject] = useState<ProjectResponse | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  // Team members for assignment
+  const [teamMembers, setTeamMembers] = useState<UserTeamResponse[]>([])
+  // Assignment modal state
+  const [assigningProject, setAssigningProject] = useState<ProjectResponse | null>(null)
+  const [assigningUserId, setAssigningUserId] = useState<string | null>(null)
+
+  // Form state
+  const [formName, setFormName] = useState('')
+  const [formDescription, setFormDescription] = useState('')
+  const [formStatus, setFormStatus] = useState<ProjectStatus>('PLANNING')
+  const [formTechnologies, setFormTechnologies] = useState('')
+  const [formRepoUrl, setFormRepoUrl] = useState('')
+  const [formProjectUrl, setFormProjectUrl] = useState('')
+  const [formStartDate, setFormStartDate] = useState('')
+  const [formEndDate, setFormEndDate] = useState('')
+
+  const canManage =
+    hasRole(user, 'CEO') ||
+    (hasRole(user, 'TEAM_LEADER') && team.leadId === user.id) ||
+    hasRole(user, 'DEPARTMENT_LEADER')
+
+  useEffect(() => {
+    projectApi
+      .getByTeam(team.id)
+      .then(setProjects)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+    teamApi
+      .getMembers(team.id)
+      .then(setTeamMembers)
+      .catch(() => {})
+  }, [team.id])
+
+  async function handleAssignUser(projectId: string, userId: string) {
+    setAssigningUserId(userId)
+    try {
+      const updated = await projectApi.assignUser(projectId, userId)
+      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      if (assigningProject?.id === updated.id) setAssigningProject(updated)
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to assign user')
+    } finally {
+      setAssigningUserId(null)
+    }
+  }
+
+  async function handleUnassignUser(projectId: string, userId: string) {
+    setAssigningUserId(userId)
+    try {
+      const updated = await projectApi.unassignUser(projectId, userId)
+      setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      if (assigningProject?.id === updated.id) setAssigningProject(updated)
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to unassign user')
+    } finally {
+      setAssigningUserId(null)
+    }
+  }
+
+  function openCreate() {
+    setEditingProject(null)
+    setFormName('')
+    setFormDescription('')
+    setFormStatus('PLANNING')
+    setFormTechnologies('')
+    setFormRepoUrl('')
+    setFormProjectUrl('')
+    setFormStartDate('')
+    setFormEndDate('')
+    setError(null)
+    setShowForm(true)
+  }
+
+  function openEdit(p: ProjectResponse) {
+    setEditingProject(p)
+    setFormName(p.name)
+    setFormDescription(p.description ?? '')
+    setFormStatus(p.status)
+    setFormTechnologies((p.technologies ?? []).join(', '))
+    setFormRepoUrl(p.repositoryUrl ?? '')
+    setFormProjectUrl(p.projectUrl ?? '')
+    setFormStartDate(p.startDate ?? '')
+    setFormEndDate(p.endDate ?? '')
+    setError(null)
+    setShowForm(true)
+  }
+
+  async function handleSave() {
+    if (!formName.trim()) return
+    setSaving(true)
+    setError(null)
+    const payload: ProjectRequest = {
+      name: formName.trim(),
+      description: formDescription.trim() || undefined,
+      status: formStatus,
+      technologies: formTechnologies
+        ? formTechnologies
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : [],
+      repositoryUrl: formRepoUrl.trim() || undefined,
+      projectUrl: formProjectUrl.trim() || undefined,
+      startDate: formStartDate || undefined,
+      endDate: formEndDate || undefined,
+      teamIds: [team.id],
+    }
+    try {
+      if (editingProject) {
+        const updated = await projectApi.update(editingProject.id, payload)
+        setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      } else {
+        const created = await projectApi.createForTeam(team.id, payload)
+        setProjects((prev) => [created, ...prev])
+      }
+      setShowForm(false)
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to save project')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDelete(p: ProjectResponse) {
+    setDeletingId(p.id)
+    try {
+      await projectApi.delete(p.id)
+      setProjects((prev) => prev.filter((x) => x.id !== p.id))
+    } catch (e: any) {
+      setError(e.message ?? 'Failed to delete project')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-foreground text-2xl font-bold">Projects</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Manage projects assigned to this team.
+          </p>
+        </div>
+        {canManage && !showForm && (
+          <button
+            onClick={openCreate}
+            className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90"
+          >
+            <Plus className="h-4 w-4" />
+            New Project
+          </button>
+        )}
+      </div>
+
+      {error && (
+        <div className="bg-destructive/10 text-destructive border-destructive/20 rounded-lg border px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Create / Edit form */}
+      {showForm && (
+        <div className="bg-muted/20 space-y-4 rounded-xl border p-5">
+          <h3 className="text-foreground text-sm font-semibold">
+            {editingProject ? 'Edit Project' : 'New Project'}
+          </h3>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="sm:col-span-2">
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Project Name *
+              </label>
+              <input
+                type="text"
+                value={formName}
+                onChange={(e) => setFormName(e.target.value)}
+                placeholder="e.g. Customer Portal v2"
+                maxLength={120}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="text-foreground mb-1 block text-xs font-medium">Description</label>
+              <textarea
+                value={formDescription}
+                onChange={(e) => setFormDescription(e.target.value)}
+                rows={3}
+                maxLength={1000}
+                placeholder="What is this project about?"
+                className="border-border bg-background text-foreground focus:ring-primary w-full resize-none rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">Status</label>
+              <select
+                value={formStatus}
+                onChange={(e) => setFormStatus(e.target.value as ProjectStatus)}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              >
+                {PROJECT_STATUS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Technologies (comma-separated)
+              </label>
+              <input
+                type="text"
+                value={formTechnologies}
+                onChange={(e) => setFormTechnologies(e.target.value)}
+                placeholder="e.g. React, Spring Boot, MongoDB"
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">
+                Repository URL
+              </label>
+              <input
+                type="url"
+                value={formRepoUrl}
+                onChange={(e) => setFormRepoUrl(e.target.value)}
+                placeholder="https://github.com/org/repo"
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">Project URL</label>
+              <input
+                type="url"
+                value={formProjectUrl}
+                onChange={(e) => setFormProjectUrl(e.target.value)}
+                placeholder="https://myapp.example.com"
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">Start Date</label>
+              <input
+                type="date"
+                value={formStartDate}
+                onChange={(e) => setFormStartDate(e.target.value)}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="text-foreground mb-1 block text-xs font-medium">End Date</label>
+              <input
+                type="date"
+                value={formEndDate}
+                onChange={(e) => setFormEndDate(e.target.value)}
+                className="border-border bg-background text-foreground focus:ring-primary w-full rounded-lg border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 border-t pt-3">
+            <button
+              onClick={() => setShowForm(false)}
+              disabled={saving}
+              className="border-border text-foreground hover:bg-muted rounded-lg border px-4 py-2 text-sm font-medium"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving || !formName.trim()}
+              className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+            >
+              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {saving ? 'Saving…' : editingProject ? 'Save Changes' : 'Create Project'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Project list */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="text-muted-foreground h-6 w-6 animate-spin" />
+        </div>
+      ) : projects.length === 0 && !showForm ? (
+        <div className="rounded-xl border border-dashed py-14 text-center">
+          <FolderKanban className="text-muted-foreground/40 mx-auto mb-3 h-10 w-10" />
+          <p className="text-foreground text-sm font-medium">No projects yet</p>
+          <p className="text-muted-foreground mt-1 text-xs">
+            {canManage
+              ? 'Click "New Project" to create one.'
+              : 'No projects assigned to this team.'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {projects.map((p) => {
+            const cfg = PROJECT_STATUS_CONFIG[p.status] ?? PROJECT_STATUS_CONFIG.PLANNING
+            const assignedUsers = p.assignedUsers ?? []
+            const MAX_SHOWN = 4
+            return (
+              <div
+                key={p.id}
+                className="bg-background flex items-start gap-4 rounded-xl border p-4"
+              >
+                <div className="bg-muted mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border">
+                  {p.avatarUrl ? (
+                    <img
+                      src={p.avatarUrl}
+                      alt={p.name}
+                      className="h-full w-full rounded-lg object-cover"
+                    />
+                  ) : (
+                    <FolderKanban className="text-muted-foreground h-4 w-4" />
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-foreground text-sm leading-tight font-semibold">{p.name}</p>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-xs font-medium ${cfg.bg} ${cfg.color}`}
+                    >
+                      {cfg.label}
+                    </span>
+                  </div>
+                  {p.description && (
+                    <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
+                      {p.description}
+                    </p>
+                  )}
+                  {p.technologies && p.technologies.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {p.technologies.slice(0, 4).map((t) => (
+                        <span
+                          key={t}
+                          className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                      {p.technologies.length > 4 && (
+                        <span className="text-muted-foreground text-xs">
+                          +{p.technologies.length - 4}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── Assigned-user avatar bubbles ── */}
+                  <div className="mt-2 flex items-center gap-1.5">
+                    <div className="flex -space-x-2">
+                      {assignedUsers.slice(0, MAX_SHOWN).map((u) => (
+                        <div
+                          key={u.id}
+                          title={`${u.firstName} ${u.lastName}`}
+                          className="ring-background h-6 w-6 flex-shrink-0 overflow-hidden rounded-full ring-2"
+                        >
+                          {u.avatar ? (
+                            <img
+                              src={u.avatar}
+                              alt={`${u.firstName} ${u.lastName}`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-[10px] font-semibold uppercase">
+                              {u.firstName?.[0]}
+                              {u.lastName?.[0]}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {assignedUsers.length > MAX_SHOWN && (
+                        <div className="ring-background bg-muted text-muted-foreground flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ring-2">
+                          +{assignedUsers.length - MAX_SHOWN}
+                        </div>
+                      )}
+                    </div>
+                    {canManage && (
+                      <button
+                        onClick={() => setAssigningProject(p)}
+                        className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-full p-0.5 transition-colors"
+                        title="Manage project members"
+                      >
+                        <UserPlus className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {assignedUsers.length === 0 && !canManage && (
+                      <span className="text-muted-foreground text-xs">No members assigned</span>
+                    )}
+                  </div>
+                </div>
+
+                {canManage && (
+                  <div className="flex flex-shrink-0 items-center gap-1">
+                    <button
+                      onClick={() => openEdit(p)}
+                      className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition-colors"
+                      title="Edit"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p)}
+                      disabled={deletingId === p.id}
+                      className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg p-1.5 transition-colors disabled:opacity-50"
+                      title="Delete"
+                    >
+                      {deletingId === p.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ── Assign Members Modal ── */}
+      {assigningProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-background w-full max-w-sm rounded-xl border p-5 shadow-lg">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-foreground text-sm font-semibold">Assign Members</h3>
+                <p className="text-muted-foreground mt-0.5 text-xs">{assigningProject.name}</p>
+              </div>
+              <button
+                onClick={() => setAssigningProject(null)}
+                className="text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {teamMembers.length === 0 ? (
+              <p className="text-muted-foreground text-sm">No team members found.</p>
+            ) : (
+              <ul className="max-h-72 space-y-2 overflow-y-auto">
+                {teamMembers.map((m) => {
+                  if (!m.user) return null
+                  const isAssigned = (assigningProject.assignedUsers ?? []).some(
+                    (u) => u.id === m.userId
+                  )
+                  const isBusy = assigningUserId === m.userId
+                  return (
+                    <li key={m.userId} className="flex items-center gap-3 rounded-lg px-2 py-1.5">
+                      <div className="h-8 w-8 flex-shrink-0 overflow-hidden rounded-full">
+                        {m.user.avatar ? (
+                          <img
+                            src={m.user.avatar}
+                            alt={`${m.user.firstName} ${m.user.lastName}`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-xs font-semibold uppercase">
+                            {m.user.firstName?.[0]}
+                            {m.user.lastName?.[0]}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-foreground text-sm font-medium">
+                          {m.user.firstName} {m.user.lastName}
+                        </p>
+                        {m.user.jobTitle && (
+                          <p className="text-muted-foreground truncate text-xs">
+                            {m.user.jobTitle}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        disabled={isBusy}
+                        onClick={() =>
+                          isAssigned
+                            ? handleUnassignUser(assigningProject.id, m.userId)
+                            : handleAssignUser(assigningProject.id, m.userId)
+                        }
+                        className={`flex-shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+                          isAssigned
+                            ? 'bg-destructive/10 text-destructive hover:bg-destructive/20'
+                            : 'bg-primary/10 text-primary hover:bg-primary/20'
+                        }`}
+                      >
+                        {isBusy ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : isAssigned ? (
+                          'Remove'
+                        ) : (
+                          'Assign'
+                        )}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Project Status helpers ─────────────────────────────────────────────────────
+
+const PROJECT_STATUS_CONFIG = {
+  PLANNING: { label: 'Planning', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+  IN_PROGRESS: { label: 'In Progress', color: 'text-amber-500', bg: 'bg-amber-500/10' },
+  ON_HOLD: { label: 'On Hold', color: 'text-orange-500', bg: 'bg-orange-500/10' },
+  COMPLETED: { label: 'Completed', color: 'text-green-600', bg: 'bg-green-500/10' },
+  CANCELLED: { label: 'Cancelled', color: 'text-destructive', bg: 'bg-destructive/10' },
+  ARCHIVED: { label: 'Archived', color: 'text-muted-foreground', bg: 'bg-muted' },
+} as const
+
+function ProjectSidebarCard({ project }: { project: ProjectResponse }) {
+  const status = PROJECT_STATUS_CONFIG[project.status] ?? PROJECT_STATUS_CONFIG.PLANNING
+
+  return (
+    <div className="border-border bg-muted/30 hover:bg-muted/60 group rounded-lg border p-3 transition-colors">
+      <div className="flex items-start gap-2.5">
+        {/* Avatar or icon */}
+        <div className="bg-muted border-border flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-md border">
+          {project.avatarUrl ? (
+            <img
+              src={project.avatarUrl}
+              alt={project.name}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <FolderKanban className="text-muted-foreground h-4 w-4" />
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <p className="text-foreground truncate text-sm leading-tight font-semibold">
+            {project.name}
+          </p>
+
+          {/* Status badge */}
+          <span
+            className={`mt-1 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${status.bg} ${status.color}`}
+          >
+            <Circle className="h-1.5 w-1.5 fill-current" />
+            {status.label}
+          </span>
+
+          {/* Description */}
+          {project.description && (
+            <p className="text-muted-foreground mt-1.5 line-clamp-2 text-xs leading-relaxed">
+              {project.description}
+            </p>
+          )}
+
+          {/* Technologies */}
+          {project.technologies && project.technologies.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {project.technologies.slice(0, 3).map((tech) => (
+                <span
+                  key={tech}
+                  className="bg-primary/10 text-primary rounded px-1.5 py-0.5 text-[10px] font-medium"
+                >
+                  {tech}
+                </span>
+              ))}
+              {project.technologies.length > 3 && (
+                <span className="text-muted-foreground text-[10px]">
+                  +{project.technologies.length - 3} more
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Dates */}
+          {(project.startDate || project.endDate) && (
+            <div className="text-muted-foreground mt-2 flex items-center gap-1 text-[10px]">
+              <CalendarDays className="h-3 w-3 flex-shrink-0" />
+              <span>
+                {project.startDate
+                  ? new Date(project.startDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      year: 'numeric',
+                    })
+                  : '—'}
+                {project.endDate && (
+                  <>
+                    {' → '}
+                    {new Date(project.endDate).toLocaleDateString('en-US', {
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </>
+                )}
+              </span>
+            </div>
+          )}
+
+          {/* Assigned user avatar bubbles */}
+          {project.assignedUsers &&
+            project.assignedUsers.length > 0 &&
+            (() => {
+              const MAX_SHOWN = 4
+              const shown = project.assignedUsers.slice(0, MAX_SHOWN)
+              const overflow = project.assignedUsers.length - MAX_SHOWN
+              return (
+                <div className="mt-2 flex items-center gap-1.5">
+                  <div className="flex -space-x-1.5">
+                    {shown.map((u) => (
+                      <div
+                        key={u.id}
+                        title={`${u.firstName} ${u.lastName}`}
+                        className="ring-background h-5 w-5 flex-shrink-0 overflow-hidden rounded-full ring-2"
+                      >
+                        {u.avatar ? (
+                          <img
+                            src={u.avatar}
+                            alt={`${u.firstName} ${u.lastName}`}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="bg-muted text-muted-foreground flex h-full w-full items-center justify-center text-[8px] font-semibold uppercase">
+                            {u.firstName?.[0]}
+                            {u.lastName?.[0]}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    {overflow > 0 && (
+                      <div className="ring-background bg-muted text-muted-foreground flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[8px] font-semibold ring-2">
+                        +{overflow}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-muted-foreground text-[10px]">
+                    {project.assignedUsers.length === 1
+                      ? '1 member'
+                      : `${project.assignedUsers.length} members`}
+                  </span>
+                </div>
+              )
+            })()}
+
+          {/* Links */}
+          {(project.repositoryUrl || project.projectUrl) && (
+            <div className="mt-2 flex items-center gap-2">
+              {project.repositoryUrl && (
+                <a
+                  href={project.repositoryUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[10px] transition-colors"
+                  title="Repository"
+                >
+                  <Github className="h-3 w-3" />
+                  Repo
+                </a>
+              )}
+              {project.projectUrl && (
+                <a
+                  href={project.projectUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[10px] transition-colors"
+                  title="Project URL"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  Live
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TeamFeedPage() {
@@ -1142,8 +1881,6 @@ export default function TeamFeedPage() {
   const teamId = params?.id as string
 
   const [team, setTeam] = useState<TeamResponse | null>(null)
-  const [posts, setPosts] = useState<Post[]>([])
-  const [usersMap] = useState<Record<string, User>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [userManagedDeptIds, setUserManagedDeptIds] = useState<string[]>([])
@@ -1151,6 +1888,26 @@ export default function TeamFeedPage() {
   const [membersOpen, setMembersOpen] = useState(false)
   const [followLoading, setFollowLoading] = useState(false)
   const [teamDepartment, setTeamDepartment] = useState<DepartmentResponse | null>(null)
+  const [showFollowersModal, setShowFollowersModal] = useState(false)
+  const [teamProjects, setTeamProjects] = useState<ProjectResponse[]>([])
+  // Whether the current user is a member (or lead) of this team
+  const [isUserTeamMember, setIsUserTeamMember] = useState(false)
+  const [viewPostId, setViewPostId] = useState<string | null>(null)
+
+  // ── Post feed: fetches from API, resolves authors ─────────────────────────
+  const {
+    posts,
+    usersMap,
+    prependPost,
+    removePost,
+    updatePost,
+    hasMore,
+    loadingMore,
+    sentinelRef,
+  } = usePostFeed({
+    scope: { type: 'team', teamId },
+    currentUser: user,
+  })
 
   useEffect(() => {
     if (!teamId) return
@@ -1159,19 +1916,29 @@ export default function TeamFeedPage() {
         setLoading(true)
         const teamData = await teamApi.getById(teamId)
         setTeam(teamData)
-        // fetch the parent department to read membersPublic setting
         if (teamData.departmentId) {
           departmentApi
             .getById(teamData.departmentId)
             .then(setTeamDepartment)
             .catch(() => {})
         }
-        const stored = localStorage.getItem(`team_posts_${teamId}`)
-        if (stored) {
-          try {
-            setPosts(JSON.parse(stored))
-          } catch {
-            /* ignore */
+        projectApi
+          .getByTeam(teamId)
+          .then(setTeamProjects)
+          .catch(() => {})
+
+        // Derive membership: lead counts, or check actual member list
+        if (user) {
+          if (teamData.leadId === user.id || hasRole(user, 'CEO')) {
+            setIsUserTeamMember(true)
+          } else {
+            // Fetch members list to check if the user is in it
+            teamApi
+              .getMembers(teamId)
+              .then((members) => {
+                setIsUserTeamMember(members.some((m: any) => m.userId === user.id))
+              })
+              .catch(() => setIsUserTeamMember(false))
           }
         }
       } catch (e: any) {
@@ -1193,33 +1960,8 @@ export default function TeamFeedPage() {
       .catch(() => {})
   }, [user])
 
-  const handlePostCreate = (content: string) => {
-    if (!user) return
-    const newPost: Post = {
-      id: Date.now().toString(),
-      authorId: user.id,
-      content,
-      timestamp: new Date(),
-      likes: [],
-      comments: [],
-    }
-    const updated = [newPost, ...posts]
-    setPosts(updated)
-    localStorage.setItem(`team_posts_${teamId}`, JSON.stringify(updated))
-  }
-
-  const handleLike = (postId: string) => {
-    if (!user) return
-    const updated = posts.map((post) => {
-      if (post.id !== postId) return post
-      const hasLiked = post.likes.includes(user.id)
-      return {
-        ...post,
-        likes: hasLiked ? post.likes.filter((id) => id !== user.id) : [...post.likes, user.id],
-      }
-    })
-    setPosts(updated)
-    localStorage.setItem(`team_posts_${teamId}`, JSON.stringify(updated))
+  const handlePostCreate = (post: PostResponse) => {
+    prependPost(post)
   }
 
   if (loading) {
@@ -1266,145 +2008,347 @@ export default function TeamFeedPage() {
 
   return (
     <AuthLayout>
-      <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Cover Banner */}
-        <div className="from-primary/20 to-secondary/20 relative mb-0 h-48 overflow-hidden rounded-xl bg-gradient-to-r">
-          {team.bannerUrl ? (
-            <img src={team.bannerUrl} alt={team.name} className="h-full w-full object-cover" />
-          ) : (
-            <div className="from-primary/20 to-secondary/20 h-full w-full bg-gradient-to-r" />
-          )}
-        </div>
-
-        {/* Team Header */}
-        <div className="bg-background mb-8 flex items-end gap-6 px-2">
-          <div className="relative -mt-14 flex-shrink-0">
-            <div className="bg-muted flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-white shadow-lg dark:border-slate-800">
-              {team.avatarUrl ? (
-                <img src={team.avatarUrl} alt={team.name} className="h-full w-full object-cover" />
-              ) : (
-                <Users className="text-foreground h-14 w-14" />
-              )}
-            </div>
-          </div>
-
-          <div className="flex flex-1 items-end justify-between pt-4 pb-2">
-            <div>
-              <h1 className="text-foreground text-3xl font-bold">{team.name}</h1>
-              {team.description && (
-                <p className="text-muted-foreground mt-1 text-sm">{team.description}</p>
-              )}
-              {team.lead && (
-                <p className="text-muted-foreground mt-2 text-xs">
-                  Led by {team.lead.firstName} {team.lead.lastName}
-                </p>
-              )}
-              <button
-                onClick={() => {
-                  const pub = teamDepartment?.membersPublic ?? true
-                  const isLead = user?.id === team.leadId
-                  const isDeptLeader =
-                    hasRole(user, 'DEPARTMENT_LEADER') &&
-                    userManagedDeptIds.includes(team.departmentId)
-                  const isCEO = hasRole(user, 'CEO')
-                  if (pub || isLead || isDeptLeader || isCEO) {
-                    setMembersOpen(true)
-                  }
-                }}
-                className={`mt-1 flex items-center gap-1.5 text-xs transition-colors ${
-                  (teamDepartment?.membersPublic ?? true) ||
-                  user?.id === team.leadId ||
-                  hasRole(user, 'CEO') ||
-                  (hasRole(user, 'DEPARTMENT_LEADER') &&
-                    userManagedDeptIds.includes(team.departmentId))
-                    ? 'text-muted-foreground hover:text-primary hover:underline'
-                    : 'text-muted-foreground/50 cursor-not-allowed'
-                }`}
-                title={
-                  (teamDepartment?.membersPublic ?? true) ||
-                  user?.id === team.leadId ||
-                  hasRole(user, 'CEO') ||
-                  (hasRole(user, 'DEPARTMENT_LEADER') &&
-                    userManagedDeptIds.includes(team.departmentId))
-                    ? 'View members'
-                    : 'Member list is restricted to department members'
-                }
-              >
-                <Users className="h-3.5 w-3.5" />
-                {team.memberCount} member{team.memberCount !== 1 ? 's' : ''}
-                {!(teamDepartment?.membersPublic ?? true) &&
-                  !hasRole(user, 'CEO') &&
-                  user?.id !== team.leadId &&
-                  !(
-                    hasRole(user, 'DEPARTMENT_LEADER') &&
-                    userManagedDeptIds.includes(team.departmentId)
-                  ) && <Shield className="ml-0.5 h-3 w-3 opacity-60" />}
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <button
-                onClick={handleFollow}
-                disabled={followLoading}
-                className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
-                  team.isFollowing
-                    ? 'border-primary text-primary hover:bg-primary/10'
-                    : 'border-border text-foreground hover:bg-muted'
-                }`}
-              >
-                {followLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : team.isFollowing ? (
-                  <BellOff className="h-4 w-4" />
-                ) : (
-                  <Bell className="h-4 w-4" />
+      {/* REMOVED: mx-auto max-w-6xl - using full width like Department page */}
+      <div className="w-full px-4 py-8 sm:px-6 lg:px-8">
+        {/* Responsive Grid Layout - matches Department page structure */}
+        <div className="flex flex-col gap-6 lg:flex-row">
+          {/* Left Column - Projects Section (like Teams section in Department page) */}
+          <div className="order-1 w-full lg:order-1 lg:w-1/5 lg:flex-shrink-0">
+            <div className="border-border bg-background z-10 mb-6 rounded-lg border p-4 lg:sticky lg:top-20">
+              <div className="mb-4 flex items-center gap-2">
+                <FolderKanban className="text-primary h-4 w-4" />
+                <h3 className="text-foreground text-sm font-semibold">Projects</h3>
+                {teamProjects.length > 0 && (
+                  <span className="bg-primary/10 text-primary ml-auto rounded-full px-2 py-0.5 text-xs font-semibold">
+                    {teamProjects.length}
+                  </span>
                 )}
-                {team.isFollowing ? 'Following' : 'Follow'}
-                {team.followerCount > 0 && (
-                  <span className="text-muted-foreground text-xs">({team.followerCount})</span>
-                )}
-              </button>
-
-              {showManageButton && (
-                <button
-                  onClick={() => setManageOpen(true)}
-                  className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-opacity hover:opacity-90"
-                >
-                  <Settings className="h-4 w-4" />
-                  Manage Team
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Posts Feed */}
-        <div className="space-y-6">
-          <CreatePost user={user} onPostCreate={handlePostCreate} />
-          <div className="space-y-6">
-            {posts.length === 0 ? (
-              <div className="py-12 text-center">
-                <div className="mb-4 text-6xl">📝</div>
-                <h2 className="text-foreground mb-2 text-xl font-semibold">No posts yet</h2>
-                <p className="text-muted-foreground">
-                  Be the first to share something with your team!
-                </p>
               </div>
-            ) : (
-              posts.map((post, index) => (
-                <div key={post.id} style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}>
-                  <PostCard
-                    post={post}
-                    currentUserId={user.id}
-                    onLike={handleLike}
-                    usersMap={usersMap}
-                  />
+
+              {teamProjects.length === 0 ? (
+                <div className="py-6 text-center">
+                  <FolderKanban className="text-muted-foreground/40 mx-auto mb-2 h-8 w-8" />
+                  <p className="text-muted-foreground text-xs">No projects assigned yet.</p>
                 </div>
-              ))
+              ) : (
+                <div className="space-y-2">
+                  {teamProjects.map((project) => (
+                    <ProjectSidebarCard key={project.id} project={project} />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Middle Column - Main Content (Team Header + Posts Feed) */}
+          <div className="order-2 w-full lg:order-2 lg:min-w-0 lg:flex-1">
+            {/* Team Header - Matches Department Header layout */}
+            <div className="bg-background mb-6">
+              {/* Back Button (optional - above the banner) */}
+              {teamDepartment && (
+                <Link
+                  href={`/department/${team.departmentId}`}
+                  className="text-muted-foreground hover:text-foreground mb-4 inline-flex items-center gap-2 text-sm transition-colors hover:underline"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to {teamDepartment.name}
+                </Link>
+              )}
+
+              {/* Cover Banner */}
+              <div className="relative mb-0 h-56 w-full overflow-hidden rounded-xl bg-gradient-to-br from-slate-400 to-slate-600">
+                {team.bannerUrl ? (
+                  <img
+                    src={team.bannerUrl}
+                    alt={team.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="h-full w-full bg-gradient-to-br from-slate-400 to-slate-600" />
+                )}
+                <div className="absolute inset-0 bg-black/20" />
+              </div>
+
+              {/* Team Header Info - Matches Department page structure */}
+              <div className="border-border border-b py-8">
+                <div className="px-4 sm:px-6 lg:px-8">
+                  <div className="flex flex-col gap-6 sm:flex-row sm:gap-8">
+                    {/* Avatar Section */}
+                    <div className="flex flex-shrink-0 justify-center sm:justify-start">
+                      <div className="bg-muted border-background flex h-32 w-32 items-center justify-center overflow-hidden rounded-full border-4 shadow-lg dark:border-slate-900">
+                        {team.avatarUrl ? (
+                          <img
+                            src={team.avatarUrl}
+                            alt={team.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <Users className="text-foreground h-16 w-16" />
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Info Section */}
+                    <div className="flex flex-1 flex-col justify-center gap-3">
+                      <div>
+                        <h1 className="text-foreground text-3xl font-bold">{team.name}</h1>
+                        {team.description && (
+                          <p className="text-muted-foreground mt-2 line-clamp-2 text-sm">
+                            {team.description}
+                          </p>
+                        )}
+                        {team.lead && (
+                          <p className="text-muted-foreground mt-2 text-xs">
+                            Led by{' '}
+                            <span className="text-foreground font-medium">
+                              {team.lead.firstName} {team.lead.lastName}
+                            </span>
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Action Buttons - Matches Department style */}
+                      <div className="flex flex-wrap items-center gap-2 pt-2">
+                        {/* Members button - styled like a button */}
+                        <button
+                          onClick={() => {
+                            const pub = teamDepartment?.membersPublic ?? true
+                            const isLead = user?.id === team.leadId
+                            const isDeptLeader =
+                              hasRole(user, 'DEPARTMENT_LEADER') &&
+                              userManagedDeptIds.includes(team.departmentId)
+                            const isCEO = hasRole(user, 'CEO')
+                            if (pub || isLead || isDeptLeader || isCEO) {
+                              setMembersOpen(true)
+                            }
+                          }}
+                          className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
+                            (teamDepartment?.membersPublic ?? true) ||
+                            user?.id === team.leadId ||
+                            hasRole(user, 'CEO') ||
+                            (hasRole(user, 'DEPARTMENT_LEADER') &&
+                              userManagedDeptIds.includes(team.departmentId))
+                              ? 'border-border text-foreground hover:bg-muted'
+                              : 'border-border/50 text-muted-foreground/50 cursor-not-allowed'
+                          }`}
+                          title={
+                            (teamDepartment?.membersPublic ?? true) ||
+                            user?.id === team.leadId ||
+                            hasRole(user, 'CEO') ||
+                            (hasRole(user, 'DEPARTMENT_LEADER') &&
+                              userManagedDeptIds.includes(team.departmentId))
+                              ? 'View members'
+                              : 'Member list is restricted to department members'
+                          }
+                        >
+                          <Users className="h-4 w-4" />
+                          <span>{team.memberCount} members</span>
+                          {!(teamDepartment?.membersPublic ?? true) &&
+                            !hasRole(user, 'CEO') &&
+                            user?.id !== team.leadId &&
+                            !(
+                              hasRole(user, 'DEPARTMENT_LEADER') &&
+                              userManagedDeptIds.includes(team.departmentId)
+                            ) && <Shield className="ml-0.5 h-3 w-3 opacity-60" />}
+                        </button>
+
+                        {/* Follow / Unfollow */}
+                        <button
+                          onClick={handleFollow}
+                          disabled={followLoading}
+                          className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all disabled:opacity-60 ${
+                            team.isFollowing
+                              ? 'border-primary bg-primary/5 text-primary hover:bg-primary/10'
+                              : 'border-border text-foreground hover:bg-muted'
+                          }`}
+                        >
+                          {followLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : team.isFollowing ? (
+                            <BellOff className="h-4 w-4" />
+                          ) : (
+                            <Bell className="h-4 w-4" />
+                          )}
+                          {team.isFollowing ? 'Following' : 'Follow'}
+                          {team.followerCount > 0 && (
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setShowFollowersModal(true)
+                              }}
+                              className="text-muted-foreground hover:text-primary cursor-pointer text-xs transition-colors"
+                            >
+                              ({team.followerCount})
+                            </span>
+                          )}
+                        </button>
+
+                        {/* Manage Team */}
+                        {showManageButton && (
+                          <button
+                            onClick={() => setManageOpen(true)}
+                            className="bg-primary text-primary-foreground flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-all hover:opacity-85"
+                          >
+                            <Settings className="h-4 w-4" />
+                            <span className="hidden sm:inline">Manage Team</span>
+                            <span className="sm:hidden">Manage</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Followers modal */}
+            <UsersModal
+              open={showFollowersModal}
+              onOpenChange={setShowFollowersModal}
+              title="Followers"
+              fetchUsers={async () => {
+                const users = await teamApi.getFollowers(teamId)
+                return users.map((u) => ({
+                  id: u.id,
+                  firstName: u.firstName,
+                  lastName: u.lastName,
+                  email: u.email,
+                  avatar: u.avatar,
+                  jobTitle: u.jobTitle,
+                }))
+              }}
+            />
+
+            {/* Create Post and Feed */}
+            <div className="space-y-6">
+              <CreatePost
+                user={user}
+                onPostCreate={handlePostCreate}
+                teamId={teamId}
+                isMember={isUserTeamMember}
+              />
+              <div className="space-y-6">
+                {posts.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <div className="mb-4 text-6xl">📝</div>
+                    <h2 className="text-foreground mb-2 text-xl font-semibold">No posts yet</h2>
+                    <p className="text-muted-foreground">
+                      Be the first to share something with your team!
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {posts.map((post, index) => (
+                      <div
+                        key={post.id}
+                        style={{ animation: `slide-up 0.3s ease-out ${index * 50}ms` }}
+                      >
+                        <PostCard
+                          post={post}
+                          currentUserId={user.id}
+                          usersMap={usersMap}
+                          onDelete={removePost}
+                          onUpdate={updatePost}
+                          currentLeadTeamId={team?.leadId === user.id ? team.id : null}
+                          currentManagedDeptId={null}
+                        />
+                      </div>
+                    ))}
+
+                    {/* Infinite scroll sentinel */}
+                    {hasMore && (
+                      <div ref={sentinelRef} className="flex justify-center py-6">
+                        {loadingMore && (
+                          <div className="flex items-center gap-2">
+                            <Loader2 size={18} className="text-muted-foreground animate-spin" />
+                            <span className="text-muted-foreground text-sm">
+                              Loading more posts…
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column - Pinned Posts */}
+          <div className="order-3 hidden lg:block lg:w-1/5 lg:flex-shrink-0">
+            {posts.filter((p) => p.isPinned).length > 0 && (
+              <div className="border-border bg-background sticky top-20 rounded-lg border p-4">
+                <div className="mb-4 flex items-center gap-2">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-primary"
+                  >
+                    <line x1="12" y1="17" x2="12" y2="22" />
+                    <path d="M5 17H19V13L21 8H3L5 13V17Z" />
+                    <line x1="12" y1="8" x2="12" y2="3" />
+                  </svg>
+                  <h3 className="text-foreground text-sm font-semibold">Pinned Posts</h3>
+                </div>
+                <div className="space-y-3">
+                  {posts
+                    .filter((p) => p.isPinned)
+                    .map((post) => {
+                      const author =
+                        usersMap[post.authorId] ?? (user?.id === post.authorId ? user : null)
+                      return (
+                        <div
+                          key={post.id}
+                          onClick={() => setViewPostId(post.id)}
+                          className="border-border hover:bg-muted/40 cursor-pointer rounded-lg border p-3 transition-colors"
+                        >
+                          <div className="mb-1.5 flex items-center gap-2">
+                            <div className="bg-muted h-6 w-6 flex-shrink-0 overflow-hidden rounded-full border">
+                              {author && 'avatar' in author && author.avatar ? (
+                                <img
+                                  src={author.avatar as string}
+                                  alt=""
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center">
+                                  <span className="text-muted-foreground text-[9px] font-bold">
+                                    {author ? (author.firstName?.[0] ?? '?').toUpperCase() : '?'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            <span className="text-foreground truncate text-xs font-medium">
+                              {author ? `${author.firstName} ${author.lastName}` : 'Unknown'}
+                            </span>
+                          </div>
+                          <p className="text-muted-foreground line-clamp-3 text-xs leading-relaxed">
+                            {post.content}
+                          </p>
+                          <p className="text-muted-foreground/60 mt-1.5 text-[10px]">
+                            {new Date(post.createdAt).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                            })}
+                          </p>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
             )}
           </div>
         </div>
       </div>
+
+      {viewPostId && <PostViewModal postId={viewPostId} onClose={() => setViewPostId(null)} />}
 
       {manageOpen && (
         <ManageTeamPanel

@@ -27,6 +27,7 @@ public class UserResponse {
     private String jobTitle;
     private String bio;
     private String avatar;
+    private String bannerUrl;
     private boolean isActive;
     private boolean mustChangePassword;
     private LocalDateTime lastLogin;

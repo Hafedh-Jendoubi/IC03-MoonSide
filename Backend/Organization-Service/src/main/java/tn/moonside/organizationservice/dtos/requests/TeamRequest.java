@@ -1,7 +1,6 @@
 package tn.moonside.organizationservice.dtos.requests;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import tn.moonside.organizationservice.enums.VisibilityType;
@@ -16,18 +15,15 @@ public class TeamRequest {
     @Size(max = 500, message = "Description must not exceed 500 characters")
     private String description;
 
-    @NotBlank(message = "Department ID is required")
+    /**
+     * Optional — a team does NOT need to belong to a department.
+     * Leave null or omit to create an independent team.
+     */
     private String departmentId;
 
-    /** User ID of the team lead — optional at creation. */
     private String leadId;
-
-    /** URL to the team avatar/logo — optional. */
     private String avatarUrl;
-
-    /** URL to the team banner — optional. */
     private String bannerUrl;
 
-    @NotNull(message = "Visibility is required")
     private VisibilityType teamVisibility = VisibilityType.PUBLIC;
 }

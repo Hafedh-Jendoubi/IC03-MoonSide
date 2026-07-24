@@ -11,6 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 import tn.moonside.userservice.dtos.requests.AssignRoleRequest;
 import tn.moonside.userservice.dtos.requests.InviteUserRequest;
 import tn.moonside.userservice.dtos.requests.UpdateAvatarRequest;
+import tn.moonside.userservice.dtos.requests.UpdateBannerRequest;
 import tn.moonside.userservice.dtos.requests.UpdateUserRequest;
 import tn.moonside.userservice.dtos.responses.ApiResponse;
 import tn.moonside.userservice.dtos.responses.BulkInviteResult;
@@ -30,21 +31,21 @@ public class UserController {
 
     /** List all users — requires USER_READ_ALL permission */
     @GetMapping
-    @RequiresPermission(AppPermission.USER_READ_ALL)
+    @RequiresPermission(AppPermission.USER_VIEW_ALL)
     public ResponseEntity<ApiResponse<List<UserResponse>>> getAllUsers() {
         return ResponseEntity.ok(ApiResponse.success(userService.getAllUsers()));
     }
 
     /** Read any user by ID — requires USER_READ permission */
     @GetMapping("/{id}")
-    @RequiresPermission(AppPermission.USER_READ)
+    @RequiresPermission(AppPermission.USER_VIEW)
     public ResponseEntity<ApiResponse<UserResponse>> getUserById(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserById(id)));
     }
 
     /** Read own profile — requires USER_READ_OWN permission */
     @GetMapping("/me")
-    @RequiresPermission(AppPermission.USER_READ_OWN)
+    @RequiresPermission(AppPermission.USER_VIEW_OWN)
     public ResponseEntity<ApiResponse<UserResponse>> getCurrentUser(
             @AuthenticationPrincipal UserDetails userDetails) {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserByEmail(userDetails.getUsername())));
@@ -52,7 +53,7 @@ public class UserController {
 
     /** Update own avatar — requires USER_UPDATE_OWN_AVATAR permission */
     @PatchMapping("/me/avatar")
-    @RequiresPermission(AppPermission.USER_UPDATE_OWN_AVATAR)
+    @RequiresPermission(AppPermission.USER_EDIT_OWN_AVATAR)
     public ResponseEntity<ApiResponse<UserResponse>> updateMyAvatar(
             @RequestBody UpdateAvatarRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -69,16 +70,35 @@ public class UserController {
         return ResponseEntity.ok(ApiResponse.success(updated, "Avatar removed successfully"));
     }
 
+    /** Update own profile banner — requires USER_EDIT_OWN_BANNER permission */
+    @PatchMapping("/me/banner")
+    @RequiresPermission(AppPermission.USER_EDIT_OWN_BANNER)
+    public ResponseEntity<ApiResponse<UserResponse>> updateMyBanner(
+            @RequestBody UpdateBannerRequest request,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        UserResponse updated = userService.updateBanner(userDetails.getUsername(), request.getBannerUrl());
+        return ResponseEntity.ok(ApiResponse.success(updated, "Banner updated successfully"));
+    }
+
+    /** Delete own profile banner — requires USER_DELETE_OWN_BANNER permission */
+    @DeleteMapping("/me/banner")
+    @RequiresPermission(AppPermission.USER_DELETE_OWN_BANNER)
+    public ResponseEntity<ApiResponse<UserResponse>> deleteMyBanner(
+            @AuthenticationPrincipal UserDetails userDetails) {
+        UserResponse updated = userService.updateBanner(userDetails.getUsername(), null);
+        return ResponseEntity.ok(ApiResponse.success(updated, "Banner removed successfully"));
+    }
+
     /** Get a user's roles — requires USER_READ_ROLES permission */
     @GetMapping("/{id}/roles")
-    @RequiresPermission(AppPermission.USER_READ_ROLES)
+    @RequiresPermission(AppPermission.USER_VIEW_ROLES)
     public ResponseEntity<ApiResponse<List<String>>> getUserRoles(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(userService.getUserRoleNames(id)));
     }
 
     /** Update own profile — requires USER_UPDATE_OWN permission */
     @PutMapping("/me")
-    @RequiresPermission(AppPermission.USER_UPDATE_OWN)
+    @RequiresPermission(AppPermission.USER_EDIT_OWN)
     public ResponseEntity<ApiResponse<UserResponse>> updateMyProfile(
             @RequestBody UpdateUserRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
@@ -89,7 +109,7 @@ public class UserController {
 
     /** Update any user — requires USER_UPDATE permission */
     @PutMapping("/{id}")
-    @RequiresPermission(AppPermission.USER_UPDATE)
+    @RequiresPermission(AppPermission.USER_EDIT_ANY)
     public ResponseEntity<ApiResponse<UserResponse>> updateUser(
             @PathVariable String id,
             @RequestBody UpdateUserRequest request,
@@ -100,7 +120,7 @@ public class UserController {
 
     /** Delete a user — requires USER_DELETE permission */
     @DeleteMapping("/{id}")
-    @RequiresPermission(AppPermission.USER_DELETE)
+    @RequiresPermission(AppPermission.USER_DELETE_ANY)
     public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable String id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(ApiResponse.success(null, "User deleted successfully"));
@@ -189,9 +209,16 @@ public class UserController {
     }
 
     /**
-     * Internal endpoint — called by other microservices to revoke a role from a user.
+     * Internal endpoint — mention autocomplete. Returns up to 10 users whose
+     * first or last name starts with the given query string.
+     * Only requires a valid JWT; no special permission needed.
      */
-    @DeleteMapping("/internal/{userId}/roles/{roleName}")
+    @GetMapping("/internal/search")
+    public ResponseEntity<ApiResponse<List<UserResponse>>> searchUsers(
+            @RequestParam("q") String query) {
+        return ResponseEntity.ok(ApiResponse.success(userService.searchByName(query)));
+    }
+
     public ResponseEntity<ApiResponse<Void>> revokeRoleByNameInternal(
             @PathVariable String userId,
             @PathVariable String roleName) {

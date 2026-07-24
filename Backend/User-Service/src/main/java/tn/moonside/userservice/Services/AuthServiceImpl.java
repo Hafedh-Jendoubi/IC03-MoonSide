@@ -11,12 +11,17 @@ import tn.moonside.userservice.repositories.RoleRepository;
 import tn.moonside.userservice.repositories.UserRepository;
 import tn.moonside.userservice.repositories.UserRoleRepository;
 import tn.moonside.userservice.security.JwtService;
+import tn.moonside.userservice.event.UserActivityEvent;
+import tn.moonside.userservice.kafka.UserActivityEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Base32;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import tn.moonside.userservice.email.EmailTemplates;
+
+import jakarta.mail.internet.MimeMessage;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -33,6 +38,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Random;
@@ -52,6 +58,9 @@ public class AuthServiceImpl implements AuthService {
     private final UserDetailsService userDetailsService;
     private final JavaMailSender mailSender;
     private final AuditLogService auditLogService;
+    // ── Redis OTP service (replaces OTP fields on the User document) ──────────
+    private final OtpRedisService otpRedisService;
+    private final UserActivityEventPublisher userActivityPublisher;
 
     @Value("${app.name:WorkSphere}")
     private String appName;
@@ -72,6 +81,9 @@ public class AuthServiceImpl implements AuthService {
             throw new DuplicateResourceException("Email already registered: " + request.getEmail());
         }
         String otp = generateNumericOtp(6);
+        // OTP stored in Redis (15-min TTL), not in the User document
+        otpRedisService.storeEmailVerificationOtp(request.getEmail(), otp);
+
         User user = User.builder()
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
@@ -84,8 +96,6 @@ public class AuthServiceImpl implements AuthService {
                 .avatar(request.getAvatar())
                 .isActive(true)
                 .emailVerified(false)
-                .emailVerificationOtp(otp)
-                .emailVerificationOtpExpiry(LocalDateTime.now().plusMinutes(15))
                 .build();
         User saved = userRepository.save(user);
         log.info("Registered new user: {}", saved.getEmail());
@@ -120,28 +130,30 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("No account found for: " + request.getEmail()));
         if (user.isEmailVerified()) return;
-        if (user.getEmailVerificationOtp() == null || user.getEmailVerificationOtpExpiry() == null) {
+
+        // Validate OTP from Redis (auto-expires, auto-consumed on success)
+        if (!otpRedisService.emailOtpExists(request.getEmail())) {
             auditLogService.log(user.getId(), user.getId(), "USER",
                     "EMAIL_VERIFY_FAILURE", "No OTP on record for " + request.getEmail(), false, null, null, null);
             throw new UnauthorizedException("No verification OTP found. Please request a new one.");
         }
-        if (LocalDateTime.now().isAfter(user.getEmailVerificationOtpExpiry())) {
-            auditLogService.log(user.getId(), user.getId(), "USER",
-                    "EMAIL_VERIFY_FAILURE", "OTP expired for " + request.getEmail(), false, null, null, null);
-            throw new UnauthorizedException("OTP has expired. Please request a new one.");
-        }
-        if (!user.getEmailVerificationOtp().equals(request.getOtp())) {
+        if (!otpRedisService.verifyAndConsumeEmailOtp(request.getEmail(), request.getOtp())) {
             auditLogService.log(user.getId(), user.getId(), "USER",
                     "EMAIL_VERIFY_FAILURE", "Invalid OTP for " + request.getEmail(), false, null, null, null);
-            throw new UnauthorizedException("Invalid OTP.");
+            throw new UnauthorizedException("Invalid or expired OTP.");
         }
+
         user.setEmailVerified(true);
-        user.setEmailVerificationOtp(null);
-        user.setEmailVerificationOtpExpiry(null);
         userRepository.save(user);
         log.info("Email verified for {}", user.getEmail());
         auditLogService.log(user.getId(), user.getId(), "USER",
                 "EMAIL_VERIFY_SUCCESS", "Email verified for " + user.getEmail(), true, null, null, null);
+
+        // Publish badge-relevant activity event
+        userActivityPublisher.publish(UserActivityEvent.builder()
+                .userId(user.getId())
+                .activityType("EMAIL_VERIFIED")
+                .build());
     }
 
     @Override
@@ -151,9 +163,8 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("No account found for: " + email));
         if (user.isEmailVerified()) return;
         String otp = generateNumericOtp(6);
-        user.setEmailVerificationOtp(otp);
-        user.setEmailVerificationOtpExpiry(LocalDateTime.now().plusMinutes(15));
-        userRepository.save(user);
+        // Overwrite in Redis — replaces any previous OTP, resets TTL
+        otpRedisService.storeEmailVerificationOtp(email, otp);
         sendEmailVerificationOtpEmail(user.getEmail(), user.getFirstName(), otp);
         log.info("Resent email verification OTP to {}", email);
     }
@@ -185,8 +196,30 @@ public class AuthServiceImpl implements AuthService {
         }
 
         user.setLastLogin(LocalDateTime.now());
+
+        // ── Update login streak ──────────────────────────────────────────────
+        LocalDate today = LocalDate.now();
+        LocalDate lastDate = user.getLastLoginDate();
+        if (lastDate == null || lastDate.isBefore(today.minusDays(1))) {
+            user.setLoginStreak(1);
+        } else if (lastDate.isEqual(today.minusDays(1))) {
+            user.setLoginStreak(user.getLoginStreak() + 1);
+        }
+        // same-day re-login: streak unchanged
+        if (user.getLoginStreak() > user.getLongestLoginStreak()) {
+            user.setLongestLoginStreak(user.getLoginStreak());
+        }
+        user.setLastLoginDate(today);
+
         userRepository.save(user);
         log.info("User logged in: {}", user.getEmail());
+
+        // Publish badge-relevant activity event
+        userActivityPublisher.publish(UserActivityEvent.builder()
+                .userId(user.getId())
+                .activityType("LOGIN_STREAK")
+                .value(user.getLongestLoginStreak())
+                .build());
 
         if (user.isTwoFactorEnabled()) {
             auditLogService.log(user.getId(), user.getId(), "USER",
@@ -240,9 +273,8 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new ResourceNotFoundException("No account found for: " + request.getEmail()));
 
         String otp = generateNumericOtp(6);
-        user.setPasswordResetOtp(otp);
-        user.setPasswordResetOtpExpiry(LocalDateTime.now().plusMinutes(15));
-        userRepository.save(user);
+        // Store OTP in Redis (15-min TTL) — no longer written to the User document
+        otpRedisService.storePasswordResetOtp(user.getEmail(), otp);
 
         sendOtpEmail(user.getEmail(), user.getFirstName(), otp);
         log.info("Password reset OTP sent to {}", user.getEmail());
@@ -254,9 +286,14 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void verifyPasswordResetOtp(VerifyOtpRequest request) {
-        User user = userRepository.findByEmail(request.getEmail())
+        userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("No account found"));
-        validateResetOtp(user, request.getOtp());
+        if (!otpRedisService.passwordResetOtpExists(request.getEmail())) {
+            throw new UnauthorizedException("No OTP requested for this account");
+        }
+        if (!otpRedisService.peekPasswordResetOtp(request.getEmail(), request.getOtp())) {
+            throw new UnauthorizedException("Invalid or expired OTP");
+        }
     }
 
     // ─── Password Reset: Step 3 — set new password ───────────────────────────
@@ -266,11 +303,12 @@ public class AuthServiceImpl implements AuthService {
     public void resetPassword(ResetPasswordRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("No account found"));
-        validateResetOtp(user, request.getOtp());
+
+        if (!otpRedisService.verifyAndConsumePasswordResetOtp(request.getEmail(), request.getOtp())) {
+            throw new UnauthorizedException("Invalid or expired OTP");
+        }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        user.setPasswordResetOtp(null);
-        user.setPasswordResetOtpExpiry(null);
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
         log.info("Password reset for {}", user.getEmail());
@@ -387,18 +425,6 @@ public class AuthServiceImpl implements AuthService {
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    private void validateResetOtp(User user, String otp) {
-        if (user.getPasswordResetOtp() == null || user.getPasswordResetOtpExpiry() == null) {
-            throw new UnauthorizedException("No OTP requested for this account");
-        }
-        if (LocalDateTime.now().isAfter(user.getPasswordResetOtpExpiry())) {
-            throw new UnauthorizedException("OTP has expired. Please request a new one.");
-        }
-        if (!user.getPasswordResetOtp().equals(otp)) {
-            throw new UnauthorizedException("Invalid OTP");
-        }
-    }
-
     private List<String> resolveRoleNames(String userId) {
         return userRoleRepository.findByUserIdFlexible(userId).stream()
                 .map(ur -> findRoleById(ur.getRoleId()))
@@ -447,35 +473,48 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private void sendEmailVerificationOtpEmail(String to, String name, String otp) {
-        SimpleMailMessage msg = new SimpleMailMessage();
-        msg.setFrom(mailFrom);
-        msg.setTo(to);
-        msg.setSubject(appName + " — Verify your email address");
-        msg.setText(
+        String html = EmailTemplates.verifyEmail(appName, name, otp, 15);
+        String textFallback =
             "Hi " + name + ",\n\n" +
             "Welcome to " + appName + "! Please verify your email address by entering the code below:\n\n" +
             "  " + otp + "\n\n" +
             "This code expires in 15 minutes.\n\n" +
             "If you did not create an account, you can safely ignore this email.\n\n" +
-            "— The " + appName + " Team"
-        );
-        mailSender.send(msg);
+            "— The " + appName + " Team";
+
+        sendHtmlEmail(to, appName + " — Verify your email address", textFallback, html);
     }
 
     private void sendOtpEmail(String to, String name, String otp) {
-        SimpleMailMessage msg = new SimpleMailMessage();
-        msg.setFrom(mailFrom);
-        msg.setTo(to);
-        msg.setSubject(appName + " — Password Reset Code");
-        msg.setText(
+        String html = EmailTemplates.resetPasswordEmail(appName, name, otp, 15);
+        String textFallback =
             "Hi " + name + ",\n\n" +
             "Your password reset code is:\n\n" +
             "  " + otp + "\n\n" +
             "This code expires in 15 minutes.\n\n" +
             "If you did not request a password reset, please ignore this email.\n\n" +
-            "— The " + appName + " Team"
-        );
-        mailSender.send(msg);
+            "— The " + appName + " Team";
+
+        sendHtmlEmail(to, appName + " — Password Reset Code", textFallback, html);
+    }
+
+    /**
+     * Sends a multipart/alternative email: an HTML version for modern clients
+     * with a plain-text fallback for clients that don't render HTML.
+     */
+    private void sendHtmlEmail(String to, String subject, String textFallback, String html) {
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setFrom(mailFrom);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(textFallback, html);
+            mailSender.send(mimeMessage);
+        } catch (Exception e) {
+            log.error("Failed to send email to {}: {}", to, e.getMessage(), e);
+            throw new RuntimeException("Failed to send email", e);
+        }
     }
 
     private String generateTotpSecret() {

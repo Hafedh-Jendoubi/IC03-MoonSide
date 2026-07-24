@@ -33,16 +33,7 @@ export const PERM = {
 // Matches the backend UserResponse DTO from User-Service
 export interface User {
   id: string
-  /**
-   * Role names from the UserRole join table.
-   * e.g. ["EMPLOYEE", "TEAM_LEADER"]
-   */
   roles: string[]
-  /**
-   * Flat list of permission action strings derived from all the user's roles.
-   * Populated when the backend UserResponse includes a `permissions` field,
-   * or computed client-side via the auth context.
-   */
   permissions?: string[]
   email: string
   firstName: string
@@ -52,6 +43,7 @@ export interface User {
   jobTitle: string | null
   bio: string | null
   avatar: string | null
+  bannerUrl: string | null
   active: boolean
   mustChangePassword: boolean
   lastLogin: string | null
@@ -70,10 +62,6 @@ export function hasRole(user: User | null | undefined, role: string): boolean {
   return user.roles.some((r) => r.toLowerCase() === role.toLowerCase())
 }
 
-/**
- * Returns true when the user holds the given permission.
- * CEO users with ANYTHING automatically pass every check.
- */
 export function hasPermission(user: User | null | undefined, permission: string): boolean {
   if (!user) return false
   const perms = user.permissions ?? []
@@ -81,10 +69,6 @@ export function hasPermission(user: User | null | undefined, permission: string)
   return perms.includes(permission)
 }
 
-/**
- * Returns true when the user holds AT LEAST ONE of the given permissions.
- * CEO (ANYTHING) automatically passes.
- */
 export function hasAnyPermission(user: User | null | undefined, ...permissions: string[]): boolean {
   if (!user) return false
   const perms = user.permissions ?? []
@@ -92,19 +76,11 @@ export function hasAnyPermission(user: User | null | undefined, ...permissions: 
   return permissions.some((p) => perms.includes(p))
 }
 
-/**
- * Returns true when the user can access the back-office area.
- * Granted to HUMAN_RESOURCES (limited) and CEO (full).
- */
 export function canAccessBackOffice(user: User | null | undefined): boolean {
   if (!user) return false
   return hasRole(user, ROLE.CEO) || hasRole(user, ROLE.HUMAN_RESOURCES)
 }
 
-/**
- * Returns true when the user has full back-office access (all sidebar items).
- * CEO only.
- */
 export function hasFullBackOfficeAccess(user: User | null | undefined): boolean {
   return hasRole(user, ROLE.CEO)
 }
@@ -114,31 +90,108 @@ export function isAdmin(user: User | null | undefined): boolean {
   return hasRole(user, ROLE.CEO)
 }
 
-// Post types — kept for future post service integration
+// ─── Post Service types (mirrors backend PostResponse / CommentResponse) ──────
+
+export type PostType =
+  | 'ANNOUNCEMENT'
+  | 'UPDATE'
+  | 'QUESTION'
+  | 'DISCUSSION'
+  | 'EVENT'
+  | 'ACHIEVEMENT'
+  | 'SURVEY'
+
+/**
+ * Visibility values that can appear on a PostResponse from the server.
+ * TEAM_ONLY and DEPARTMENT_ONLY are set automatically by the server when a
+ * post is created inside a team / department feed — clients never submit them.
+ */
+export type PostVisibility = 'PUBLIC' | 'PRIVATE' | 'TEAM_ONLY' | 'DEPARTMENT_ONLY' | 'DRAFT'
+
+/** The subset of PostVisibility values a client may submit when creating / editing a post. */
+export type ClientPostVisibility = 'PUBLIC' | 'PRIVATE'
+
 export interface Post {
   id: string
   authorId: string
+  teamId: string | null
+  departmentId: string | null
+  updatedBy: string | null
   content: string
-  timestamp: Date
-  likes: string[]
-  comments: Comment[]
+  postType: PostType
+  postVisibility: PostVisibility
+  isPinned: boolean
+  isAIGenerated: boolean
+  viewCount: number
+  commentCount: number
+  reactionCount: number
+  attachments: Attachment[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Attachment {
+  id: string
+  url: string
+  fileName: string
+  fileType: string
+  fileSize: number
 }
 
 export interface Comment {
   id: string
   authorId: string
+  postId: string
   content: string
-  timestamp: Date
-  likes: string[]
+  postVisibility: PostVisibility
+  isPinned: boolean
+  isEdited: boolean
+  parentId: string | null
+  reactionCount: number
+  replyCount: number
+  createdAt: string
+  updatedAt: string
 }
+
+export interface ReactionSummary {
+  total: number
+  byEmoji: Record<string, number>
+  userReactionCode: string | null
+}
+
+export type NotificationType =
+  | 'MENTION'
+  | 'COMMENT'
+  | 'REACTION'
+  | 'FOLLOW'
+  | 'BADGE_EARNED'
+  | 'ANNOUNCEMENT'
+  | 'POST_PINNED'
+  | 'CONNECTION_REQUEST'
+  | 'CONNECTION_ACCEPTED'
 
 export interface Notification {
   id: string
-  userId: string
-  type: 'like' | 'comment' | 'mention'
-  message: string
-  read: boolean
-  timestamp: Date
+  recipientId: string
+  senderId: string
+  notificationType: NotificationType
+  title: string
+  body: string
+  resourceId?: string
+  resourceType?: string
+  isRead: boolean
+  createdAt: string
+  readAt?: string
+}
+
+export interface NotificationPreferences {
+  badgeEarnedNotifications: boolean
+  mentionNotifications: boolean
+  commentNotifications: boolean
+  reactionNotifications: boolean
+  followNotifications: boolean
+  connectionNotifications: boolean
+  announcementNotifications: boolean
 }
 
 export interface Message {

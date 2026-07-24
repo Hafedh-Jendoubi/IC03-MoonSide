@@ -1,0 +1,184 @@
+package tn.moonside.postservice.controllers;
+
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.*;
+import tn.moonside.postservice.clients.UserClient;
+import tn.moonside.postservice.clients.UserSummary;
+import tn.moonside.postservice.dtos.requests.PostRequest;
+import tn.moonside.postservice.dtos.responses.ApiResponse;
+import tn.moonside.postservice.dtos.responses.PagedResponse;
+import tn.moonside.postservice.dtos.responses.PostResponse;
+import tn.moonside.postservice.services.PostService;
+
+import java.util.Collections;
+import java.util.List;
+
+@RestController
+@RequestMapping("/posts")
+@RequiredArgsConstructor
+public class PostController {
+
+    private final PostService postService;
+    private final UserClient userClient;
+
+    @PostMapping
+    public ResponseEntity<ApiResponse<PostResponse>> createPost(
+            @Valid @RequestBody PostRequest req,
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success(postService.createPost(req, userId), "Post created"));
+    }
+
+    @GetMapping("/{postId}")
+    public ResponseEntity<ApiResponse<PostResponse>> getPost(@PathVariable String postId) {
+        postService.recordView(postId);
+        return ResponseEntity.ok(ApiResponse.success(postService.getById(postId)));
+    }
+
+    /**
+     * GET /posts/feed
+     * Global public feed — returns all PUBLIC posts, newest first.
+     * Not personalised; no authentication required beyond gateway filtering.
+     */
+    @GetMapping("/feed")
+    public ResponseEntity<ApiResponse<PagedResponse<PostResponse>>> getFeed(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(postService.getPublicFeed(page, size)));
+    }
+
+    /**
+     * GET /posts/feed/following
+     *
+     * Personalised feed for the authenticated user.
+     * Returns posts from the departments and teams the user follows,
+     * ordered by newest first.
+     *
+     * Visibility rules applied server-side:
+     *  - PUBLIC posts in a followed dept/team  → included
+     *  - DEPARTMENT_ONLY posts                 → included (user follows that dept)
+     *  - TEAM_ONLY posts                       → included (user follows that team)
+     *  - PRIVATE posts                         → never included
+     *
+     * Returns an empty page (not an error) when the user follows nothing.
+     */
+    @GetMapping("/feed/following")
+    public ResponseEntity<ApiResponse<Page<PostResponse>>> getFollowingFeed(
+            @AuthenticationPrincipal String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(
+                ApiResponse.success(postService.getFollowingFeed(userId, page, size)));
+    }
+
+    /**
+     * GET /posts/feed/connections
+     *
+     * Feed of what the authenticated user's accepted connections have posted,
+     * commented on, or reacted to — newest first. Empty page when the user
+     * has no connections yet.
+     */
+    @GetMapping("/feed/connections")
+    public ResponseEntity<ApiResponse<Page<PostResponse>>> getConnectionsFeed(
+            @AuthenticationPrincipal String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(
+                ApiResponse.success(postService.getConnectionsFeed(userId, page, size)));
+    }
+
+    /**
+     * GET /posts/feed/personalized
+     *
+     * The single home-feed: posts from followed/joined departments and teams,
+     * plus posts from accepted connections, plus the viewer's own posts —
+     * merged and sorted newest-first. This is what the main Feed page should
+     * call so a post in a followed department/team and a connection's post
+     * both show up together, correctly paginated.
+     */
+    @GetMapping("/feed/personalized")
+    public ResponseEntity<ApiResponse<Page<PostResponse>>> getPersonalizedFeed(
+            @AuthenticationPrincipal String userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(
+                ApiResponse.success(postService.getPersonalizedFeed(userId, page, size)));
+    }
+
+    @GetMapping("/author/{authorId}")
+    public ResponseEntity<ApiResponse<Page<PostResponse>>> getByAuthor(
+            @PathVariable String authorId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(postService.getByAuthor(authorId, page, size)));
+    }
+
+    @GetMapping("/team/{teamId}")
+    public ResponseEntity<ApiResponse<Page<PostResponse>>> getByTeam(
+            @PathVariable String teamId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(postService.getByTeam(teamId, page, size)));
+    }
+
+    @GetMapping("/department/{departmentId}")
+    public ResponseEntity<ApiResponse<Page<PostResponse>>> getByDepartment(
+            @PathVariable String departmentId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponse.success(postService.getByDepartment(departmentId, page, size)));
+    }
+
+    @PutMapping("/{postId}")
+    public ResponseEntity<ApiResponse<PostResponse>> updatePost(
+            @PathVariable String postId,
+            @Valid @RequestBody PostRequest req,
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                postService.updatePost(postId, req, userId, extractRoles())));
+    }
+
+    @PatchMapping("/{postId}/pin")
+    public ResponseEntity<ApiResponse<PostResponse>> togglePin(
+            @PathVariable String postId,
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                postService.togglePin(postId, userId, extractRoles()), "Post pin status updated"));
+    }
+
+    @DeleteMapping("/{postId}")
+    public ResponseEntity<ApiResponse<Void>> deletePost(
+            @PathVariable String postId,
+            @AuthenticationPrincipal String userId) {
+        postService.deletePost(postId, userId, extractRoles());
+        return ResponseEntity.ok(ApiResponse.success(null, "Post deleted"));
+    }
+
+    /**
+     * GET /posts/mentions/search?q=john
+     * Proxies user search to User-Service for the mention autocomplete dropdown.
+     * Returns up to 10 users whose first or last name starts with the query.
+     */
+    @GetMapping("/mentions/search")
+    public ResponseEntity<ApiResponse<List<UserSummary>>> searchMentions(
+            @RequestParam("q") String query) {
+        return ResponseEntity.ok(ApiResponse.success(userClient.searchByName(query)));
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+
+    private List<String> extractRoles() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return Collections.emptyList();
+        return auth.getAuthorities().stream()
+                .map(a -> a.getAuthority().replace("ROLE_", ""))
+                .toList();
+    }
+}

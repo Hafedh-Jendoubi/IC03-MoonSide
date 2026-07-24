@@ -12,9 +12,9 @@ public class GatewayConfig {
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
 
-                // User Service: User, UserRole, UserTeam, Role, Permission, PermissionRole, AuditLog
+                // User Service: User, UserRole, UserTeam, Role, Permission, PermissionRole, AuditLog, Connections
                 .route("user-service", r -> r
-                        .path("/users/**", "/auth/**", "/roles/**", "/permissions/**", "/audit-logs/**")
+                        .path("/users/**", "/auth/**", "/roles/**", "/permissions/**", "/audit-logs/**", "/connections/**")
                         .uri("lb://USER-SERVICE"))
 
                 // Organization Service: Department, Team
@@ -34,18 +34,30 @@ public class GatewayConfig {
 
                 // Notification Service: Notification
                 .route("notification-service", r -> r
-                        .path("/notifications/**")
+                        .path("/api/notifications/**")
+                        .filters(f -> f.dedupeResponseHeader("Access-Control-Allow-Origin Access-Control-Allow-Credentials", "RETAIN_FIRST"))
                         .uri("lb://NOTIFICATION-SERVICE"))
 
                 // Badge Service: Badge, UserBadge, AuditLog
                 .route("badge-service", r -> r
                         .path("/badges/**")
+                        .filters(f -> f.dedupeResponseHeader("Access-Control-Allow-Origin Access-Control-Allow-Credentials", "RETAIN_FIRST"))
                         .uri("lb://BADGE-SERVICE"))
 
                 // Media Service: file uploads, avatar storage
                 .route("media-service", r -> r
                         .path("/media/**")
                         .uri("lb://MEDIA-SERVICE"))
+
+                // Search Service: global search across users, posts, teams (Elasticsearch)
+                .route("search-service", r -> r
+                        .path("/search/**")
+                        .uri("lb://SEARCH-SERVICE"))
+
+                // AI Service: grammar fixing, rewriting, paragraph generation, comment suggestions
+                .route("ai-service", r -> r
+                        .path("/ai/**")
+                        .uri("lb://AI-SERVICE"))
 
                 .build();
     }

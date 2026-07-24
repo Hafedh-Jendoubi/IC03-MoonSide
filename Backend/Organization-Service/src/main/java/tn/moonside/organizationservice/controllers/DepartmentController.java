@@ -28,13 +28,15 @@ public class DepartmentController {
     // ── Public / authenticated reads ─────────────────────────────────────────
 
     @GetMapping
-    public ResponseEntity<ApiResponse<List<DepartmentResponse>>> getAllDepartments() {
-        return ResponseEntity.ok(ApiResponse.success(departmentService.getAllDepartments()));
+    public ResponseEntity<ApiResponse<List<DepartmentResponse>>> getAllDepartments(
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.success(departmentService.getAllDepartments(userId)));
     }
 
     @GetMapping("/active")
-    public ResponseEntity<ApiResponse<List<DepartmentResponse>>> getActiveDepartments() {
-        return ResponseEntity.ok(ApiResponse.success(departmentService.getActiveDepartments()));
+    public ResponseEntity<ApiResponse<List<DepartmentResponse>>> getActiveDepartments(
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.success(departmentService.getActiveDepartments(userId)));
     }
 
     @GetMapping("/{id}")
@@ -139,6 +141,16 @@ public class DepartmentController {
     }
 
     // ── Follow / Unfollow ─────────────────────────────────────────────────────
+
+    /**
+     * GET /organizations/departments/{id}/followers
+     * Returns the list of users following this department.
+     */
+    @GetMapping("/{id}/followers")
+    public ResponseEntity<ApiResponse<List<tn.moonside.organizationservice.dtos.responses.UserSummary>>> getDepartmentFollowers(
+            @PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.success(departmentService.getDepartmentFollowers(id)));
+    }
 
     /**
      * POST /organizations/departments/{id}/follow

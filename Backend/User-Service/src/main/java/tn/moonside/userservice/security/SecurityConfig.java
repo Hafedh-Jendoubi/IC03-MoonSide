@@ -24,6 +24,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  * Strategy
  * ─────────
  * • Public /auth/* endpoints are permitted without a token.
+ * • /audit-logs/internal is permitted without a token so that other
+ *   microservices (post-service, organization-service, …) can push audit
+ *   events even when the original request context is unavailable to forward
+ *   the user's Bearer token (e.g. async calls, scheduled jobs).
  * • Every other endpoint requires a valid JWT (authenticated()).
  * • Fine-grained per-endpoint permission checks are NOT done here.
  *   They are enforced by {@link PermissionAuthorizationFilter}, which runs
@@ -63,7 +67,15 @@ public class SecurityConfig {
                 ).permitAll()
 
                 // ── Actuator ────────────────────────────────────────────────
-                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/info", "/actuator/prometheus").permitAll()
+
+                // ── Internal inter-service audit ingestion ──────────────────
+                // Called by organization-service, post-service, and any future
+                // microservice. Permit without a JWT so async / scheduled
+                // callers that have no active servlet context can still push
+                // audit events. The endpoint only writes to the audit_logs
+                // collection and has no privileged read access.
+                .requestMatchers(HttpMethod.POST, "/audit-logs/internal").permitAll()
 
                 // ── Everything else requires a valid JWT ────────────────────
                 // Fine-grained permission checks are handled by

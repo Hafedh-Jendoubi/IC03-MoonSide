@@ -1,155 +1,1428 @@
 'use client'
 
-import { useState } from 'react'
-import { Post, User, getFullName } from '@/lib/types'
-import { Heart, MessageCircle, Share2 } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import Link from 'next/link'
+import {
+  PostResponse,
+  AttachmentResponse,
+  CommentResponse,
+  SurveyResponse,
+  commentApi,
+  reactionApi,
+  userApi,
+  postApi,
+  attachmentApi,
+  surveyApi,
+  savedPostApi,
+} from '@/lib/api'
+import { User, getFullName, PostType, ROLE } from '@/lib/types'
+import {
+  Heart,
+  ThumbsUp,
+  MessageCircle,
+  Share2,
+  MoreHorizontal,
+  Trash2,
+  Pin,
+  Bookmark,
+  BookmarkCheck,
+  ChevronDown,
+  ChevronUp,
+  Send,
+  Pencil,
+  X,
+  Check,
+  CornerDownRight,
+  BarChart2,
+  Users,
+  CheckCircle2,
+  Sparkles,
+  Loader2,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useAuth } from '@/lib/auth-context'
+import { UsersModal, ModalUser } from '@/components/users-modal'
+import { AttachmentGallery } from '@/components/attachment-gallery'
+import { EditPostModal } from '@/components/edit-post-modal'
+import { MentionTextarea } from '@/components/mention-textarea'
+import { renderMentions } from '@/lib/render-mentions'
 
-interface PostCardProps {
-  post: Post
-  currentUserId: string
-  onLike: (postId: string) => void
-  usersMap: Record<string, User>
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const POST_TYPE_STYLES: Record<PostType, { label: string; color: string }> = {
+  DISCUSSION: {
+    label: 'Discussion',
+    color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+  },
+  ANNOUNCEMENT: {
+    label: 'Announcement',
+    color: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+  },
+  UPDATE: {
+    label: 'Update',
+    color: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  },
+  QUESTION: {
+    label: 'Question',
+    color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
+  },
+  EVENT: {
+    label: 'Event',
+    color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
+  },
+  ACHIEVEMENT: {
+    label: 'Achievement',
+    color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
+  },
+  SURVEY: {
+    label: 'Survey',
+    color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',
+  },
 }
 
-export function PostCard({ post, currentUserId, onLike, usersMap }: PostCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const author = usersMap[post.authorId]
-  const hasLiked = post.likes.includes(currentUserId)
+// ── SurveyPanel ───────────────────────────────────────────────────────────────
 
-  const formatTime = (date: Date | string) => {
-    const d = date instanceof Date ? date : new Date(date)
-    const now = new Date()
-    const diffMs = now.getTime() - d.getTime()
-    const diffMins = Math.floor(diffMs / 60000)
-    const diffHours = Math.floor(diffMs / 3600000)
-    const diffDays = Math.floor(diffMs / 86400000)
+function SurveyPanel({ postId, initialSurvey }: { postId: string; initialSurvey: SurveyResponse }) {
+  const [survey, setSurvey] = useState<SurveyResponse>(initialSurvey)
+  const [voting, setVoting] = useState<string | null>(null) // optionId being voted
+  const [error, setError] = useState<string | null>(null)
 
-    if (diffMins < 1) return 'just now'
-    if (diffMins < 60) return `${diffMins}m ago`
-    if (diffHours < 24) return `${diffHours}h ago`
-    return `${diffDays}d ago`
+  const hasVoted = !!survey.userVotedOptionId
+  const isClosed = !survey.surveyOpen
+
+  const handleVote = async (optionId: string) => {
+    if (voting || isClosed) return
+    setVoting(optionId)
+    setError(null)
+    try {
+      const updated = await surveyApi.vote(postId, { optionId })
+      setSurvey(updated)
+    } catch (e: any) {
+      console.error('Vote failed:', e)
+      setError('Could not record your vote. Please try again.')
+    } finally {
+      setVoting(null)
+    }
   }
 
-  const AuthorAvatar = ({ user, size = 'md' }: { user: User; size?: 'sm' | 'md' }) => {
-    const sizeClass = size === 'sm' ? 'h-8 w-8 text-xs' : 'h-12 w-12 text-sm'
-    const name = getFullName(user)
-    return user.avatar ? (
-      <img src={user.avatar} alt={name} className={`${sizeClass} rounded-full object-cover`} />
-    ) : (
-      <div
-        className={`${sizeClass} bg-primary/10 text-primary flex flex-shrink-0 items-center justify-center rounded-full font-bold`}
-      >
-        {user.firstName?.[0]?.toUpperCase()}
-        {user.lastName?.[0]?.toUpperCase()}
-      </div>
-    )
-  }
-
-  // Author not yet in map (still loading) — show skeleton
-  if (!author) {
-    return (
-      <div className="border-border animate-slide-up bg-background rounded-lg border p-6 dark:border-slate-700 dark:bg-slate-900">
-        <div className="flex items-start gap-4">
-          <div className="bg-muted h-12 w-12 animate-pulse rounded-full dark:bg-slate-700" />
-          <div className="flex-1 space-y-2">
-            <div className="bg-muted h-4 w-32 animate-pulse rounded dark:bg-slate-700" />
-            <div className="bg-muted h-3 w-24 animate-pulse rounded dark:bg-slate-700" />
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  const authorName = getFullName(author)
+  const showResults = hasVoted || isClosed
 
   return (
-    <div className="border-border animate-slide-up bg-background rounded-lg border p-6 transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:hover:shadow-slate-900/50">
-      {/* Author Info */}
-      <div className="mb-4 flex items-start gap-4">
-        <AuthorAvatar user={author} />
-        <div className="flex-1">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-foreground font-semibold">{authorName}</p>
-              {author.jobTitle && (
-                <p className="text-muted-foreground text-sm">{author.jobTitle}</p>
+    <div className="my-4 space-y-3 rounded-xl border border-teal-200 bg-teal-50/40 p-4 dark:border-teal-800/40 dark:bg-teal-900/10">
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <BarChart2 size={16} className="shrink-0 text-teal-600 dark:text-teal-400" />
+        <p className="text-foreground leading-snug font-semibold">{survey.surveyQuestion}</p>
+      </div>
+
+      {/* Options */}
+      <div className="space-y-2">
+        {survey.options.map((opt) => {
+          const isMyVote = survey.userVotedOptionId === opt.id
+          const isLoading = voting === opt.id
+
+          if (showResults) {
+            // Results bar view
+            return (
+              <div key={opt.id} className="space-y-1">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-foreground flex items-center gap-1.5 font-medium">
+                    {isMyVote && (
+                      <CheckCircle2
+                        size={14}
+                        className="shrink-0 text-teal-600 dark:text-teal-400"
+                      />
+                    )}
+                    {opt.text}
+                  </span>
+                  <span className="text-muted-foreground text-xs tabular-nums">
+                    {opt.percentage.toFixed(0)}%
+                  </span>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-teal-100 dark:bg-teal-900/30">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isMyVote ? 'bg-teal-500 dark:bg-teal-400' : 'bg-teal-300 dark:bg-teal-700'
+                    }`}
+                    style={{ width: `${opt.percentage}%` }}
+                  />
+                </div>
+              </div>
+            )
+          }
+
+          // Voting button view
+          return (
+            <button
+              key={opt.id}
+              onClick={() => handleVote(opt.id)}
+              disabled={!!voting}
+              className={`w-full rounded-lg border px-4 py-2.5 text-left text-sm font-medium transition-all ${
+                isLoading
+                  ? 'border-teal-400 bg-teal-100 text-teal-700 dark:border-teal-600 dark:bg-teal-900/30 dark:text-teal-300'
+                  : 'border-border text-foreground bg-white hover:border-teal-400 hover:bg-teal-50 dark:bg-slate-800 dark:hover:border-teal-600 dark:hover:bg-teal-900/20'
+              } disabled:cursor-not-allowed disabled:opacity-70`}
+            >
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-teal-500 border-t-transparent" />
+                  Voting…
+                </span>
+              ) : (
+                opt.text
               )}
-            </div>
-            <span className="text-muted-foreground text-xs">{formatTime(post.timestamp)}</span>
-          </div>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between pt-1">
+        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+          <Users size={12} />
+          <span>
+            {survey.totalVotes} {survey.totalVotes === 1 ? 'vote' : 'votes'}
+          </span>
         </div>
-      </div>
-
-      {/* Content */}
-      <p className="text-foreground mb-4 leading-relaxed">{post.content}</p>
-
-      {/* Stats */}
-      <div className="text-muted-foreground border-border flex items-center gap-6 border-t border-b py-3 text-sm dark:border-slate-700">
-        <span>{post.likes.length} likes</span>
-        <span>{post.comments.length} comments</span>
-      </div>
-
-      {/* Actions */}
-      <div className="mt-4 mb-4 flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => onLike(post.id)}
-          className={`flex items-center gap-2 ${hasLiked ? 'text-primary' : 'text-muted-foreground'}`}
-        >
-          <Heart size={18} fill={hasLiked ? 'currentColor' : 'none'} className="transition-all" />
-          Like
-        </Button>
-        <Button variant="ghost" size="sm" className="text-muted-foreground flex items-center gap-2">
-          <MessageCircle size={18} />
-          Comment
-        </Button>
-        <Button variant="ghost" size="sm" className="text-muted-foreground flex items-center gap-2">
-          <Share2 size={18} />
-          Share
-        </Button>
-      </div>
-
-      {/* Comments Section */}
-      {post.comments.length > 0 && (
-        <div className="border-border mt-4 border-t pt-4 dark:border-slate-700">
+        {isClosed && (
+          <span className="text-muted-foreground text-xs font-medium italic">Survey closed</span>
+        )}
+        {hasVoted && !isClosed && (
           <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-primary mb-3 text-sm hover:underline"
+            onClick={() => setSurvey((s) => ({ ...s, userVotedOptionId: null }))}
+            className="text-xs text-teal-600 hover:underline dark:text-teal-400"
           >
-            {isExpanded ? 'Hide' : `Show ${post.comments.length}`} comment
-            {post.comments.length !== 1 ? 's' : ''}
+            Change vote
           </button>
+        )}
+      </div>
 
-          {isExpanded && (
-            <div className="animate-slide-down space-y-3">
-              {post.comments.map((comment) => {
-                const commentAuthor = usersMap[comment.authorId]
-                if (!commentAuthor) return null
+      {error && <p className="text-destructive text-xs">{error}</p>}
+    </div>
+  )
+}
 
-                return (
-                  <div key={comment.id} className="flex gap-3">
-                    <AuthorAvatar user={commentAuthor} size="sm" />
-                    <div className="flex-1">
-                      <div className="bg-muted rounded-lg p-3 dark:bg-slate-800">
-                        <p className="text-foreground text-sm font-semibold">
-                          {getFullName(commentAuthor)}
-                        </p>
-                        <p className="text-foreground mt-1 text-sm">{comment.content}</p>
-                      </div>
-                      <div className="text-muted-foreground mt-1 flex items-center gap-3 text-xs">
-                        <span>{formatTime(comment.timestamp)}</span>
-                        <span>{comment.likes.length} likes</span>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+// ── Reaction types ─────────────────────────────────────────────────────────────
+
+const REACTION_TYPES = [
+  { code: 'LIKE', emoji: '👍', label: 'Like', Icon: ThumbsUp },
+  { code: 'LOVE', emoji: '❤️', label: 'Love', Icon: Heart },
+  { code: 'CLAP', emoji: '👏', label: 'Clap', Icon: null },
+  { code: 'WOW', emoji: '😮', label: 'Wow', Icon: null },
+  { code: 'HAHA', emoji: '😂', label: 'Haha', Icon: null },
+] as const
+
+type ReactionCode = (typeof REACTION_TYPES)[number]['code']
+
+// ── ReactionPicker ─────────────────────────────────────────────────────────────
+
+function ReactionPicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (code: ReactionCode) => void
+  onClose: () => void
+}) {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [onClose])
+
+  return (
+    <div
+      ref={ref}
+      className="border-border bg-background absolute bottom-full left-0 z-50 mb-2 flex items-center gap-1 rounded-full border px-2 py-1.5 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+    >
+      {REACTION_TYPES.map(({ code, emoji, label }) => (
+        <button
+          key={code}
+          title={label}
+          onClick={() => {
+            onSelect(code)
+            onClose()
+          }}
+          className="group flex flex-col items-center"
+        >
+          <span className="text-xl transition-transform duration-100 group-hover:-translate-y-1 group-hover:scale-125">
+            {emoji}
+          </span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// ── ReactionButton ─────────────────────────────────────────────────────────────
+
+function ReactionButton({
+  reactionCode,
+  reactionCount,
+  onReact,
+  size = 'post',
+}: {
+  reactionCode: ReactionCode | null
+  reactionCount: number
+  onReact: (code: ReactionCode) => Promise<void>
+  size?: 'post' | 'comment'
+}) {
+  const [showPicker, setShowPicker] = useState(false)
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  const active = REACTION_TYPES.find((r) => r.code === reactionCode)
+
+  const handlePressStart = () => {
+    holdTimer.current = setTimeout(() => setShowPicker(true), 400)
+  }
+  const handlePressEnd = () => {
+    if (holdTimer.current) clearTimeout(holdTimer.current)
+  }
+  const handleClick = () => {
+    if (showPicker) return
+    active ? onReact(active.code) : onReact('LIKE')
+  }
+
+  if (size === 'comment') {
+    return (
+      <div ref={containerRef} className="relative inline-flex items-center">
+        {showPicker && (
+          <ReactionPicker onSelect={(c) => onReact(c)} onClose={() => setShowPicker(false)} />
+        )}
+        <button
+          onMouseDown={handlePressStart}
+          onMouseUp={handlePressEnd}
+          onMouseLeave={handlePressEnd}
+          onTouchStart={handlePressStart}
+          onTouchEnd={handlePressEnd}
+          onClick={handleClick}
+          className={`hover:text-primary flex items-center gap-1 transition-colors ${active ? 'text-primary font-semibold' : ''}`}
+        >
+          <span className="text-sm leading-none">{active ? active.emoji : '👍'}</span>
+          {!active && <span>Like</span>}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      {showPicker && (
+        <ReactionPicker onSelect={(c) => onReact(c)} onClose={() => setShowPicker(false)} />
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        onMouseDown={handlePressStart}
+        onMouseUp={handlePressEnd}
+        onMouseLeave={handlePressEnd}
+        onTouchStart={handlePressStart}
+        onTouchEnd={handlePressEnd}
+        onClick={handleClick}
+        className={`flex items-center gap-2 ${active ? 'text-primary' : 'text-muted-foreground'}`}
+      >
+        {active ? (
+          <>
+            <span className="text-base leading-none">{active.emoji}</span>
+            <span>{active.label}</span>
+          </>
+        ) : (
+          <>
+            <ThumbsUp size={18} className="transition-all" />
+            <span>Like</span>
+          </>
+        )}
+      </Button>
+    </div>
+  )
+}
+
+// ── formatTime ─────────────────────────────────────────────────────────────────
+
+function formatTime(dateStr: string): string {
+  const normalized = dateStr.endsWith('Z') || dateStr.includes('+') ? dateStr : dateStr + 'Z'
+  const d = new Date(normalized)
+  if (isNaN(d.getTime())) return dateStr
+  const now = new Date()
+  const diffMs = Math.max(0, now.getTime() - d.getTime())
+  const diffMins = Math.floor(diffMs / 60_000)
+  const diffHours = Math.floor(diffMs / 3_600_000)
+  const diffDays = Math.floor(diffMs / 86_400_000)
+  const diffMonths = Math.floor(diffDays / 30.44)
+  const diffYears = Math.floor(diffDays / 365.25)
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 30) return `${diffDays}d ago`
+  if (diffYears < 1) return `${diffMonths}mo ago`
+  const rem = diffMonths - diffYears * 12
+  return rem === 0 ? `${diffYears}y ago` : `${diffYears}y ${rem}mo ago`
+}
+
+// ── fetchReactors ─────────────────────────────────────────────────────────────
+
+async function fetchReactors(
+  reactions: Awaited<ReturnType<typeof reactionApi.getPostReactors>>
+): Promise<ModalUser[]> {
+  const uniqueIds = [...new Set(reactions.map((r) => r.userId))]
+  const settled = await Promise.allSettled(uniqueIds.map((id) => userApi.getById(id)))
+  const userMap: Record<string, User> = {}
+  settled.forEach((r, i) => {
+    if (r.status === 'fulfilled') userMap[uniqueIds[i]] = r.value as User
+  })
+  return reactions.reduce<ModalUser[]>((acc, r) => {
+    const u = userMap[r.userId]
+    if (!u) return acc
+    acc.push({
+      id: u.id,
+      firstName: u.firstName ?? '',
+      lastName: u.lastName ?? '',
+      email: u.email ?? '',
+      avatar: u.avatar ?? null,
+      jobTitle: u.jobTitle ?? null,
+      emoji: r.reactionTypeEmoji ?? undefined,
+    })
+    return acc
+  }, [])
+}
+
+// ── UserAvatar ────────────────────────────────────────────────────────────────
+
+function UserAvatar({
+  user,
+  size = 'md',
+  clickable = false,
+}: {
+  user: User | null | undefined
+  size?: 'sm' | 'md' | 'xs'
+  clickable?: boolean
+}) {
+  const sizeClass =
+    size === 'xs' ? 'h-6 w-6 text-[10px]' : size === 'sm' ? 'h-8 w-8 text-xs' : 'h-12 w-12 text-sm'
+  if (!user)
+    return (
+      <div
+        className={`${sizeClass} bg-muted flex-shrink-0 animate-pulse rounded-full dark:bg-slate-700`}
+      />
+    )
+  const name = getFullName(user)
+  const avatar = user.avatar ? (
+    <img
+      src={user.avatar}
+      alt={name}
+      className={`${sizeClass} flex-shrink-0 rounded-full object-cover`}
+    />
+  ) : (
+    <div
+      className={`${sizeClass} bg-primary/10 text-primary flex flex-shrink-0 items-center justify-center rounded-full font-bold`}
+    >
+      {user.firstName?.[0]?.toUpperCase()}
+      {user.lastName?.[0]?.toUpperCase()}
+    </div>
+  )
+  if (clickable && user.id) {
+    return (
+      <Link
+        href={`/profile/${user.id}`}
+        className="ring-offset-background focus-visible:ring-ring flex-shrink-0 rounded-full transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+      >
+        {avatar}
+      </Link>
+    )
+  }
+  return avatar
+}
+
+// ── useCommentAuthors ─────────────────────────────────────────────────────────
+
+function useCommentAuthors(seedMap: Record<string, User>) {
+  const [localMap, setLocalMap] = useState<Record<string, User>>(seedMap)
+  const fetchedIds = useRef<Set<string>>(new Set(Object.keys(seedMap)))
+
+  useEffect(() => {
+    setLocalMap((prev) => {
+      const merged = { ...prev }
+      let changed = false
+      for (const [id, u] of Object.entries(seedMap)) {
+        if (!merged[id]) {
+          merged[id] = u
+          fetchedIds.current.add(id)
+          changed = true
+        }
+      }
+      return changed ? merged : prev
+    })
+  }, [seedMap])
+
+  const resolveAuthors = useCallback(async (authorIds: string[]) => {
+    const missing = [...new Set(authorIds)].filter((id) => !fetchedIds.current.has(id))
+    if (missing.length === 0) return
+    missing.forEach((id) => fetchedIds.current.add(id))
+    const results = await Promise.allSettled(missing.map((id) => userApi.getById(id)))
+    const updates: Record<string, User> = {}
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') updates[missing[i]] = r.value as User
+    })
+    if (Object.keys(updates).length > 0) setLocalMap((prev) => ({ ...prev, ...updates }))
+  }, [])
+
+  return { localMap, resolveAuthors }
+}
+
+// ── ReplyInput ────────────────────────────────────────────────────────────────
+
+function ReplyInput({
+  postId,
+  parentCommentId,
+  currentUserId,
+  usersMap,
+  onAdded,
+  onCancel,
+  depth,
+}: {
+  postId: string
+  parentCommentId: string
+  currentUserId: string
+  usersMap: Record<string, User>
+  onAdded: (reply: CommentResponse) => void
+  onCancel: () => void
+  depth: number
+}) {
+  const [text, setText] = useState('')
+  const [replyMentions, setReplyMentions] = useState<string[]>([])
+  const [submitting, setSubmitting] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    inputRef.current?.focus()
+  }, [])
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!text.trim() || submitting) return
+    setSubmitting(true)
+    try {
+      const reply = await commentApi.addComment(postId, {
+        content: text.trim(),
+        parentId: parentCommentId,
+        mentionedUserIds: replyMentions,
+      })
+      onAdded(reply)
+      setText('')
+      setReplyMentions([])
+    } catch (err) {
+      console.error('Failed to post reply:', err)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+  return (
+    <form onSubmit={handleSubmit} className="mt-2 flex items-center gap-2">
+      <UserAvatar user={usersMap[currentUserId]} size={depth >= 2 ? 'xs' : 'sm'} />
+      <div className="flex flex-1 items-center gap-2">
+        <MentionTextarea
+          value={text}
+          onChange={setText}
+          onMentionsChange={setReplyMentions}
+          placeholder="Write a reply… (type @ to mention)"
+          singleLine
+          onSubmit={() => handleSubmit({ preventDefault: () => {} } as React.FormEvent)}
+          className="flex-1 rounded-full px-4 py-1.5"
+        />
+        <Button
+          type="submit"
+          size="icon"
+          disabled={!text.trim() || submitting}
+          className="h-7 w-7 shrink-0"
+        >
+          <Send size={12} />
+        </Button>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          onClick={onCancel}
+          className="h-7 w-7 shrink-0"
+        >
+          <X size={12} />
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+// ── CommentRow ────────────────────────────────────────────────────────────────
+
+interface CommentRowProps {
+  comment: CommentResponse
+  postId: string
+  usersMap: Record<string, User>
+  currentUserId: string
+  currentUserRoles: string[]
+  post: PostResponse
+  onDeleted: (id: string) => void
+  onUpdated: (updated: CommentResponse) => void
+  resolveAuthors: (ids: string[]) => Promise<void>
+  depth?: number
+  currentLeadTeamId?: string | null
+}
+
+function CommentRow({
+  comment,
+  postId,
+  usersMap,
+  currentUserId,
+  currentUserRoles,
+  post,
+  onDeleted,
+  onUpdated,
+  resolveAuthors,
+  depth = 0,
+  currentLeadTeamId,
+}: CommentRowProps) {
+  const author = usersMap[comment.authorId]
+  const isOwn = comment.authorId === currentUserId
+  const isTeamLeader = currentUserRoles.includes(ROLE.TEAM_LEADER)
+  const isDeptLeader =
+    currentUserRoles.includes(ROLE.DEPARTMENT_LEADER) ||
+    currentUserRoles.includes('DEPARTMENT_MANAGER')
+  const isCeo = currentUserRoles.includes(ROLE.CEO)
+  const isLeaderOfThisTeam =
+    isTeamLeader && !!currentLeadTeamId && post.teamId === currentLeadTeamId
+  const canEdit =
+    isOwn || isCeo || isLeaderOfThisTeam || (isDeptLeader && (!!post.departmentId || !!post.teamId))
+
+  const [likeCount, setLikeCount] = useState(comment.reactionCount)
+  const [reactionCode, setReactionCode] = useState<ReactionCode | null>(null)
+  const [showReactorsModal, setShowReactorsModal] = useState(false)
+
+  useEffect(() => {
+    reactionApi
+      .getCommentReactions(postId, comment.id)
+      .then((summary) => {
+        setLikeCount(summary.total)
+        setReactionCode((summary.userReaction?.reactionTypeCode as ReactionCode) ?? null)
+      })
+      .catch(() => {})
+  }, [postId, comment.id])
+
+  const [isEditing, setIsEditing] = useState(false)
+  const [editContent, setEditContent] = useState(comment.content)
+  const [saving, setSaving] = useState(false)
+  const [showReplyInput, setShowReplyInput] = useState(false)
+  const [replies, setReplies] = useState<CommentResponse[]>([])
+  const [replyCount, setReplyCount] = useState(comment.replyCount)
+  const [showReplies, setShowReplies] = useState(false)
+  const [loadingReplies, setLoadingReplies] = useState(false)
+  const [repliesLoaded, setRepliesLoaded] = useState(false)
+
+  const avatarSize: 'sm' | 'xs' = depth >= 1 ? 'xs' : 'sm'
+
+  const loadReplies = useCallback(async () => {
+    if (loadingReplies || repliesLoaded) return
+    setLoadingReplies(true)
+    try {
+      const page = await commentApi.getReplies(postId, comment.id)
+      setReplies(page.content)
+      await resolveAuthors(page.content.map((r) => r.authorId))
+      setRepliesLoaded(true)
+    } catch (err) {
+      console.error('Failed to load replies:', err)
+    } finally {
+      setLoadingReplies(false)
+    }
+  }, [postId, comment.id, loadingReplies, repliesLoaded, resolveAuthors])
+
+  const toggleReplies = () => {
+    if (!showReplies && !repliesLoaded) loadReplies()
+    setShowReplies((s) => !s)
+  }
+
+  const handleReact = async (code: ReactionCode) => {
+    try {
+      const prev = reactionCode
+      const res = await reactionApi.reactToComment(postId, comment.id, { reactionTypeCode: code })
+      if (res) {
+        setReactionCode(code)
+        if (!prev) setLikeCount((c) => c + 1)
+      } else {
+        setReactionCode(null)
+        setLikeCount((c) => Math.max(0, c - 1))
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleDelete = async () => {
+    try {
+      await commentApi.deleteComment(postId, comment.id)
+      onDeleted(comment.id)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleEditSave = async () => {
+    if (!editContent.trim() || saving) return
+    setSaving(true)
+    try {
+      const updated = await commentApi.updateComment(postId, comment.id, {
+        content: editContent.trim(),
+      })
+      onUpdated(updated)
+      setIsEditing(false)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleReplyAdded = async (reply: CommentResponse) => {
+    setReplies((prev) => [...prev, reply])
+    setReplyCount((c) => c + 1)
+    setShowReplies(true)
+    setRepliesLoaded(true)
+    setShowReplyInput(false)
+    await resolveAuthors([reply.authorId])
+  }
+
+  return (
+    <div
+      className={`flex gap-2 ${depth > 0 ? 'border-border ml-8 border-l pl-3 dark:border-slate-700' : ''}`}
+    >
+      <UserAvatar user={author} size={avatarSize} clickable />
+      <div className="min-w-0 flex-1">
+        <div className="bg-muted rounded-2xl px-4 py-3 dark:bg-slate-800">
+          <div className="flex items-center justify-between gap-2">
+            {author ? (
+              <Link
+                href={`/profile/${author.id}`}
+                className="text-foreground truncate text-sm font-semibold hover:underline"
+              >
+                {getFullName(author)}
+              </Link>
+            ) : (
+              <p className="text-foreground truncate text-sm font-semibold">Unknown user</p>
+            )}
+            {(isOwn || canEdit) && !isEditing && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
+                    <MoreHorizontal size={14} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {canEdit && (
+                    <DropdownMenuItem onClick={() => setIsEditing(true)}>
+                      <Pencil size={14} className="mr-2" />
+                      Edit
+                    </DropdownMenuItem>
+                  )}
+                  {isOwn && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={handleDelete}
+                      >
+                        <Trash2 size={14} className="mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+          {isEditing ? (
+            <div className="mt-2 space-y-2">
+              <MentionTextarea
+                value={editContent}
+                onChange={setEditContent}
+                rows={3}
+                className="rounded-lg px-3 py-2 dark:bg-slate-700"
+              />
+              <div className="flex justify-end gap-2">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setEditContent(comment.content)
+                    setIsEditing(false)
+                  }}
+                  className="h-7 px-2"
+                >
+                  <X size={14} className="mr-1" />
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleEditSave}
+                  disabled={!editContent.trim() || saving}
+                  className="h-7 px-3"
+                >
+                  <Check size={14} className="mr-1" />
+                  Save
+                </Button>
+              </div>
             </div>
+          ) : (
+            <p className="text-foreground mt-1 text-sm leading-relaxed">
+              {renderMentions(comment.content)}
+            </p>
           )}
         </div>
+        <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-3 pl-3 text-xs">
+          <span>{formatTime(comment.createdAt)}</span>
+          <ReactionButton
+            reactionCode={reactionCode}
+            reactionCount={likeCount}
+            onReact={handleReact}
+            size="comment"
+          />
+          {likeCount > 0 && (
+            <button
+              onClick={() => setShowReactorsModal(true)}
+              className="hover:text-primary -ml-2 transition-colors"
+            >
+              ({likeCount})
+            </button>
+          )}
+          <UsersModal
+            open={showReactorsModal}
+            onOpenChange={setShowReactorsModal}
+            title="Reactions"
+            fetchUsers={async () => {
+              const r = await reactionApi.getCommentReactors(postId, comment.id)
+              return fetchReactors(r)
+            }}
+          />
+          <button
+            onClick={() => setShowReplyInput((s) => !s)}
+            className="hover:text-primary flex items-center gap-1 font-medium transition-colors"
+          >
+            <CornerDownRight size={12} />
+            Reply
+          </button>
+          {replyCount > 0 && (
+            <button
+              onClick={toggleReplies}
+              className="hover:text-primary flex items-center gap-1 transition-colors"
+            >
+              {showReplies ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showReplies ? 'Hide' : 'View'} {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
+            </button>
+          )}
+          {comment.isEdited && <span className="italic">edited</span>}
+        </div>
+        {showReplyInput && (
+          <ReplyInput
+            postId={postId}
+            parentCommentId={comment.id}
+            currentUserId={currentUserId}
+            usersMap={usersMap}
+            onAdded={handleReplyAdded}
+            onCancel={() => setShowReplyInput(false)}
+            depth={depth}
+          />
+        )}
+        {showReplies && (
+          <div className="mt-3 space-y-3">
+            {loadingReplies ? (
+              <div className="ml-8 flex gap-2">
+                <div className="bg-muted h-6 w-6 animate-pulse rounded-full dark:bg-slate-700" />
+                <div className="bg-muted h-12 flex-1 animate-pulse rounded-2xl dark:bg-slate-700" />
+              </div>
+            ) : (
+              replies.map((reply) => (
+                <CommentRow
+                  key={reply.id}
+                  comment={reply}
+                  postId={postId}
+                  usersMap={usersMap}
+                  currentUserId={currentUserId}
+                  currentUserRoles={currentUserRoles}
+                  post={post}
+                  onDeleted={(id) => {
+                    setReplies((p) => p.filter((r) => r.id !== id))
+                    setReplyCount((c) => Math.max(0, c - 1))
+                  }}
+                  onUpdated={(u) => setReplies((p) => p.map((r) => (r.id === u.id ? u : r)))}
+                  resolveAuthors={resolveAuthors}
+                  depth={depth + 1}
+                  currentLeadTeamId={currentLeadTeamId}
+                />
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main PostCard ─────────────────────────────────────────────────────────────
+
+interface PostCardProps {
+  post: PostResponse
+  currentUserId: string
+  usersMap: Record<string, User>
+  onDelete?: (postId: string) => void
+  onUpdate?: (updated: PostResponse) => void
+  /** The team ID that the current user leads, if any. Used to gate pin access. */
+  currentLeadTeamId?: string | null
+  /** The department ID that the current user manages, if any. Used to gate pin access. */
+  currentManagedDeptId?: string | null
+}
+
+export function PostCard({
+  post,
+  currentUserId,
+  usersMap,
+  onDelete,
+  onUpdate,
+  currentLeadTeamId,
+  currentManagedDeptId,
+}: PostCardProps) {
+  const { user: currentUser } = useAuth()
+
+  const [reactionCount, setReactionCount] = useState(post.reactionCount)
+  const [activeReaction, setActiveReaction] = useState<ReactionCode | null>(null)
+  const [showReactorsModal, setShowReactorsModal] = useState(false)
+  const [commentCount, setCommentCount] = useState(post.commentCount)
+  const [comments, setComments] = useState<CommentResponse[]>([])
+  const [showComments, setShowComments] = useState(false)
+  const [loadingComments, setLoadingComments] = useState(false)
+  const [newComment, setNewComment] = useState('')
+  const [newCommentMentions, setNewCommentMentions] = useState<string[]>([])
+  const [submittingComment, setSubmittingComment] = useState(false)
+  const [commentSuggestions, setCommentSuggestions] = useState<string[]>([])
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null)
+  const [attachments, setAttachments] = useState<AttachmentResponse[]>(post.attachments ?? [])
+  const [isEditingPost, setIsEditingPost] = useState(false)
+  const [editPostContent, setEditPostContent] = useState(post.content)
+  const [savingPost, setSavingPost] = useState(false)
+  const [isPinned, setIsPinned] = useState(post.isPinned)
+  const [isSaved, setIsSaved] = useState(false)
+
+  // Sync local isPinned state whenever the post prop changes (e.g. after re-sort from parent)
+  useEffect(() => {
+    setIsPinned(post.isPinned)
+  }, [post.isPinned])
+  const [savingPostAction, setSavingPostAction] = useState(false)
+
+  const currentUserRoles: string[] = currentUser?.roles ?? []
+  const isOwn = post.authorId === currentUserId
+  const isTeamLeader = currentUserRoles.includes(ROLE.TEAM_LEADER)
+  const isDeptLeader =
+    currentUserRoles.includes(ROLE.DEPARTMENT_LEADER) ||
+    currentUserRoles.includes('DEPARTMENT_MANAGER')
+  const isCeo = currentUserRoles.includes(ROLE.CEO)
+  const isLeaderOfThisTeam =
+    isTeamLeader && !!currentLeadTeamId && post.teamId === currentLeadTeamId
+  const canEditPost =
+    isOwn || isCeo || isLeaderOfThisTeam || (isDeptLeader && (!!post.departmentId || !!post.teamId))
+  const canDeletePost = canEditPost
+
+  // ── Pin gate: scoped strictly to the leader's context ───────────────────────
+  // CEO can pin anything.
+  // Dept leader can pin posts that belong to their department, OR posts that
+  //   belong to a team inside their department.
+  // Team leader can ONLY pin posts that belong to the exact team they lead —
+  //   they must NOT see the pin option on the department feed or other teams.
+  const canPinPost = (() => {
+    if (isCeo) return true
+    if (isDeptLeader && currentManagedDeptId) {
+      // post is directly in their department
+      if (post.departmentId === currentManagedDeptId) return true
+      // post is in a team that belongs to their department — we trust the
+      // caller passed currentManagedDeptId only when verified
+      if (post.teamId && !post.departmentId) return true
+    }
+    if (isTeamLeader && currentLeadTeamId) {
+      // only if the post is in the exact team they lead
+      if (post.teamId === currentLeadTeamId) return true
+    }
+    return false
+  })()
+
+  const seedMap = currentUser ? { ...usersMap, [currentUser.id]: currentUser } : usersMap
+  const { localMap: commentUsersMap, resolveAuthors } = useCommentAuthors(seedMap)
+  const author = commentUsersMap[post.authorId]
+
+  // Ensure the post's own author is always resolved (e.g. on the Saved Posts page
+  // where usersMap starts empty and no comment-load triggers resolveAuthors).
+  useEffect(() => {
+    if (post.authorId && !commentUsersMap[post.authorId]) {
+      resolveAuthors([post.authorId])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [post.authorId])
+
+  useEffect(() => {
+    if (post.attachments && post.attachments.length > 0) {
+      setAttachments(post.attachments)
+      return
+    }
+    attachmentApi
+      .list(post.id)
+      .then((list) => setAttachments(list))
+      .catch(() => {})
+  }, [post.id])
+
+  useEffect(() => {
+    reactionApi
+      .getPostReactions(post.id)
+      .then((summary) => {
+        setReactionCount(summary.total)
+        setActiveReaction((summary.userReaction?.reactionTypeCode as ReactionCode) ?? null)
+      })
+      .catch(() => {})
+  }, [post.id])
+
+  useEffect(() => {
+    savedPostApi
+      .getSaved()
+      .then((saved) => {
+        setIsSaved(saved.some((p) => p.id === post.id))
+      })
+      .catch(() => {})
+  }, [post.id])
+
+  const handleToggleSave = async () => {
+    if (savingPostAction) return
+    setSavingPostAction(true)
+    try {
+      if (isSaved) {
+        await savedPostApi.unsave(post.id)
+        setIsSaved(false)
+        onDelete?.(post.id)
+      } else {
+        await savedPostApi.save(post.id)
+        setIsSaved(true)
+      }
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSavingPostAction(false)
+    }
+  }
+
+  const handleTogglePin = async () => {
+    try {
+      const updated = await postApi.togglePin(post.id)
+      setIsPinned(updated.isPinned)
+      onUpdate?.(updated)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const loadComments = useCallback(async () => {
+    if (loadingComments) return
+    setLoadingComments(true)
+    try {
+      const page = await commentApi.getComments(post.id)
+      setComments(page.content)
+      await resolveAuthors(page.content.map((c) => c.authorId))
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoadingComments(false)
+    }
+  }, [post.id, loadingComments, resolveAuthors])
+
+  const toggleComments = () => {
+    if (!showComments && comments.length === 0) loadComments()
+    setShowComments((s) => !s)
+  }
+
+  const handleReact = async (code: ReactionCode) => {
+    try {
+      const prev = activeReaction
+      const res = await reactionApi.reactToPost(post.id, { reactionTypeCode: code })
+      if (res) {
+        setActiveReaction(code)
+        if (!prev) setReactionCount((c) => c + 1)
+      } else {
+        setActiveReaction(null)
+        setReactionCount((c) => Math.max(0, c - 1))
+      }
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleDelete = async () => {
+    try {
+      await postApi.delete(post.id)
+      onDelete?.(post.id)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleEditPostSave = async () => {
+    if (!editPostContent.trim() || savingPost) return
+    setSavingPost(true)
+    try {
+      const updated = await postApi.update(post.id, {
+        content: editPostContent.trim(),
+        postType: post.postType,
+        postVisibility: post.postVisibility as 'PUBLIC' | 'PRIVATE',
+        teamId: post.teamId ?? undefined,
+        departmentId: post.departmentId ?? undefined,
+        isPinned: post.isPinned,
+        isAIGenerated: post.isAIGenerated,
+      })
+      onUpdate?.(updated)
+      setIsEditingPost(false)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSavingPost(false)
+    }
+  }
+
+  const handleSuggestComments = async () => {
+    if (loadingSuggestions) return
+    setLoadingSuggestions(true)
+    setSuggestionsError(null)
+    try {
+      const { aiApi } = await import('@/lib/api')
+      const res = await aiApi.suggestComments({
+        postContent: post.content,
+        postType: post.postType,
+        count: 3,
+      })
+      setCommentSuggestions(res.suggestions)
+    } catch (e) {
+      console.error('Failed to fetch comment suggestions:', e)
+      setSuggestionsError('Could not load suggestions. Please try again.')
+    } finally {
+      setLoadingSuggestions(false)
+    }
+  }
+
+  const handleAddComment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newComment.trim() || submittingComment) return
+    setSubmittingComment(true)
+    try {
+      const comment = await commentApi.addComment(post.id, {
+        content: newComment.trim(),
+        mentionedUserIds: newCommentMentions,
+      })
+      setComments((prev) => [...prev, comment])
+      setCommentCount((c) => c + 1)
+      setNewComment('')
+      setNewCommentMentions([])
+      setCommentSuggestions([])
+      await resolveAuthors([comment.authorId])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setSubmittingComment(false)
+    }
+  }
+
+  const typeStyle = POST_TYPE_STYLES[post.postType] ?? POST_TYPE_STYLES.DISCUSSION
+
+  return (
+    <div
+      className={`border-border animate-slide-up bg-background rounded-xl border shadow-sm transition-shadow hover:shadow-md dark:border-slate-700 dark:bg-slate-900 ${isPinned ? 'border-amber-400/60 ring-1 ring-amber-400/30 dark:border-amber-500/40 dark:ring-amber-500/20' : ''}`}
+    >
+      {/* Pinned banner */}
+      {isPinned && (
+        <div className="flex items-center gap-2 rounded-t-xl border-b border-amber-200/60 bg-amber-50 px-4 py-2 dark:border-amber-700/30 dark:bg-amber-900/20">
+          <Pin
+            size={12}
+            className="shrink-0 fill-amber-500 text-amber-600 dark:fill-amber-400 dark:text-amber-400"
+          />
+          <span className="text-xs font-semibold tracking-wide text-amber-700 uppercase dark:text-amber-400">
+            Pinned Post
+          </span>
+        </div>
       )}
+      <div className="p-6">
+        {/* Header */}
+        <div className="mb-4 flex items-start gap-4">
+          <UserAvatar user={author} clickable />
+          <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                {author ? (
+                  <Link
+                    href={`/profile/${author.id}`}
+                    className="text-foreground font-semibold hover:underline"
+                  >
+                    {getFullName(author)}
+                  </Link>
+                ) : (
+                  <p className="text-foreground font-semibold">Unknown user</p>
+                )}
+                <Badge className={`${typeStyle.color} border-0 text-xs`}>{typeStyle.label}</Badge>
+              </div>
+              {author?.jobTitle && (
+                <p className="text-muted-foreground truncate text-sm">{author.jobTitle}</p>
+              )}
+              <p className="text-muted-foreground text-xs">{formatTime(post.createdAt)}</p>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                  <MoreHorizontal size={16} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canEditPost && (
+                  <DropdownMenuItem onClick={() => setIsEditingPost(true)}>
+                    <Pencil size={14} className="mr-2" />
+                    Edit post
+                  </DropdownMenuItem>
+                )}
+                {canPinPost && (
+                  <DropdownMenuItem onClick={handleTogglePin}>
+                    <Pin size={14} className="mr-2" />
+                    {isPinned ? 'Unpin post' : 'Pin post'}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onClick={handleToggleSave} disabled={savingPostAction}>
+                  {isSaved ? (
+                    <>
+                      <BookmarkCheck size={14} className="text-primary mr-2" />
+                      Unsave post
+                    </>
+                  ) : (
+                    <>
+                      <Bookmark size={14} className="mr-2" />
+                      Save post
+                    </>
+                  )}
+                </DropdownMenuItem>
+                {canDeletePost && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={handleDelete}
+                    >
+                      <Trash2 size={14} className="mr-2" />
+                      Delete post
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Edit Post Modal */}
+        {isEditingPost && (
+          <EditPostModal
+            post={post}
+            onClose={() => setIsEditingPost(false)}
+            onSaved={(updated) => {
+              onUpdate?.(updated)
+              setAttachments(updated.attachments ?? [])
+            }}
+          />
+        )}
+
+        {/* Content */}
+        <>
+          {post.content && (
+            <p className="text-foreground mb-2 leading-relaxed whitespace-pre-wrap">
+              {renderMentions(post.content)}
+            </p>
+          )}
+          {/* Survey panel — renders below content for SURVEY posts */}
+          {post.postType === 'SURVEY' && post.survey && (
+            <SurveyPanel postId={post.id} initialSurvey={post.survey} />
+          )}
+        </>
+
+        {/* Attachments */}
+        <AttachmentGallery attachments={attachments} />
+
+        {/* Stats bar */}
+        <div className="text-muted-foreground border-border flex items-center gap-6 border-t border-b py-2.5 text-sm dark:border-slate-700">
+          <button
+            onClick={() => reactionCount > 0 && setShowReactorsModal(true)}
+            className={
+              reactionCount > 0 ? 'hover:text-foreground transition-colors' : 'cursor-default'
+            }
+          >
+            {reactionCount} {reactionCount === 1 ? 'reaction' : 'reactions'}
+          </button>
+          <button onClick={toggleComments} className="hover:text-foreground transition-colors">
+            {commentCount} {commentCount === 1 ? 'comment' : 'comments'}
+          </button>
+        </div>
+
+        <UsersModal
+          open={showReactorsModal}
+          onOpenChange={setShowReactorsModal}
+          title="Reactions"
+          fetchUsers={async () => {
+            const reactions = await reactionApi.getPostReactors(post.id)
+            return fetchReactors(reactions)
+          }}
+        />
+
+        {/* Action buttons */}
+        <div className="my-3 flex items-center gap-1">
+          <ReactionButton
+            reactionCode={activeReaction}
+            reactionCount={reactionCount}
+            onReact={handleReact}
+            size="post"
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggleComments}
+            className="text-muted-foreground flex items-center gap-2"
+          >
+            <MessageCircle size={18} />
+            Comment
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground flex items-center gap-2"
+          >
+            <Share2 size={18} />
+            Share
+          </Button>
+          {commentCount > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleComments}
+              className="text-muted-foreground ml-auto flex items-center gap-1 text-xs"
+            >
+              {showComments ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              {showComments ? 'Hide' : 'Show'} comments
+            </Button>
+          )}
+        </div>
+
+        {/* Comment section */}
+        {showComments && (
+          <div className="border-border mt-2 border-t pt-4 dark:border-slate-700">
+            <form onSubmit={handleAddComment} className="mb-2 flex items-start gap-3">
+              <UserAvatar user={commentUsersMap[currentUserId]} size="sm" />
+              <div className="flex flex-1 items-start gap-2">
+                <MentionTextarea
+                  value={newComment}
+                  onChange={setNewComment}
+                  onMentionsChange={setNewCommentMentions}
+                  placeholder="Write a comment… (type @ to mention someone)"
+                  singleLine
+                  onSubmit={handleAddComment as unknown as () => void}
+                  className="flex-1 rounded-full px-4 py-2"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleSuggestComments}
+                  disabled={loadingSuggestions}
+                  className="text-muted-foreground hover:text-foreground mt-0.5 h-8 w-8 shrink-0"
+                  title="Suggest comments with AI"
+                >
+                  {loadingSuggestions ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={14} />
+                  )}
+                </Button>
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={!newComment.trim() || submittingComment}
+                  className="mt-0.5 h-8 w-8 shrink-0"
+                >
+                  <Send size={14} />
+                </Button>
+              </div>
+            </form>
+
+            {suggestionsError && (
+              <p className="text-destructive mb-3 pl-11 text-xs">{suggestionsError}</p>
+            )}
+
+            {commentSuggestions.length > 0 && (
+              <div className="mb-4 flex flex-wrap gap-1.5 pl-11">
+                {commentSuggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => {
+                      setNewComment(s)
+                      setCommentSuggestions([])
+                    }}
+                    className="bg-muted/60 text-foreground/90 hover:bg-muted rounded-full border px-3 py-1 text-left text-xs transition-colors"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+            {loadingComments ? (
+              <div className="space-y-3">
+                {[1, 2].map((i) => (
+                  <div key={i} className="flex gap-3">
+                    <div className="bg-muted h-8 w-8 animate-pulse rounded-full dark:bg-slate-700" />
+                    <div className="flex-1 space-y-2">
+                      <div className="bg-muted h-14 animate-pulse rounded-2xl dark:bg-slate-700" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {comments.map((c) => (
+                  <CommentRow
+                    key={c.id}
+                    comment={c}
+                    postId={post.id}
+                    usersMap={commentUsersMap}
+                    currentUserId={currentUserId}
+                    currentUserRoles={currentUserRoles}
+                    post={post}
+                    onDeleted={(id) => {
+                      setComments((p) => p.filter((x) => x.id !== id))
+                      setCommentCount((c) => Math.max(0, c - 1))
+                    }}
+                    onUpdated={(u) => setComments((p) => p.map((x) => (x.id === u.id ? u : x)))}
+                    resolveAuthors={resolveAuthors}
+                    depth={0}
+                    currentLeadTeamId={currentLeadTeamId}
+                  />
+                ))}
+                {comments.length === 0 && (
+                  <p className="text-muted-foreground text-center text-sm">No comments yet.</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -34,7 +34,7 @@ public class PermissionController {
 
     /** List all permissions (optionally filtered by scope) — requires PERMISSION_READ_ALL permission */
     @GetMapping
-    @RequiresPermission(AppPermission.PERMISSION_READ_ALL)
+    @RequiresPermission(AppPermission.PERMISSION_VIEW_ALL)
     public ResponseEntity<ApiResponse<List<PermissionResponse>>> getAllPermissions(
             @RequestParam(required = false) TypeScope scopeType) {
         if (scopeType != null) {
@@ -45,14 +45,14 @@ public class PermissionController {
 
     /** Read a specific permission — requires PERMISSION_READ permission */
     @GetMapping("/{id}")
-    @RequiresPermission(AppPermission.PERMISSION_READ)
+    @RequiresPermission(AppPermission.PERMISSION_VIEW)
     public ResponseEntity<ApiResponse<PermissionResponse>> getPermissionById(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(permissionService.getPermissionById(id)));
     }
 
     /** Update a permission — requires PERMISSION_UPDATE permission */
     @PutMapping("/{id}")
-    @RequiresPermission(AppPermission.PERMISSION_UPDATE)
+    @RequiresPermission(AppPermission.PERMISSION_EDIT)
     public ResponseEntity<ApiResponse<PermissionResponse>> updatePermission(
             @PathVariable String id,
             @Valid @RequestBody PermissionRequest request) {

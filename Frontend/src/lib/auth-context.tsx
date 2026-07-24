@@ -78,11 +78,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { twoFactorRequired: true, mustChangePassword: false }
       }
       tokenStorage.setTokens(response.accessToken, response.refreshToken)
-      setUser(response.user)
-      // Return the actual mustChangePassword value from the response
+      // Fetch the full user profile from /users/me to ensure permissions are
+      // always populated. The login response's user object may omit or return
+      // an incomplete permissions array depending on the auth service, whereas
+      // /users/me always returns the complete, up-to-date user with all permissions.
+      const me = await userApi.getMe()
+      setUser(me)
       return {
         twoFactorRequired: false,
-        mustChangePassword: response.user?.mustChangePassword ?? false,
+        mustChangePassword: me.mustChangePassword ?? false,
       }
     } finally {
       setIsLoading(false)

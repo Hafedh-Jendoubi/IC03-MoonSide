@@ -1,6 +1,7 @@
 'use client'
 
-import { useParams } from 'next/navigation'
+import Link from 'next/link'
+import { useParams, useRouter } from 'next/navigation'
 import { useEffect, useState, useRef } from 'react'
 import { useAuth } from '@/lib/auth-context'
 import { AuthLayout } from '@/components/auth-layout'
@@ -20,10 +21,35 @@ import {
   Loader2,
   Camera,
   Trash2,
+  FileText,
+  Heart,
+  MessageCircle,
+  Activity,
+  ChevronDown,
+  ChevronUp,
+  Users,
+  Award,
 } from 'lucide-react'
 import { User, getFullName } from '@/lib/types'
-import { userApi, mediaApi, UpdateUserRequest } from '@/lib/api'
-import { useRouter } from 'next/navigation'
+import {
+  userApi,
+  mediaApi,
+  UpdateUserRequest,
+  postApi,
+  reactionApi,
+  commentApi,
+  PostResponse,
+  connectionApi,
+  badgeApi,
+  teamApi,
+} from '@/lib/api'
+import type { UserBadge } from '@/lib/api'
+import { PostViewModal } from '@/components/post-view-modal'
+import { BadgeIcon } from '@/components/badge-icon'
+import { ContactOptionsModal } from '@/components/contact-options-modal'
+import { ConnectButton } from '@/components/connect-button'
+import { UserConnectionsModal } from '@/components/user-connections-modal'
+import { OrgBannerUpload } from '@/components/org-image-upload'
 
 // --- Edit Profile Modal -------------------------------------------------------
 
@@ -38,7 +64,6 @@ const MAX_SIZE_MB = 10
 
 function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
   const { refreshUser } = useAuth()
-  const inputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
     firstName: user.firstName ?? '',
@@ -50,58 +75,12 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  // Avatar state
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(user.avatar ?? null)
-  const [avatarFile, setAvatarFile] = useState<File | null>(null)
-  const [avatarStatus, setAvatarStatus] = useState<'idle' | 'uploading' | 'deleting'>('idle')
-  const [avatarError, setAvatarError] = useState<string | null>(null)
-  const [pendingDelete, setPendingDelete] = useState(false)
-
-  const initials = `${form.firstName?.[0] ?? ''}${form.lastName?.[0] ?? ''}`.toUpperCase()
-
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    if (!ALLOWED_TYPES.includes(file.type)) {
-      setAvatarError('Only JPEG, PNG, GIF and WebP images are allowed.')
-      return
-    }
-    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-      setAvatarError(`File must be under ${MAX_SIZE_MB} MB.`)
-      return
-    }
-
-    setAvatarError(null)
-    setPendingDelete(false)
-    setAvatarPreview(URL.createObjectURL(file))
-    setAvatarFile(file)
-    if (inputRef.current) inputRef.current.value = ''
-  }
-
-  const handleDeleteAvatar = () => {
-    setAvatarPreview(null)
-    setAvatarFile(null)
-    setAvatarError(null)
-    setPendingDelete(true)
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
     setError('')
 
     try {
-      // Handle avatar changes first
-      if (pendingDelete) {
-        setAvatarStatus('deleting')
-        await userApi.deleteAvatar()
-      } else if (avatarFile) {
-        setAvatarStatus('uploading')
-        const media = await mediaApi.upload(avatarFile, 'AVATAR')
-        await userApi.updateAvatar(media.url)
-      }
-
       // Save profile fields — use the /users/me endpoint (requires USER_UPDATE_OWN)
       const payload: UpdateUserRequest = {
         firstName: form.firstName || undefined,
@@ -117,7 +96,6 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
       setError(err instanceof Error ? err.message : 'Failed to save changes')
     } finally {
       setSaving(false)
-      setAvatarStatus('idle')
     }
   }
 
@@ -126,16 +104,17 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
     if (e.target === e.currentTarget) onClose()
   }
 
-  const avatarBusy = avatarStatus !== 'idle'
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6 backdrop-blur-sm"
       onClick={handleBackdropClick}
     >
-      <div className="animate-scale-in w-full max-w-lg rounded-2xl bg-white p-0 shadow-2xl dark:bg-slate-900">
+      <div
+        className="animate-scale-in flex w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl dark:bg-slate-900"
+        style={{ maxHeight: 'calc(100vh - 3rem)' }}
+      >
         {/* Modal header */}
-        <div className="border-border flex items-center justify-between border-b px-6 py-4 dark:border-slate-700">
+        <div className="border-border flex flex-shrink-0 items-center justify-between border-b px-6 py-4 dark:border-slate-700">
           <div>
             <h2 className="text-foreground text-lg font-semibold">Edit Profile</h2>
             <p className="text-muted-foreground text-sm">Update your personal information</p>
@@ -148,170 +127,502 @@ function EditProfileModal({ user, onClose, onSaved }: EditProfileModalProps) {
           </button>
         </div>
 
-        {/* Avatar row */}
-        <div className="border-border flex items-center gap-5 border-b px-6 py-5 dark:border-slate-700">
-          {/* Clickable avatar with camera overlay */}
-          <div className="group relative flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              disabled={avatarBusy}
-              className="border-border focus-visible:ring-ring relative block h-20 w-20 overflow-hidden rounded-full border-2 focus:outline-none focus-visible:ring-2 disabled:cursor-not-allowed"
-              aria-label="Change profile picture"
-            >
-              {avatarPreview ? (
-                <img
-                  src={avatarPreview}
-                  alt={getFullName(user)}
-                  className="h-full w-full object-cover"
+        {/* Scrollable form body */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+          <div className="space-y-4 px-6 py-5">
+            {error && (
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-foreground mb-1 block text-sm font-medium">First Name</label>
+                <Input
+                  value={form.firstName}
+                  onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
+                  placeholder="First name"
+                  required
                 />
-              ) : (
-                <span className="bg-primary/10 text-primary flex h-full w-full items-center justify-center rounded-full text-xl font-bold">
-                  {initials || '?'}
-                </span>
-              )}
+              </div>
+              <div>
+                <label className="text-foreground mb-1 block text-sm font-medium">Last Name</label>
+                <Input
+                  value={form.lastName}
+                  onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
+                  placeholder="Last name"
+                  required
+                />
+              </div>
+            </div>
 
-              {/* Hover overlay */}
-              <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
-                {avatarBusy ? (
-                  <Loader2 size={18} className="animate-spin text-white" />
-                ) : (
-                  <Camera size={18} className="text-white" />
-                )}
-                <span className="text-[9px] leading-none font-medium text-white">
-                  {avatarBusy ? '…' : 'Change'}
-                </span>
-              </span>
-            </button>
-          </div>
+            <div>
+              <label className="text-foreground mb-1 block text-sm font-medium">Job Title</label>
+              <Input
+                value={form.jobTitle}
+                onChange={(e) => setForm((f) => ({ ...f, jobTitle: e.target.value }))}
+                placeholder="e.g. Software Engineer"
+              />
+            </div>
 
-          {/* Info + action buttons */}
-          <div className="min-w-0 flex-1">
-            <p className="text-foreground font-medium">{getFullName(user)}</p>
-            <p className="text-muted-foreground mb-3 text-sm">{user.email}</p>
+            <div>
+              <label className="text-foreground mb-1 block text-sm font-medium">Phone Number</label>
+              <Input
+                value={form.phoneNumber}
+                onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))}
+                placeholder="+1 (555) 000-0000"
+                type="tel"
+              />
+            </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="gap-1.5 text-xs"
-                disabled={avatarBusy}
-                onClick={() => inputRef.current?.click()}
-              >
-                <Camera size={13} />
-                {avatarFile ? 'Change photo' : 'Upload photo'}
+            <div>
+              <label className="text-foreground mb-1 block text-sm font-medium">Bio</label>
+              <textarea
+                value={form.bio}
+                onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
+                placeholder="Tell people a bit about yourself..."
+                rows={3}
+                className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1 pb-1">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
               </Button>
-
-              {(avatarPreview || user.avatar) && !pendingDelete && (
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  className="gap-1.5 border-red-200 text-xs text-red-600 hover:bg-red-50 hover:text-red-700"
-                  disabled={avatarBusy}
-                  onClick={handleDeleteAvatar}
-                >
-                  <Trash2 size={13} />
-                  Remove photo
-                </Button>
-              )}
-
-              {pendingDelete && (
-                <span className="flex items-center gap-1 text-xs text-amber-600">
-                  <Trash2 size={13} />
-                  Photo will be removed on save
-                </span>
-              )}
-            </div>
-
-            {avatarError && <p className="mt-1.5 text-xs text-red-600">{avatarError}</p>}
-          </div>
-
-          {/* Hidden file input */}
-          <input
-            ref={inputRef}
-            type="file"
-            accept={ALLOWED_TYPES.join(',')}
-            className="hidden"
-            onChange={handleAvatarChange}
-          />
-        </div>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4 px-6 py-5">
-          {error && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-600">
-              {error}
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-foreground mb-1 block text-sm font-medium">First Name</label>
-              <Input
-                value={form.firstName}
-                onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
-                placeholder="First name"
-                required
-              />
-            </div>
-            <div>
-              <label className="text-foreground mb-1 block text-sm font-medium">Last Name</label>
-              <Input
-                value={form.lastName}
-                onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
-                placeholder="Last name"
-                required
-              />
+              <Button
+                type="submit"
+                disabled={saving}
+                className="bg-primary hover:bg-primary/90 gap-2 text-white"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {saving ? 'Saving…' : 'Save Changes'}
+              </Button>
             </div>
           </div>
-
-          <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">Job Title</label>
-            <Input
-              value={form.jobTitle}
-              onChange={(e) => setForm((f) => ({ ...f, jobTitle: e.target.value }))}
-              placeholder="e.g. Software Engineer"
-            />
-          </div>
-
-          <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">Phone Number</label>
-            <Input
-              value={form.phoneNumber}
-              onChange={(e) => setForm((f) => ({ ...f, phoneNumber: e.target.value }))}
-              placeholder="+1 (555) 000-0000"
-              type="tel"
-            />
-          </div>
-
-          <div>
-            <label className="text-foreground mb-1 block text-sm font-medium">Bio</label>
-            <textarea
-              value={form.bio}
-              onChange={(e) => setForm((f) => ({ ...f, bio: e.target.value }))}
-              placeholder="Tell people a bit about yourself..."
-              rows={3}
-              className="border-input bg-background placeholder:text-muted-foreground focus-visible:ring-ring w-full rounded-md border px-3 py-2 text-sm shadow-sm focus-visible:ring-1 focus-visible:outline-none"
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-1">
-            <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={saving}
-              className="bg-primary hover:bg-primary/90 gap-2 text-white"
-            >
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {saving ? 'Saving…' : 'Save Changes'}
-            </Button>
-          </div>
+          {/* end space-y-4 */}
         </form>
       </div>
+    </div>
+  )
+}
+
+// --- Activity Types -----------------------------------------------------------
+
+type ActivityKind = 'POST' | 'COMMENT' | 'REACTION' | 'BADGE' | 'TEAM_JOIN'
+
+interface ActivityItem {
+  id: string
+  kind: ActivityKind
+  timestamp: string
+  // POST
+  post?: PostResponse
+  // COMMENT
+  commentContent?: string
+  commentPostId?: string
+  commentPostContent?: string
+  // REACTION
+  reactionEmoji?: string
+  reactionPostId?: string
+  reactionPostContent?: string
+  // BADGE
+  badgeName?: string
+  badgeIcon?: string
+  // TEAM_JOIN
+  teamId?: string
+  teamName?: string
+  departmentName?: string
+}
+
+// --- Recent Activity Section --------------------------------------------------
+
+const ACTIVITY_PAGE_SIZE = 5
+const POST_FETCH_LIMIT = 10 // posts to scan for reactions/comments
+const CONTENT_FETCH_LIMIT = 15 // comments/reactions to fetch directly for the timeline
+
+function formatRelativeTime(dateStr: string): string {
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMins / 60)
+  const diffDays = Math.floor(diffHours / 24)
+
+  if (diffMins < 1) return 'just now'
+  if (diffMins < 60) return `${diffMins}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+function truncate(text: string, max = 80): string {
+  return text.length > max ? text.slice(0, max) + '…' : text
+}
+
+const ACTIVITY_ICON: Record<ActivityKind, { icon: React.ReactNode; label: string; color: string }> =
+  {
+    POST: {
+      icon: <FileText size={14} />,
+      label: 'Published a post',
+      color: 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400',
+    },
+    COMMENT: {
+      icon: <MessageCircle size={14} />,
+      label: 'Commented on a post',
+      color: 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400',
+    },
+    REACTION: {
+      icon: <Heart size={14} />,
+      label: 'Reacted to a post',
+      color: 'bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-400',
+    },
+    BADGE: {
+      icon: <Award size={14} />,
+      label: 'Earned a badge',
+      color: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400',
+    },
+    TEAM_JOIN: {
+      icon: <Users size={14} />,
+      label: 'Joined a team',
+      color: 'bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-400',
+    },
+  }
+
+interface RecentActivityProps {
+  userId: string
+  badges: UserBadge[]
+  onOpenPost: (postId: string) => void
+}
+
+function RecentActivity({ userId, badges, onOpenPost }: RecentActivityProps) {
+  const [activities, setActivities] = useState<ActivityItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [visibleCount, setVisibleCount] = useState(ACTIVITY_PAGE_SIZE)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function fetchActivity() {
+      setLoading(true)
+      setError(null)
+
+      try {
+        // 1. Fetch this user's own posts, comments (on ANY post), reactions (on ANY
+        //    post), and team memberships, all in parallel. Each call is independent —
+        //    Promise.allSettled means one failing (e.g. a service being briefly down)
+        //    doesn't blank out the rest of the timeline.
+        const [postsResult, commentsResult, reactionsResult, teamsResult] =
+          await Promise.allSettled([
+            postApi.getByAuthor(userId, 0, POST_FETCH_LIMIT),
+            commentApi.getByAuthor(userId, 0, CONTENT_FETCH_LIMIT),
+            reactionApi.getByUser(userId, 0, CONTENT_FETCH_LIMIT),
+            teamApi.getUserTeams(userId),
+          ])
+
+        if (cancelled) return
+
+        const userPosts: PostResponse[] =
+          postsResult.status === 'fulfilled' ? (postsResult.value.content ?? []) : []
+        const userComments =
+          commentsResult.status === 'fulfilled' ? (commentsResult.value.content ?? []) : []
+        // Post-level reactions only — comment-level reactions aren't tied to a single
+        // post here, so they're left out of the timeline rather than shown incorrectly.
+        const userReactions =
+          reactionsResult.status === 'fulfilled'
+            ? (reactionsResult.value.content ?? []).filter((r) => r.reactableType === 'POST')
+            : []
+        const userTeams = teamsResult.status === 'fulfilled' ? teamsResult.value : []
+
+        // 2. Build POST activities
+        const postActivities: ActivityItem[] = userPosts.map((p) => ({
+          id: `post-${p.id}`,
+          kind: 'POST' as ActivityKind,
+          timestamp: p.createdAt,
+          post: p,
+        }))
+
+        // 3. Comments and reactions reference posts by ID only — resolve the
+        //    content of any referenced post that isn't already among the user's
+        //    own posts (i.e. posts authored by someone else).
+        const knownPostContent = new Map<string, string>(userPosts.map((p) => [p.id, p.content]))
+        const missingPostIds = Array.from(
+          new Set(
+            [
+              ...userComments.map((c) => c.postId),
+              ...userReactions.map((r) => r.reactableId),
+            ].filter((id) => !knownPostContent.has(id))
+          )
+        )
+        if (missingPostIds.length > 0) {
+          const fetched = await Promise.allSettled(missingPostIds.map((id) => postApi.getById(id)))
+          fetched.forEach((r) => {
+            if (r.status === 'fulfilled') knownPostContent.set(r.value.id, r.value.content)
+          })
+        }
+
+        if (cancelled) return
+
+        // 4. Build COMMENT activities
+        const commentActivities: ActivityItem[] = userComments.map((c) => ({
+          id: `comment-${c.id}`,
+          kind: 'COMMENT' as ActivityKind,
+          timestamp: c.createdAt,
+          commentContent: c.content,
+          commentPostId: c.postId,
+          commentPostContent: knownPostContent.get(c.postId),
+        }))
+
+        // 5. Build REACTION activities
+        const reactionActivities: ActivityItem[] = userReactions.map((r) => ({
+          id: `reaction-${r.id}`,
+          kind: 'REACTION' as ActivityKind,
+          timestamp: r.createdAt,
+          reactionEmoji: r.reactionTypeEmoji,
+          reactionPostId: r.reactableId,
+          reactionPostContent: knownPostContent.get(r.reactableId),
+        }))
+
+        // 6. Build BADGE activities
+        const badgeActivities: ActivityItem[] = badges.map((b) => ({
+          id: `badge-${b.id}`,
+          kind: 'BADGE' as ActivityKind,
+          timestamp: b.awardedAt,
+          badgeName: b.displayName,
+          badgeIcon: b.icon,
+        }))
+
+        // 7. Build TEAM_JOIN activities
+        const teamActivities: ActivityItem[] = userTeams.map((m) => ({
+          id: `team-${m.team.id}`,
+          kind: 'TEAM_JOIN' as ActivityKind,
+          timestamp: m.joinedAt,
+          teamId: m.team.id,
+          teamName: m.team.name,
+          departmentName: m.team.departmentName ?? undefined,
+        }))
+
+        // 8. Merge and sort by newest first
+        const all = [
+          ...postActivities,
+          ...commentActivities,
+          ...reactionActivities,
+          ...badgeActivities,
+          ...teamActivities,
+        ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+
+        if (!cancelled) {
+          setActivities(all)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : 'Failed to load activity')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    fetchActivity()
+    return () => {
+      cancelled = true
+    }
+  }, [userId, badges])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="text-primary h-6 w-6 animate-spin" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600 dark:border-red-900/30 dark:bg-red-900/10 dark:text-red-400">
+        {error}
+      </div>
+    )
+  }
+
+  if (activities.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
+        <div className="bg-muted flex h-12 w-12 items-center justify-center rounded-full">
+          <Activity className="text-muted-foreground h-5 w-5" />
+        </div>
+        <p className="text-muted-foreground text-sm">No recent activity yet</p>
+      </div>
+    )
+  }
+
+  const visible = activities.slice(0, visibleCount)
+  const hasMore = visibleCount < activities.length
+
+  return (
+    <div className="space-y-1">
+      {/* Stats bar */}
+      <div className="mb-5 flex flex-wrap gap-4">
+        {(
+          [
+            { kind: 'POST', label: 'Posts', icon: <FileText size={13} /> },
+            { kind: 'COMMENT', label: 'Comments', icon: <MessageCircle size={13} /> },
+            { kind: 'REACTION', label: 'Reactions', icon: <Heart size={13} /> },
+            { kind: 'BADGE', label: 'Badges', icon: <Award size={13} /> },
+            { kind: 'TEAM_JOIN', label: 'Teams joined', icon: <Users size={13} /> },
+          ] as const
+        )
+          .filter(({ kind }) => activities.some((a) => a.kind === kind))
+          .map(({ kind, label, icon }) => {
+            const count = activities.filter((a) => a.kind === kind).length
+            const meta = ACTIVITY_ICON[kind]
+            return (
+              <div
+                key={kind}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${meta.color}`}
+              >
+                {icon}
+                <span>
+                  {count} {label}
+                </span>
+              </div>
+            )
+          })}
+      </div>
+
+      {/* Timeline */}
+      <div className="relative">
+        {/* Vertical line */}
+        <div className="bg-border absolute top-0 bottom-0 left-[19px] w-px" />
+
+        <div className="space-y-4">
+          {visible.map((item) => {
+            const meta = ACTIVITY_ICON[item.kind]
+            return (
+              <div key={item.id} className="flex gap-4">
+                {/* Icon bubble */}
+                <div
+                  className={`relative z-10 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${meta.color}`}
+                >
+                  {item.kind === 'REACTION' && item.reactionEmoji ? (
+                    <span className="text-base">{item.reactionEmoji}</span>
+                  ) : (
+                    meta.icon
+                  )}
+                </div>
+
+                {/* Content */}
+                <div
+                  className="bg-card border-border hover:bg-muted/30 min-w-0 flex-1 cursor-pointer rounded-xl border p-3 transition-colors"
+                  onClick={() => {
+                    const postId = item.post?.id ?? item.commentPostId ?? item.reactionPostId
+                    if (postId) onOpenPost(postId)
+                  }}
+                >
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span className="text-foreground text-sm font-medium">{meta.label}</span>
+                    <span className="text-muted-foreground flex-shrink-0 text-xs">
+                      {formatRelativeTime(item.timestamp)}
+                    </span>
+                  </div>
+
+                  {item.kind === 'POST' && item.post && (
+                    <button
+                      onClick={() => onOpenPost(item.post!.id)}
+                      className="text-muted-foreground hover:text-primary block w-full text-left text-sm transition-colors"
+                    >
+                      <span className="italic">"{truncate(item.post.content)}"</span>
+                      {(item.post.commentCount > 0 || item.post.reactionCount > 0) && (
+                        <span className="text-muted-foreground/70 ml-2 text-xs">
+                          · {item.post.commentCount} comment
+                          {item.post.commentCount !== 1 ? 's' : ''}· {item.post.reactionCount}{' '}
+                          reaction{item.post.reactionCount !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </button>
+                  )}
+
+                  {item.kind === 'COMMENT' && item.commentPostId && (
+                    <button
+                      onClick={() => onOpenPost(item.commentPostId!)}
+                      className="text-muted-foreground hover:text-primary block w-full text-left text-sm transition-colors"
+                    >
+                      <span className="italic">"{truncate(item.commentContent ?? '')}"</span>
+                      {item.commentPostContent && (
+                        <span className="text-muted-foreground/70 ml-1 text-xs">
+                          on "{truncate(item.commentPostContent, 50)}"
+                        </span>
+                      )}
+                    </button>
+                  )}
+
+                  {item.kind === 'REACTION' && item.reactionPostId && (
+                    <button
+                      onClick={() => onOpenPost(item.reactionPostId!)}
+                      className="text-muted-foreground hover:text-primary block w-full text-left text-sm transition-colors"
+                    >
+                      {item.reactionEmoji && <span className="mr-1">{item.reactionEmoji}</span>}
+                      {item.reactionPostContent && (
+                        <span>on "{truncate(item.reactionPostContent, 60)}"</span>
+                      )}
+                    </button>
+                  )}
+
+                  {item.kind === 'BADGE' && (
+                    <span className="text-muted-foreground block text-sm">{item.badgeName}</span>
+                  )}
+
+                  {item.kind === 'TEAM_JOIN' && (
+                    <Link
+                      href={item.teamId ? `/team/${item.teamId}` : '#'}
+                      className="text-muted-foreground hover:text-primary block w-full text-sm transition-colors"
+                    >
+                      {item.teamName}
+                      {item.departmentName && (
+                        <span className="text-muted-foreground/70 ml-1 text-xs">
+                          · {item.departmentName}
+                        </span>
+                      )}
+                    </Link>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Load more / collapse */}
+      {(hasMore || visibleCount > ACTIVITY_PAGE_SIZE) && (
+        <div className="pt-3 text-center">
+          {hasMore ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => setVisibleCount((v) => v + ACTIVITY_PAGE_SIZE)}
+            >
+              <ChevronDown size={14} />
+              Show more ({activities.length - visibleCount} remaining)
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => setVisibleCount(ACTIVITY_PAGE_SIZE)}
+            >
+              <ChevronUp size={14} />
+              Show less
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -328,6 +639,83 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
+  const [viewPostId, setViewPostId] = useState<string | null>(null)
+  const [showContactModal, setShowContactModal] = useState(false)
+  const [connectionCount, setConnectionCount] = useState<number | null>(null)
+  const [userBadges, setUserBadges] = useState<UserBadge[]>([])
+  const [showConnectionsModal, setShowConnectionsModal] = useState(false)
+
+  const refreshConnectionCount = async () => {
+    try {
+      const { count } = await connectionApi.getCount(userId)
+      setConnectionCount(count)
+    } catch {
+      // Non-critical — just leave the previous count/skeleton in place.
+    }
+  }
+
+  // Avatar editing state (own profile only)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const [avatarStatus, setAvatarStatus] = useState<'idle' | 'uploading' | 'deleting'>('idle')
+  const [avatarError, setAvatarError] = useState<string | null>(null)
+
+  const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !profileUser) return
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setAvatarError('Only JPEG, PNG, GIF and WebP images are allowed.')
+      return
+    }
+    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+      setAvatarError(`File must be under ${MAX_SIZE_MB} MB.`)
+      return
+    }
+    setAvatarError(null)
+    setAvatarStatus('uploading')
+    try {
+      const media = await mediaApi.upload(file, 'AVATAR')
+      await userApi.updateAvatar(media.url)
+      setProfileUser((u) => (u ? { ...u, avatar: media.url } : u))
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : 'Failed to upload photo')
+    } finally {
+      setAvatarStatus('idle')
+      if (avatarInputRef.current) avatarInputRef.current.value = ''
+    }
+  }
+
+  const handleDeleteAvatar = async () => {
+    if (!profileUser) return
+    setAvatarError(null)
+    setAvatarStatus('deleting')
+    try {
+      await userApi.deleteAvatar()
+      setProfileUser((u) => (u ? { ...u, avatar: null } : u))
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : 'Failed to remove photo')
+    } finally {
+      setAvatarStatus('idle')
+    }
+  }
+
+  // Banner editing state (own profile only) — uses the same OrgBannerUpload
+  // component as team/department pages.
+  const [bannerError, setBannerError] = useState<string | null>(null)
+
+  const handleBannerUploaded = async (url: string | null) => {
+    if (!profileUser) return
+    setBannerError(null)
+    try {
+      if (url) {
+        await userApi.updateBanner(url)
+      } else {
+        await userApi.deleteBanner()
+      }
+      setProfileUser((u) => (u ? { ...u, bannerUrl: url } : u))
+    } catch (err) {
+      setBannerError(err instanceof Error ? err.message : 'Failed to update banner')
+    }
+  }
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -341,7 +729,20 @@ export default function ProfilePage() {
         setIsLoading(false)
       }
     }
-    if (userId) fetchUser()
+    const fetchBadges = async () => {
+      try {
+        const badges = await badgeApi.getUserBadges(userId)
+        setUserBadges(badges)
+      } catch {
+        // Non-critical — badges section simply won't appear
+      }
+    }
+    if (userId) {
+      fetchUser()
+      fetchBadges()
+      setConnectionCount(null)
+      refreshConnectionCount()
+    }
   }, [userId])
 
   if (isLoading) {
@@ -370,6 +771,28 @@ export default function ProfilePage() {
 
   return (
     <AuthLayout>
+      {/* Post View Modal */}
+      {viewPostId && <PostViewModal postId={viewPostId} onClose={() => setViewPostId(null)} />}
+
+      {/* Contact Options Modal — choose Outlook email or Teams chat */}
+      {profileUser.email && (
+        <ContactOptionsModal
+          open={showContactModal}
+          onOpenChange={setShowContactModal}
+          recipientName={displayName}
+          recipientEmail={profileUser.email}
+        />
+      )}
+
+      {/* Connections Modal — only for other users' profiles; your own count links to /connections */}
+      {showConnectionsModal && !isOwnProfile && (
+        <UserConnectionsModal
+          userId={profileUser.id}
+          displayName={displayName}
+          onClose={() => setShowConnectionsModal(false)}
+        />
+      )}
+
       {/* Edit Profile Modal */}
       {showEditModal && isOwnProfile && (
         <EditProfileModal
@@ -383,25 +806,95 @@ export default function ProfilePage() {
       )}
 
       <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        {/* Cover Image */}
-        <div className="animate-fade-in from-primary/20 to-secondary/20 mb-6 h-48 rounded-xl bg-gradient-to-r"></div>
+        {/* Cover Banner */}
+        {isOwnProfile ? (
+          <div className="animate-fade-in mb-6">
+            <OrgBannerUpload
+              currentUrl={profileUser.bannerUrl}
+              onUploaded={handleBannerUploaded}
+              context="USER_BANNER"
+              heightClassName="h-56"
+            />
+            {bannerError && <p className="text-destructive mt-1 text-xs">{bannerError}</p>}
+          </div>
+        ) : profileUser.bannerUrl ? (
+          <div className="animate-fade-in mb-6 h-56 w-full overflow-hidden rounded-lg">
+            <img
+              src={profileUser.bannerUrl}
+              alt={`${displayName}'s banner`}
+              className="h-full w-full object-cover"
+            />
+          </div>
+        ) : (
+          <div className="animate-fade-in from-primary/20 to-secondary/20 mb-6 h-56 rounded-lg bg-gradient-to-r"></div>
+        )}
 
         {/* Profile Card */}
-        <Card className="animate-scale-in relative -mt-24 mb-8 p-6">
+        <Card className="animate-scale-in relative -mt-16 mb-8 p-6">
           <div className="flex flex-col gap-6 sm:flex-row">
-            {/* Avatar */}
-            {profileUser.avatar ? (
-              <img
-                src={profileUser.avatar}
-                alt={displayName}
-                className="h-32 w-32 rounded-full border-4 border-white object-cover shadow-lg dark:border-slate-800"
-              />
-            ) : (
-              <div className="bg-primary/10 text-primary flex h-32 w-32 flex-shrink-0 items-center justify-center rounded-full border-4 border-white text-4xl font-bold shadow-lg dark:border-slate-800">
-                {profileUser.firstName?.[0]?.toUpperCase()}
-                {profileUser.lastName?.[0]?.toUpperCase()}
+            {/* Avatar with hover controls (own profile only) */}
+            <div className="relative flex-shrink-0 self-start">
+              <div className="group relative h-32 w-32">
+                {profileUser.avatar ? (
+                  <img
+                    src={profileUser.avatar}
+                    alt={displayName}
+                    className="h-32 w-32 rounded-full border-4 border-white object-cover shadow-lg dark:border-slate-800"
+                  />
+                ) : (
+                  <div className="bg-primary/10 text-primary flex h-32 w-32 flex-shrink-0 items-center justify-center rounded-full border-4 border-white text-4xl font-bold shadow-lg dark:border-slate-800">
+                    {profileUser.firstName?.[0]?.toUpperCase()}
+                    {profileUser.lastName?.[0]?.toUpperCase()}
+                  </div>
+                )}
+
+                {/* Hover overlay — own profile only */}
+                {isOwnProfile && (
+                  <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-full bg-black/50 opacity-0 transition-opacity group-hover:opacity-100">
+                    {avatarStatus !== 'idle' ? (
+                      <Loader2 size={22} className="animate-spin text-white" />
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => avatarInputRef.current?.click()}
+                          title="Change photo"
+                          className="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-white transition-colors hover:bg-white/40"
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        {profileUser.avatar && (
+                          <button
+                            type="button"
+                            onClick={handleDeleteAvatar}
+                            title="Remove photo"
+                            className="flex h-9 w-9 items-center justify-center rounded-full bg-red-500/80 text-white transition-colors hover:bg-red-600"
+                          >
+                            <X size={15} />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
+
+              {/* Hidden file input */}
+              {isOwnProfile && (
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept={ALLOWED_TYPES.join(',')}
+                  className="hidden"
+                  onChange={handleAvatarFileChange}
+                />
+              )}
+
+              {/* Avatar error */}
+              {avatarError && (
+                <p className="mt-1 max-w-[8rem] text-center text-xs text-red-500">{avatarError}</p>
+              )}
+            </div>
 
             {/* Profile Info */}
             <div className="flex-1">
@@ -415,6 +908,43 @@ export default function ProfilePage() {
                     <MapPin size={16} />
                     {profileUser.active ? 'Active Member' : 'Inactive'}
                   </p>
+                  {isOwnProfile ? (
+                    <Link
+                      href="/connections"
+                      className="text-muted-foreground hover:text-primary mt-1 flex items-center gap-1 text-sm transition-colors"
+                    >
+                      <Users size={15} />
+                      {connectionCount === null ? (
+                        <span className="bg-muted inline-block h-4 w-20 animate-pulse rounded" />
+                      ) : (
+                        <span>
+                          <span className="text-foreground hover:text-primary font-semibold">
+                            {connectionCount}
+                          </span>{' '}
+                          connection{connectionCount === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </Link>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowConnectionsModal(true)}
+                      disabled={connectionCount === null}
+                      className="text-muted-foreground hover:text-primary mt-1 flex items-center gap-1 text-sm transition-colors"
+                    >
+                      <Users size={15} />
+                      {connectionCount === null ? (
+                        <span className="bg-muted inline-block h-4 w-20 animate-pulse rounded" />
+                      ) : (
+                        <span>
+                          <span className="text-foreground hover:text-primary font-semibold">
+                            {connectionCount}
+                          </span>{' '}
+                          connection{connectionCount === 1 ? '' : 's'}
+                        </span>
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 {/* Action buttons */}
@@ -430,14 +960,20 @@ export default function ProfilePage() {
                     </Button>
                   ) : (
                     <>
-                      <Button variant="outline" className="gap-2">
+                      <Button
+                        variant="outline"
+                        className="gap-2"
+                        onClick={() => setShowContactModal(true)}
+                        disabled={!profileUser.email}
+                        title={profileUser.email ? `Message ${displayName}` : 'No email on file'}
+                      >
                         <Mail size={18} />
                         Message
                       </Button>
-                      <Button className="bg-primary hover:bg-primary/90 gap-2 text-white">
-                        <MessageSquare size={18} />
-                        Connect
-                      </Button>
+                      <ConnectButton
+                        targetUserId={profileUser.id}
+                        onChange={() => refreshConnectionCount()}
+                      />
                     </>
                   )}
                 </div>
@@ -545,12 +1081,68 @@ export default function ProfilePage() {
           </div>
         </Card>
 
+        {/* Badges ─────────────────────────────────────────────────────────── */}
+        {userBadges.length > 0 && (
+          <Card className="animate-slide-up mb-8 p-6" style={{ animationDelay: '80ms' }}>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="text-foreground text-2xl font-bold">Badges</h2>
+                <p className="text-muted-foreground mt-0.5 text-sm">
+                  {isOwnProfile ? 'Your' : `${getFullName(profileUser)}'s`} achievements
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-muted-foreground text-sm font-medium">
+                  {userBadges.length} earned
+                </span>
+                <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-full">
+                  <Award className="text-primary h-5 w-5" />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {userBadges.map((b) => (
+                <Link
+                  key={b.badgeKey}
+                  href="/badges"
+                  title={`${b.displayName} — ${b.description}`}
+                  className="group bg-muted/40 hover:bg-muted flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors"
+                >
+                  <BadgeIcon name={b.icon} size={14} className="text-primary shrink-0" />
+                  <span>{b.displayName}</span>
+                </Link>
+              ))}
+            </div>
+
+            {isOwnProfile && (
+              <div className="mt-4">
+                <Link href="/badges" className="text-primary text-sm font-medium hover:underline">
+                  View all badges →
+                </Link>
+              </div>
+            )}
+          </Card>
+        )}
+
         {/* Recent Activity */}
         <Card className="animate-slide-up p-6" style={{ animationDelay: '100ms' }}>
-          <h2 className="text-foreground mb-4 text-2xl font-bold">Recent Activity</h2>
-          <div className="py-8 text-center">
-            <p className="text-muted-foreground">Posts will appear here</p>
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-foreground text-2xl font-bold">Recent Activity</h2>
+              <p className="text-muted-foreground mt-0.5 text-sm">
+                Posts, comments, and reactions by {isOwnProfile ? 'you' : getFullName(profileUser)}
+              </p>
+            </div>
+            <div className="bg-primary/10 flex h-10 w-10 items-center justify-center rounded-full">
+              <Activity className="text-primary h-5 w-5" />
+            </div>
           </div>
+          <RecentActivity
+            userId={userId}
+            badges={userBadges}
+            onOpenPost={(id) => setViewPostId(id)}
+          />
         </Card>
       </div>
     </AuthLayout>

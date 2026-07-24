@@ -15,12 +15,17 @@ import tn.moonside.userservice.repositories.UserRoleRepository;
 import tn.moonside.userservice.repositories.PermissionRoleRepository;
 import tn.moonside.userservice.repositories.PermissionRepository;
 import tn.moonside.userservice.entities.PermissionRole;
+import tn.moonside.userservice.event.UserActivityEvent;
+import tn.moonside.userservice.kafka.UserActivityEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
+import tn.moonside.userservice.email.EmailTemplates;
+
+import jakarta.mail.internet.MimeMessage;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,6 +56,7 @@ public class UserServiceImpl implements UserService {
     private final AuditLogService auditLogService;
     private final PasswordEncoder passwordEncoder;
     private final JavaMailSender mailSender;
+    private final UserActivityEventPublisher userActivityPublisher;
 
     @Value("${app.name:WorkSphere}")
     private String appName;
@@ -230,11 +236,9 @@ public class UserServiceImpl implements UserService {
     }
 
     private void sendInvitationEmail(String to, String firstName, String rawPassword) {
-        SimpleMailMessage msg = new SimpleMailMessage();
-        msg.setFrom(mailFrom);
-        msg.setTo(to);
-        msg.setSubject(appName + " — Your account has been created");
-        msg.setText(
+        String loginUrl = frontendUrl + "/login";
+        String html = EmailTemplates.invitationEmail(appName, firstName, to, rawPassword, loginUrl);
+        String textFallback =
             "Hi " + firstName + ",\n\n" +
             "An administrator has created an account for you on " + appName + ".\n\n" +
             "Your login credentials are:\n" +
@@ -242,12 +246,23 @@ public class UserServiceImpl implements UserService {
             "  Password: " + rawPassword + "\n\n" +
             "For security reasons, please change your password after your first login.\n\n" +
             "Click the link below to log in:\n" +
-            "  " + frontendUrl + "/login\n\n" +
+            "  " + loginUrl + "\n\n" +
             "If you did not expect this email, please contact your administrator.\n\n" +
-            "— The " + appName + " Team"
-        );
-        mailSender.send(msg);
-        log.info("Invitation email sent to {}", to);
+            "— The " + appName + " Team";
+
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setFrom(mailFrom);
+            helper.setTo(to);
+            helper.setSubject(appName + " — Your account has been created");
+            helper.setText(textFallback, html);
+            mailSender.send(mimeMessage);
+            log.info("Invitation email sent to {}", to);
+        } catch (Exception e) {
+            log.error("Failed to send invitation email to {}: {}", to, e.getMessage(), e);
+            throw new RuntimeException("Failed to send invitation email", e);
+        }
     }
 
     @Override
@@ -270,6 +285,16 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public List<UserResponse> searchByName(String query) {
+        if (query == null || query.isBlank()) return List.of();
+        String escaped = query.trim().replaceAll("[.*+?^${}()|\\[\\]\\\\]", "\\\\$0");
+        return userRepository.searchByName(escaped).stream()
+                .limit(10)
+                .map(this::mapToUserResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     @Transactional
     public UserResponse updateAvatar(String email, String avatarUrl) {
         User user = userRepository.findByEmail(email)
@@ -286,6 +311,27 @@ public class UserServiceImpl implements UserService {
                 : "Avatar updated for " + email;
         auditLogService.log(saved.getId(), saved.getId(), "USER",
                 action, desc, true, oldAvatar, avatarUrl, null);
+
+        return mapToUserResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public UserResponse updateBanner(String email, String bannerUrl) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
+        String oldBanner = user.getBannerUrl();
+        user.setBannerUrl(bannerUrl);
+        user.setUpdatedAt(LocalDateTime.now());
+        User saved = userRepository.save(user);
+        log.info("Updated banner for user: {}", saved.getId());
+
+        String action = (bannerUrl == null) ? "BANNER_DELETE" : "BANNER_UPDATE";
+        String desc   = (bannerUrl == null)
+                ? "Banner removed for " + email
+                : "Banner updated for " + email;
+        auditLogService.log(saved.getId(), saved.getId(), "USER",
+                action, desc, true, oldBanner, bannerUrl, null);
 
         return mapToUserResponse(saved);
     }
@@ -314,6 +360,19 @@ public class UserServiceImpl implements UserService {
                 "PROFILE_UPDATE",
                 "Profile updated for " + updated.getEmail() + " by " + currentUserEmail,
                 true, oldSnapshot, toSnapshot(updated), null);
+
+        // Publish PROFILE_COMPLETED event if all key fields are now filled
+        boolean isProfileComplete = updated.getFirstName() != null && !updated.getFirstName().isBlank()
+                && updated.getLastName()    != null && !updated.getLastName().isBlank()
+                && updated.getJobTitle()    != null && !updated.getJobTitle().isBlank()
+                && updated.getBio()         != null && !updated.getBio().isBlank()
+                && updated.getAvatar()      != null && !updated.getAvatar().isBlank();
+        if (isProfileComplete) {
+            userActivityPublisher.publish(UserActivityEvent.builder()
+                    .userId(updated.getId())
+                    .activityType("PROFILE_COMPLETED")
+                    .build());
+        }
 
         return mapToUserResponse(updated);
     }
@@ -478,6 +537,7 @@ public class UserServiceImpl implements UserService {
                 .jobTitle(user.getJobTitle())
                 .bio(user.getBio())
                 .avatar(user.getAvatar())
+                .bannerUrl(user.getBannerUrl())
                 .isActive(user.isActive())
                 .mustChangePassword(user.isMustChangePassword())
                 .lastLogin(user.getLastLogin())

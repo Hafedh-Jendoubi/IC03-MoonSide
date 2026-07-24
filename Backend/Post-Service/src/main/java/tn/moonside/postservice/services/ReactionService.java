@@ -1,0 +1,223 @@
+package tn.moonside.postservice.services;
+
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
+import org.springframework.stereotype.Service;
+import tn.moonside.postservice.audit.AuditClient;
+import tn.moonside.postservice.audit.PostAuditAction;
+import tn.moonside.postservice.clients.UserClient;
+import tn.moonside.postservice.dtos.requests.ReactionRequest;
+import tn.moonside.postservice.entities.Post;
+import tn.moonside.postservice.entities.Comment;
+import tn.moonside.postservice.event.NotificationEvent;
+import tn.moonside.postservice.kafka.NotificationEventPublisher;
+import tn.moonside.postservice.repositories.PostRepository;
+import tn.moonside.postservice.repositories.CommentRepository;
+import tn.moonside.postservice.dtos.responses.ReactionResponse;
+import tn.moonside.postservice.dtos.responses.ReactionSummaryResponse;
+import tn.moonside.postservice.entities.Reaction;
+import tn.moonside.postservice.entities.ReactionType;
+import tn.moonside.postservice.repositories.ReactionRepository;
+import tn.moonside.postservice.repositories.ReactionTypeRepository;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ReactionService {
+
+    private final ReactionRepository reactionRepository;
+    private final ReactionTypeRepository reactionTypeRepository;
+    private final AuditClient auditClient;
+    private final UserClient userClient;
+    private final PostRepository postRepository;
+    private final CommentRepository commentRepository;
+    private final NotificationEventPublisher notificationPublisher;
+
+    /**
+     * Toggle reaction: if the user already has the same reaction, remove it.
+     * If they have a different reaction, switch it. Otherwise add new.
+     */
+    @CacheEvict(value = "reactionSummary", key = "#reactableType + '-' + #reactableId")
+    public ReactionResponse toggleReaction(String reactableType, String reactableId,
+                                           ReactionRequest req, String userId) {
+        ReactionType reactionType = reactionTypeRepository.findByCode(req.getReactionTypeCode())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Unknown reaction type: " + req.getReactionTypeCode()));
+
+        Optional<Reaction> existing = reactionRepository
+                .findByUserIdAndReactableTypeAndReactableId(userId, reactableType, reactableId);
+
+        if (existing.isPresent()) {
+            Reaction r = existing.get();
+            if (r.getReactionTypeId().equals(reactionType.getId())) {
+                // Same reaction → remove (toggle off)
+                reactionRepository.delete(r);
+
+                String reactorNameR = userClient.displayName(userId);
+                String targetDescR = resolveTargetDescription(reactableType, reactableId);
+                auditClient.log(userId, reactableId, reactableType, PostAuditAction.REACTION_REMOVED,
+                        reactorNameR + " removed reaction '" + req.getReactionTypeCode() +
+                        "' from " + targetDescR,
+                        true, req.getReactionTypeCode(), null);
+
+                return null;
+            }
+            // Different reaction → switch
+            String oldCode = reactionTypeRepository.findById(r.getReactionTypeId())
+                    .map(ReactionType::getCode).orElse(r.getReactionTypeId());
+            r.setReactionTypeId(reactionType.getId());
+            ReactionResponse response = toResponse(reactionRepository.save(r), reactionType);
+
+            String reactorNameC = userClient.displayName(userId);
+            String targetDescC = resolveTargetDescription(reactableType, reactableId);
+            auditClient.log(userId, reactableId, reactableType, PostAuditAction.REACTION_CHANGED,
+                    reactorNameC + " changed reaction from '" + oldCode +
+                    "' to '" + req.getReactionTypeCode() + "' on " + targetDescC,
+                    true, oldCode, req.getReactionTypeCode());
+
+            return response;
+        }
+
+        // New reaction
+        Reaction reaction = Reaction.builder()
+                .userId(userId)
+                .reactionTypeId(reactionType.getId())
+                .reactableType(reactableType)
+                .reactableId(reactableId)
+                .build();
+        ReactionResponse response = toResponse(reactionRepository.save(reaction), reactionType);
+
+        String reactorName = userClient.displayName(userId);
+        String targetDesc = resolveTargetDescription(reactableType, reactableId);
+
+        // ── Kafka notification ────────────────────────────────────────────────
+        String targetOwnerId = resolveOwnerId(reactableType, reactableId);
+        if (targetOwnerId != null && !targetOwnerId.equals(userId)) {
+            notificationPublisher.publish(NotificationEvent.builder()
+                    .recipientId(targetOwnerId)
+                    .senderId(userId)
+                    .notificationType("REACTION")
+                    .title(reactorName + " reacted to your " + reactableType.toLowerCase())
+                    .body(reactionType.getEmoji() + " " + reactionType.getCode())
+                    .resourceId(reactableId)
+                    .resourceType(reactableType)
+                    .build());
+        }
+
+        auditClient.log(userId, reactableId, reactableType, PostAuditAction.REACTION_ADDED,
+                reactorName + " reacted '" + req.getReactionTypeCode() + "' to " + targetDesc,
+                true, null, req.getReactionTypeCode());
+
+        return response;
+    }
+
+    @Cacheable(value = "reactionSummary", key = "#reactableType + '-' + #reactableId")
+    public ReactionSummaryResponse getSummary(String reactableType, String reactableId, String currentUserId) {
+        List<Reaction> reactions = reactionRepository
+                .findByReactableTypeAndReactableId(reactableType, reactableId);
+
+        // Group by emoji
+        Map<String, Long> byEmoji = reactions.stream().collect(Collectors.groupingBy(r -> {
+            return reactionTypeRepository.findById(r.getReactionTypeId())
+                    .map(ReactionType::getEmoji)
+                    .orElse("?");
+        }, Collectors.counting()));
+
+        ReactionResponse userReaction = reactions.stream()
+                .filter(r -> r.getUserId().equals(currentUserId))
+                .findFirst()
+                .map(r -> reactionTypeRepository.findById(r.getReactionTypeId())
+                        .map(rt -> toResponse(r, rt)).orElse(null))
+                .orElse(null);
+
+        return ReactionSummaryResponse.builder()
+                .total(reactions.size())
+                .byEmoji(byEmoji)
+                .userReaction(userReaction)
+                .build();
+    }
+
+    /**
+     * Returns all reactions (to posts and comments) made by a single user, newest first.
+     * Used by the "Recent Activity" section on a user's profile page.
+     */
+    public org.springframework.data.domain.Page<ReactionResponse> getByUser(String userId, int page, int size) {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                page, size, org.springframework.data.domain.Sort.by(
+                        org.springframework.data.domain.Sort.Direction.DESC, "createdAt"));
+        return reactionRepository.findByUserId(userId, pageable)
+                .map(r -> reactionTypeRepository.findById(r.getReactionTypeId())
+                        .map(rt -> toResponse(r, rt))
+                        .orElse(null));
+    }
+
+    public List<ReactionResponse> getReactors(String reactableType, String reactableId) {
+        return reactionRepository.findByReactableTypeAndReactableId(reactableType, reactableId)
+                .stream()
+                .map(r -> reactionTypeRepository.findById(r.getReactionTypeId())
+                        .map(rt -> toResponse(r, rt))
+                        .orElse(null))
+                .filter(r -> r != null)
+                .collect(Collectors.toList());
+    }
+
+    private ReactionResponse toResponse(Reaction r, ReactionType rt) {
+        return ReactionResponse.builder()
+                .id(r.getId()).userId(r.getUserId())
+                .reactionTypeId(r.getReactionTypeId())
+                .reactionTypeCode(rt.getCode())
+                .reactionTypeEmoji(rt.getEmoji())
+                .reactableType(r.getReactableType())
+                .reactableId(r.getReactableId())
+                .createdAt(r.getCreatedAt())
+                .build();
+    }
+
+    private String resolveOwnerId(String reactableType, String reactableId) {
+        try {
+            if ("POST".equalsIgnoreCase(reactableType)) {
+                return postRepository.findById(reactableId).map(Post::getAuthorId).orElse(null);
+            }
+            if ("COMMENT".equalsIgnoreCase(reactableType)) {
+                return commentRepository.findById(reactableId).map(Comment::getAuthorId).orElse(null);
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    /**
+     * Returns a human-readable description of the reacted-to entity,
+     * e.g. "a post by Alice Smith (posted 2025-05-10 14:30)" or
+     * "a comment by Bob Jones".
+     */
+    private String resolveTargetDescription(String reactableType, String reactableId) {
+        try {
+            if ("POST".equalsIgnoreCase(reactableType)) {
+                return postRepository.findById(reactableId).map(post -> {
+                    String authorName = userClient.displayName(post.getAuthorId());
+                    String date = post.getCreatedAt()
+                            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+                    return "a post by " + authorName + " (posted " + date + ")";
+                }).orElse("a post");
+            }
+            if ("COMMENT".equalsIgnoreCase(reactableType)) {
+                return commentRepository.findById(reactableId).map(comment -> {
+                    String authorName = userClient.displayName(comment.getAuthorId());
+                    return "a comment by " + authorName;
+                }).orElse("a comment");
+            }
+        } catch (Exception e) {
+            // fail-safe — degraded description is better than an exception
+        }
+        return reactableType.toLowerCase();
+    }
+
+}

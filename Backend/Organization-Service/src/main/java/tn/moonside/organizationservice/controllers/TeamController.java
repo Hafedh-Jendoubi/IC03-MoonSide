@@ -41,6 +41,16 @@ public class TeamController {
     }
 
     /**
+     * GET /organizations/teams/independent
+     * Returns PUBLIC teams that have no department — shown on the Discover page.
+     */
+    @GetMapping("/independent")
+    public ResponseEntity<ApiResponse<List<TeamResponse>>> getIndependentTeams(
+            @AuthenticationPrincipal String userId) {
+        return ResponseEntity.ok(ApiResponse.success(teamService.getIndependentTeams(userId)));
+    }
+
+    /**
      * GET /organizations/teams/visible
      * Returns all teams the authenticated user is allowed to see:
      *  - All PUBLIC teams
@@ -72,6 +82,18 @@ public class TeamController {
     public ResponseEntity<ApiResponse<List<TeamResponse>>> getMyTeams(
             @AuthenticationPrincipal String userId) {
         return ResponseEntity.ok(ApiResponse.success(teamService.getMyTeams(userId)));
+    }
+
+    /**
+     * GET /organizations/teams/user/{userId}
+     * All teams the given user belongs to, with the date they joined each one.
+     * Used by the "Recent Activity" section on a user's profile page.
+     */
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<ApiResponse<List<tn.moonside.organizationservice.dtos.responses.TeamMembershipResponse>>> getUserTeams(
+            @PathVariable String userId,
+            @AuthenticationPrincipal String requestingUserId) {
+        return ResponseEntity.ok(ApiResponse.success(teamService.getUserTeams(userId, requestingUserId)));
     }
 
     @GetMapping("/department/{departmentId}")
@@ -188,6 +210,16 @@ public class TeamController {
     }
 
     // ── Follow / Unfollow ─────────────────────────────────────────────────────
+
+    /**
+     * GET /organizations/teams/{teamId}/followers
+     * Returns the list of users following this team.
+     */
+    @GetMapping("/{teamId}/followers")
+    public ResponseEntity<ApiResponse<List<tn.moonside.organizationservice.dtos.responses.UserSummary>>> getTeamFollowers(
+            @PathVariable String teamId) {
+        return ResponseEntity.ok(ApiResponse.success(teamService.getTeamFollowers(teamId)));
+    }
 
     /**
      * POST /organizations/teams/{teamId}/follow

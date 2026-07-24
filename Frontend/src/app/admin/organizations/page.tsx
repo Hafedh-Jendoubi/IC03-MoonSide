@@ -52,7 +52,7 @@ import {
   Lock,
   Loader2,
   RefreshCw,
-  CheckCircle,
+  FolderCog,
   XCircle,
   Crown,
   UserCog,
@@ -64,6 +64,7 @@ import {
   departmentApi,
   teamApi,
   userApi,
+  projectApi,
   DepartmentResponse,
   TeamResponse,
   UserResponse,
@@ -71,6 +72,9 @@ import {
   DepartmentRequest,
   TeamRequest,
   VisibilityType,
+  ProjectResponse,
+  ProjectRequest,
+  ProjectStatus,
 } from '@/lib/api'
 import { tokenStorage } from '@/lib/api'
 import { UserPicker } from '@/components/user-picker'
@@ -225,11 +229,12 @@ function TeamForm({
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="text-foreground text-sm font-medium">Department *</label>
+          <label className="text-foreground text-sm font-medium">
+            Department <span className="text-muted-foreground font-normal">(optional)</span>
+          </label>
           <select
             value={departmentId}
             onChange={(e) => setDepartmentId(e.target.value)}
-            required
             className="border-input bg-background focus-visible:ring-ring mt-1 w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
           >
             <option value="">— Select —</option>
@@ -273,9 +278,169 @@ function TeamForm({
         <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
           Cancel
         </Button>
-        <Button type="submit" disabled={loading || !name.trim() || !departmentId}>
+        <Button type="submit" disabled={loading || !name.trim()}>
           {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {initial ? 'Save changes' : 'Create team'}
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+// --- Project Form -------------------------------------------------------------
+
+interface ProjectFormProps {
+  initial?: ProjectResponse | null
+  teams: TeamResponse[]
+  onSave: (data: ProjectRequest) => Promise<void>
+  onCancel: () => void
+  loading: boolean
+}
+
+const PROJECT_STATUSES: ProjectStatus[] = [
+  'PLANNING',
+  'IN_PROGRESS',
+  'ON_HOLD',
+  'COMPLETED',
+  'CANCELLED',
+  'ARCHIVED',
+]
+
+function ProjectForm({ initial, teams, onSave, onCancel, loading }: ProjectFormProps) {
+  const [name, setName] = useState(initial?.name ?? '')
+  const [description, setDescription] = useState(initial?.description ?? '')
+  const [status, setStatus] = useState<ProjectStatus>(initial?.status ?? 'PLANNING')
+  const [repositoryUrl, setRepositoryUrl] = useState(initial?.repositoryUrl ?? '')
+  const [projectUrl, setProjectUrl] = useState(initial?.projectUrl ?? '')
+  const [technologies, setTechnologies] = useState((initial?.technologies ?? []).join(', '))
+  const [teamIds, setTeamIds] = useState<string[]>(initial?.teams?.map((t) => t.id) ?? [])
+  const [startDate, setStartDate] = useState(initial?.startDate?.slice(0, 10) ?? '')
+  const [endDate, setEndDate] = useState(initial?.endDate?.slice(0, 10) ?? '')
+  const [err, setErr] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) {
+      setErr('Name is required')
+      return
+    }
+    setErr(null)
+    await onSave({
+      name: name.trim(),
+      description: description.trim() || undefined,
+      status,
+      repositoryUrl: repositoryUrl.trim() || undefined,
+      projectUrl: projectUrl.trim() || undefined,
+      technologies: technologies
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean),
+      teamIds,
+      startDate: startDate || undefined,
+      endDate: endDate || undefined,
+    })
+  }
+
+  function toggleTeam(id: string) {
+    setTeamIds((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]))
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+      {err && <p className="text-destructive text-sm">{err}</p>}
+      <div className="space-y-1">
+        <label className="text-sm font-medium">Name *</label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Project name" />
+      </div>
+      <div className="space-y-1">
+        <label className="text-sm font-medium">Description</label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="What does this project do?"
+          rows={2}
+          className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Status</label>
+          <select
+            value={status}
+            onChange={(e) => setStatus(e.target.value as ProjectStatus)}
+            className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 text-sm focus:ring-2 focus:outline-none"
+          >
+            {PROJECT_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s.replace('_', ' ')}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Technologies</label>
+          <Input
+            value={technologies}
+            onChange={(e) => setTechnologies(e.target.value)}
+            placeholder="React, Java, …"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Repo URL</label>
+          <Input
+            value={repositoryUrl}
+            onChange={(e) => setRepositoryUrl(e.target.value)}
+            placeholder="https://github.com/…"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Live URL</label>
+          <Input
+            value={projectUrl}
+            onChange={(e) => setProjectUrl(e.target.value)}
+            placeholder="https://…"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Start Date</label>
+          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <label className="text-sm font-medium">End Date</label>
+          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        </div>
+      </div>
+      {teams.length > 0 && (
+        <div className="space-y-1">
+          <label className="text-sm font-medium">Teams</label>
+          <div className="border-input max-h-32 space-y-1 overflow-y-auto rounded-md border p-2">
+            {teams.map((t) => (
+              <label
+                key={t.id}
+                className="hover:bg-muted flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={teamIds.includes(t.id)}
+                  onChange={() => toggleTeam(t.id)}
+                />
+                {t.name}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="flex justify-end gap-2 pt-2">
+        <Button type="button" variant="outline" onClick={onCancel} disabled={loading}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={loading}>
+          {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {initial ? 'Update' : 'Create'}
         </Button>
       </div>
     </form>
@@ -408,7 +573,7 @@ export default function AdminOrganizationsPage() {
   const [expandedDepts, setExpandedDepts] = useState<Set<string>>(new Set())
 
   // Active tab
-  const [tab, setTab] = useState<'departments' | 'teams'>('departments')
+  const [tab, setTab] = useState<'departments' | 'teams' | 'projects'>('departments')
 
   // Dialogs
   const [deptDialog, setDeptDialog] = useState<{
@@ -432,20 +597,29 @@ export default function AdminOrganizationsPage() {
     teamName: string
   } | null>(null)
 
+  // Projects
+  const [projects, setProjects] = useState<ProjectResponse[]>([])
+  const [projectDialog, setProjectDialog] = useState<{
+    open: boolean
+    editing: ProjectResponse | null
+  }>({ open: false, editing: null })
+
   // -- Data loading ---------------------------------------------------------
 
   const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [depts, allTeams, allUsers] = await Promise.all([
+      const [depts, allTeams, allUsers, allProjects] = await Promise.all([
         departmentApi.getAll(),
         teamApi.getAll(),
         userApi.getAll(),
+        projectApi.getAll(),
       ])
       setDepartments(depts)
       setTeams(allTeams)
       setUsers(allUsers)
+      setProjects(allProjects)
     } catch (e: any) {
       setError(e.message ?? 'Failed to load data')
     } finally {
@@ -529,6 +703,35 @@ export default function AdminOrganizationsPage() {
     setDeleteDialog(null)
   }
 
+  // -- Project actions -------------------------------------------------------
+
+  async function handleSaveProject(data: ProjectRequest) {
+    setSaving(true)
+    try {
+      if (projectDialog.editing) {
+        const updated = await projectApi.update(projectDialog.editing.id, data)
+        setProjects((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+      } else {
+        const created = await projectApi.create(data)
+        setProjects((prev) => [...prev, created])
+      }
+      setProjectDialog({ open: false, editing: null })
+    } catch (e: any) {
+      alert(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteProject(id: string) {
+    try {
+      await projectApi.delete(id)
+      setProjects((prev) => prev.filter((p) => p.id !== id))
+    } catch (e: any) {
+      alert(e.message)
+    }
+  }
+
   // -- Derived --------------------------------------------------------------
 
   function teamsForDept(deptId: string) {
@@ -606,11 +809,11 @@ export default function AdminOrganizationsPage() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
               <div className="rounded-lg bg-green-500/10 p-2">
-                <CheckCircle className="h-5 w-5 text-green-500" />
+                <FolderCog className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                <p className="text-2xl font-bold">{departments.filter((d) => d.isActive).length}</p>
-                <p className="text-muted-foreground text-xs">Active Depts</p>
+                <p className="text-2xl font-bold">{projects.length}</p>
+                <p className="text-muted-foreground text-xs">Projects</p>
               </div>
             </div>
           </CardContent>
@@ -619,7 +822,7 @@ export default function AdminOrganizationsPage() {
 
       {/* Tabs */}
       <div className="border-border flex gap-1 border-b">
-        {(['departments', 'teams'] as const).map((t) => (
+        {(['departments', 'teams', 'projects'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -1033,6 +1236,96 @@ export default function AdminOrganizationsPage() {
         </Card>
       )}
 
+      {/* -- Projects Tab ------------------------------------------------------- */}
+      {tab === 'projects' && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-4">
+            <div>
+              <CardTitle className="text-base">Projects</CardTitle>
+              <CardDescription>{projects.length} total</CardDescription>
+            </div>
+            <Button size="sm" onClick={() => setProjectDialog({ open: true, editing: null })}>
+              <Plus className="mr-2 h-4 w-4" /> New Project
+            </Button>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Teams</TableHead>
+                  <TableHead>Technologies</TableHead>
+                  <TableHead className="w-12" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {projects.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-muted-foreground py-12 text-center">
+                      No projects yet. Create your first one.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {projects.map((project) => (
+                  <TableRow key={project.id} className="hover:bg-muted/30">
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{project.name}</p>
+                        {project.description && (
+                          <p className="text-muted-foreground max-w-xs truncate text-xs">
+                            {project.description}
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className="text-xs">
+                        {project.status.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-muted-foreground text-xs">
+                        {project.teams?.map((t) => t.name).join(', ') || '—'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-muted-foreground text-xs">
+                        {project.technologies?.slice(0, 3).join(', ') || '—'}
+                        {project.technologies?.length > 3 && ` +${project.technologies.length - 3}`}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => setProjectDialog({ open: true, editing: project })}
+                          >
+                            <Edit2 className="mr-2 h-4 w-4" /> Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => handleDeleteProject(project.id)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
       {/* -- Department Dialog ------------------------------------------------- */}
       <Dialog
         open={deptDialog.open}
@@ -1110,6 +1403,30 @@ export default function AdminOrganizationsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* -- Project Dialog ---------------------------------------------------- */}
+      <Dialog
+        open={projectDialog.open}
+        onOpenChange={(open) => !open && setProjectDialog({ open: false, editing: null })}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{projectDialog.editing ? 'Edit Project' : 'New Project'}</DialogTitle>
+            <DialogDescription>
+              {projectDialog.editing
+                ? 'Update project details.'
+                : 'Create a new software project and assign teams to it.'}
+            </DialogDescription>
+          </DialogHeader>
+          <ProjectForm
+            initial={projectDialog.editing}
+            teams={teams}
+            onSave={handleSaveProject}
+            onCancel={() => setProjectDialog({ open: false, editing: null })}
+            loading={saving}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* -- Members Modal ---------------------------------------------------- */}
       {membersModal && (

@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import tn.moonside.userservice.dtos.responses.ActivityStatsResponse;
 import tn.moonside.userservice.dtos.responses.ApiResponse;
 import tn.moonside.userservice.dtos.responses.AuditLogResponse;
 import tn.moonside.userservice.security.AppPermission;
@@ -34,7 +35,7 @@ public class AuditLogController {
      * Requires AUDIT_LOG_READ permission.
      */
     @GetMapping
-    @RequiresPermission(AppPermission.AUDIT_LOG_READ)
+    @RequiresPermission(AppPermission.AUDIT_LOG_VIEW)
     public ResponseEntity<ApiResponse<Page<AuditLogResponse>>> getAll(
             @RequestParam(defaultValue = "0")  int page,
             @RequestParam(defaultValue = "20") int size,
@@ -67,7 +68,7 @@ public class AuditLogController {
      * Requires AUDIT_LOG_STATS permission.
      */
     @GetMapping("/stats")
-    @RequiresPermission(AppPermission.AUDIT_LOG_STATS)
+    @RequiresPermission(AppPermission.AUDIT_LOG_VIEW_STATS)
     public ResponseEntity<ApiResponse<Map<String, Long>>> stats() {
         Map<String, Long> stats = Map.of(
                 "total",   auditLogService.countTotal(),
@@ -75,5 +76,17 @@ public class AuditLogController {
                 "failure", auditLogService.countFailure()
         );
         return ResponseEntity.ok(ApiResponse.success(stats, "Stats retrieved"));
+    }
+
+    /**
+     * Real "hours of activity on the website" plus login/action breakdowns
+     * for the admin back-office dashboard, computed from actual audit log timestamps.
+     * GET /audit-logs/stats/activity
+     * Requires AUDIT_LOG_STATS permission.
+     */
+    @GetMapping("/stats/activity")
+    @RequiresPermission(AppPermission.AUDIT_LOG_VIEW_STATS)
+    public ResponseEntity<ApiResponse<ActivityStatsResponse>> activityStats() {
+        return ResponseEntity.ok(ApiResponse.success(auditLogService.getActivityStats(), "Activity stats retrieved"));
     }
 }

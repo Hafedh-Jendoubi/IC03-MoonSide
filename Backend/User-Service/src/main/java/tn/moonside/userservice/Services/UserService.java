@@ -15,6 +15,7 @@ public interface UserService {
     List<UserResponse> getAllUsers();
     UserResponse updateUser(String id, UpdateUserRequest request, String currentUserEmail);
     UserResponse updateAvatar(String email, String avatarUrl);
+    UserResponse updateBanner(String email, String bannerUrl);
     void deleteUser(String id);
     void assignRole(String userId, AssignRoleRequest request);
     void revokeRole(String userId, String roleId);
@@ -26,4 +27,6 @@ public interface UserService {
     List<String> getUserRoleNames(String userId);
     UserResponse inviteUser(InviteUserRequest request);
     BulkInviteResult bulkInviteFromExcel(MultipartFile file);
+    /** Search users by name prefix for mention autocomplete (max 10 results). */
+    List<UserResponse> searchByName(String query);
 }
