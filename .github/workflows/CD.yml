@@ -162,10 +162,13 @@ jobs:
           username: ${{ env.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - uses: docker/build-push-action@v5
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
         with:
           context: ${{ matrix.service.path }}
           push: true
+          build-args: |
+            ${{ matrix.service.name == 'frontend' && format('NEXT_PUBLIC_API_URL=https://moonside-gateway.onrender.com') || '' }}
           tags: |
             ${{ env.DOCKERHUB_USERNAME }}/moonside-${{ matrix.service.name }}:${{ needs.prepare.outputs.tag }}
             ${{ env.DOCKERHUB_USERNAME }}/moonside-${{ matrix.service.name }}:${{ needs.prepare.outputs.sha }}
