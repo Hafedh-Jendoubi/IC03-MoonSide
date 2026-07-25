@@ -105,12 +105,6 @@
         </dependency>
 
 
-        <!-- Spring Mail (for password reset OTP emails) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-mail</artifactId>
-        </dependency>
-
         <!-- Apache Commons Codec (Base32 for TOTP secret) -->
         <dependency>
             <groupId>commons-codec</groupId>
@@ -129,12 +123,6 @@
             <version>3.5.3</version>
         </dependency>
 
-
-        <!-- Spring Boot Mail (for password-reset OTP emails) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-mail</artifactId>
-        </dependency>
 
         <!-- Apache Commons Codec (Base32 for TOTP secret encoding) -->
         <dependency>

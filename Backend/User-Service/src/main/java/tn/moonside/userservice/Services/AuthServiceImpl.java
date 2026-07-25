@@ -17,11 +17,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.binary.Base32;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import tn.moonside.userservice.email.EmailService;
 import tn.moonside.userservice.email.EmailTemplates;
 
-import jakarta.mail.internet.MimeMessage;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -56,7 +54,7 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
-    private final JavaMailSender mailSender;
+    private final EmailService emailService;
     private final AuditLogService auditLogService;
     // ── Redis OTP service (replaces OTP fields on the User document) ──────────
     private final OtpRedisService otpRedisService;
@@ -64,9 +62,6 @@ public class AuthServiceImpl implements AuthService {
 
     @Value("${app.name:WorkSphere}")
     private String appName;
-
-    @Value("${spring.mail.username}")
-    private String mailFrom;
 
     // ─── Register ─────────────────────────────────────────────────────────────
 
@@ -503,18 +498,7 @@ public class AuthServiceImpl implements AuthService {
      * with a plain-text fallback for clients that don't render HTML.
      */
     private void sendHtmlEmail(String to, String subject, String textFallback, String html) {
-        try {
-            MimeMessage mimeMessage = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
-            helper.setFrom(mailFrom);
-            helper.setTo(to);
-            helper.setSubject(subject);
-            helper.setText(textFallback, html);
-            mailSender.send(mimeMessage);
-        } catch (Exception e) {
-            log.error("Failed to send email to {}: {}", to, e.getMessage(), e);
-            throw new RuntimeException("Failed to send email", e);
-        }
+        emailService.sendHtmlEmail(to, subject, textFallback, html);
     }
 
     private String generateTotpSecret() {
