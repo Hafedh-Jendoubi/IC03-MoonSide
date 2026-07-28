@@ -41,14 +41,22 @@ public class MinioConfig {
 
         MinioClient client = builder.build();
 
-        // Create bucket if it doesn't exist (no-op if it already does, e.g. B2
-        // buckets you created manually through the web console).
-        boolean exists = client.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
-        if (!exists) {
-            client.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
-            log.info("Created bucket: {}", bucket);
-        } else {
-            log.info("Bucket already exists: {}", bucket);
+        // Best-effort only: some B2 application keys are restricted to a
+        // single bucket and don't grant bucket-management permissions
+        // (HeadBucket/CreateBucket), even though they work fine for the
+        // actual file uploads/downloads this app needs. Since the bucket is
+        // created manually in the B2 console anyway, we don't want a denied
+        // management call here to crash the whole app at startup.
+        try {
+            boolean exists = client.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
+            if (!exists) {
+                client.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
+                log.info("Created bucket: {}", bucket);
+            } else {
+                log.info("Bucket already exists: {}", bucket);
+            }
+        } catch (Exception e) {
+            log.warn("Skipping bucket existence/create check (likely a restricted app key — this is fine if the bucket already exists): {}", e.getMessage());
         }
 
         // NOTE: no public-read bucket policy is applied here anymore.
