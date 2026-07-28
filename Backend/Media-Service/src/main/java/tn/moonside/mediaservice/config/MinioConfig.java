@@ -3,7 +3,6 @@ package tn.moonside.mediaservice.config;
 import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
-import io.minio.SetBucketPolicyArgs;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -25,52 +24,37 @@ public class MinioConfig {
     @Value("${minio.bucket}")
     private String bucket;
 
+    // Only relevant for real AWS-style S3 providers (e.g. Backblaze B2) that
+    // require a region. Local MinIO ignores this. Leave blank for local dev.
+    @Value("${minio.region:}")
+    private String region;
+
     @Bean
     public MinioClient minioClient() throws Exception {
-        MinioClient client = MinioClient.builder()
+        MinioClient.Builder builder = MinioClient.builder()
                 .endpoint(endpoint)
-                .credentials(accessKey, secretKey)
-                .build();
+                .credentials(accessKey, secretKey);
 
-        // Create bucket if it doesn't exist
+        if (region != null && !region.isBlank()) {
+            builder.region(region);
+        }
+
+        MinioClient client = builder.build();
+
+        // Create bucket if it doesn't exist (no-op if it already does, e.g. B2
+        // buckets you created manually through the web console).
         boolean exists = client.bucketExists(BucketExistsArgs.builder().bucket(bucket).build());
         if (!exists) {
             client.makeBucket(MakeBucketArgs.builder().bucket(bucket).build());
-            log.info("Created MinIO bucket: {}", bucket);
+            log.info("Created bucket: {}", bucket);
         } else {
-            log.info("MinIO bucket already exists: {}", bucket);
+            log.info("Bucket already exists: {}", bucket);
         }
 
-        // Always (re-)apply the public-read policy.
-        // This ensures the policy is set even if the bucket was created
-        // by a previous run that didn't apply it.
-        applyPublicReadPolicy(client);
-
+        // NOTE: no public-read bucket policy is applied here anymore.
+        // The bucket is PRIVATE (Backblaze B2 requires card verification to
+        // make a bucket public). Files are instead served through our own
+        // /media/file/** streaming endpoint — see MediaController.
         return client;
-    }
-
-    private void applyPublicReadPolicy(MinioClient client) throws Exception {
-        // Use plain "*" for Principal — MinIO requires this format, not {"AWS":["*"]}
-        String policy = String.format("""
-                {
-                  "Version": "2012-10-17",
-                  "Statement": [
-                    {
-                      "Effect": "Allow",
-                      "Principal": "*",
-                      "Action": "s3:GetObject",
-                      "Resource": "arn:aws:s3:::%s/*"
-                    }
-                  ]
-                }
-                """, bucket);
-
-        client.setBucketPolicy(
-                SetBucketPolicyArgs.builder()
-                        .bucket(bucket)
-                        .config(policy)
-                        .build()
-        );
-        log.info("Public-read policy applied to bucket: {}", bucket);
     }
 }
