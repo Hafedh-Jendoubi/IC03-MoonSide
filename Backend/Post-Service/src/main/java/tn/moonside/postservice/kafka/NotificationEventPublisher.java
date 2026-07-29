@@ -26,7 +26,7 @@ public class NotificationEventPublisher {
             kafkaTemplate.send(notificationsTopic, event.getRecipientId(), event)
                     .whenComplete((result, ex) -> {
                         if (ex != null) {
-                            log.error("Failed to publish notification event: {}", ex.getMessage());
+                            log.error("Failed to publish notification event", ex);
                         } else {
                             log.debug("Notification event published: type={} recipient={}",
                                     event.getNotificationType(), event.getRecipientId());
@@ -34,7 +34,7 @@ public class NotificationEventPublisher {
                     });
         } catch (Exception e) {
             // Notification failures must NEVER break the main flow
-            log.error("Error publishing notification event: {}", e.getMessage());
+            log.error("Error publishing notification event", e);
         }
     }
 }
