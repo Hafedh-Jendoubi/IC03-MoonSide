@@ -1,8 +1,10 @@
 package tn.moonside.postservice.services;
 
+import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import io.minio.http.Method;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -104,7 +106,10 @@ public class PostAttachmentService {
 
         uploadToMinio(file, objectKey, contentType, fileSize);
 
-        String fileURL = publicEndpoint + "/" + bucket + "/" + objectKey;
+        // Note: the bucket is private, so we don't store a permanent public URL here.
+        // A fresh pre-signed URL is generated on every read in toResponse(), since
+        // pre-signed URLs expire and can't be safely persisted long-term.
+        String fileURL = generatePresignedUrl(objectKey);
         Attachment saved = attachmentRepository.save(
                 Attachment.builder()
                         .postId(postId)
@@ -172,6 +177,29 @@ public class PostAttachmentService {
         } catch (Exception e) {
             log.error("MinIO upload failed [{}]: {}", objectKey, e.getMessage());
             throw new RuntimeException("Failed to upload file to storage: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Generates a temporary, signed download URL for a private-bucket object.
+     * Works with any bucket privacy setting (no public bucket policy needed,
+     * no cost, no billing info required) — Backblaze B2 fully supports this
+     * via its S3-compatible API. Default expiry: 24 hours.
+     */
+    private String generatePresignedUrl(String objectKey) {
+        try {
+            return minioClient.getPresignedObjectUrl(
+                    GetPresignedObjectUrlArgs.builder()
+                            .method(Method.GET)
+                            .bucket(bucket)
+                            .object(objectKey)
+                            .expiry(60 * 60 * 24) // 24 hours (seconds); max allowed is 7 days
+                            .build()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to generate pre-signed URL for [{}]: {}", objectKey, e.getMessage());
+            // Fallback to a raw URL (only useful if the bucket is actually public)
+            return publicEndpoint + "/" + bucket + "/" + objectKey;
         }
     }
 
@@ -252,7 +280,7 @@ public class PostAttachmentService {
                 .postId(a.getPostId())
                 .uploaderId(a.getUploaderId())
                 .fileName(a.getFileName())
-                .fileURL(a.getFileURL())
+                .fileURL(generatePresignedUrl(a.getObjectKey()))
                 .fileSizeBytes(a.getFileSizeBytes())
                 .contentType(a.getContentType())
                 .attachmentType(a.getAttachmentType())

@@ -45,7 +45,15 @@ public class MinioConfig {
             log.info("MinIO bucket already exists: {}", bucket);
         }
 
-        applyPublicReadPolicy(client);
+        try {
+            applyPublicReadPolicy(client);
+        } catch (Exception e) {
+            // Backblaze B2's S3-compatible API does not implement SetBucketPolicy
+            // ("This API call is not supported."). Bucket-level public/private access
+            // on B2 must be configured in the B2 console (Bucket Settings) instead.
+            log.warn("Could not apply bucket policy on {} (this is expected on providers " +
+                    "like Backblaze B2 that don't support SetBucketPolicy): {}", bucket, e.getMessage());
+        }
         return client;
     }
 
