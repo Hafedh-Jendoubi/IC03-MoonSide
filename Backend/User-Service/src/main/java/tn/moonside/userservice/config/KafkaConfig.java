@@ -22,16 +22,16 @@ public class KafkaConfig {
     @Bean
     public NewTopic notificationsTopic() {
         return TopicBuilder.name(notificationsTopic)
-                .partitions(3)
-                .replicas(1)
+                .partitions(2)
+                .replicas(2)
                 .build();
     }
 
     @Bean
     public NewTopic userActivityTopic() {
         return TopicBuilder.name(userActivityTopic)
-                .partitions(3)
-                .replicas(1)
+                .partitions(2)
+                .replicas(2)
                 .build();
     }
 
