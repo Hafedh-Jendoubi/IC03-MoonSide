@@ -27,14 +27,14 @@ public class NotificationEventPublisher {
             kafkaTemplate.send(notificationsTopic, event.getRecipientId(), event)
                     .whenComplete((result, ex) -> {
                         if (ex != null) {
-                            log.error("Failed to publish notification event", ex);
+                            log.error("Failed to publish notification event: {}", ex.getMessage());
                         } else {
                             log.debug("Notification event published: type={} recipient={}",
                                     event.getNotificationType(), event.getRecipientId());
                         }
                     });
         } catch (Exception e) {
-            log.error("Error publishing notification event", e);
+            log.error("Error publishing notification event: {}", e.getMessage());
         }
     }
 }

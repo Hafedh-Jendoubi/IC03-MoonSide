@@ -29,16 +29,16 @@ public class UserActivityEventPublisher {
                 userActivityKafkaTemplate.send(userActivityTopic, event.getUserId(), event)
                         .whenComplete((result, ex) -> {
                             if (ex != null) {
-                                log.warn("Failed to publish user activity event type={} user={}",
-                                        event.getActivityType(), event.getUserId(), ex);
+                                log.warn("Failed to publish user activity event type={} user={}: {}",
+                                        event.getActivityType(), event.getUserId(), ex.getMessage());
                             } else {
                                 log.debug("User activity event published: type={} user={}",
                                         event.getActivityType(), event.getUserId());
                             }
                         });
             } catch (Exception e) {
-                log.warn("Error publishing user activity event type={} user={}",
-                        event.getActivityType(), event.getUserId(), e);
+                log.warn("Error publishing user activity event type={} user={}: {}",
+                        event.getActivityType(), event.getUserId(), e.getMessage());
             }
         });
     }

@@ -21,9 +21,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Value;
-import tn.moonside.userservice.email.EmailService;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import tn.moonside.userservice.email.EmailTemplates;
 
+import jakarta.mail.internet.MimeMessage;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,11 +55,14 @@ public class UserServiceImpl implements UserService {
     private final PermissionRepository permissionRepository;
     private final AuditLogService auditLogService;
     private final PasswordEncoder passwordEncoder;
-    private final EmailService emailService;
+    private final JavaMailSender mailSender;
     private final UserActivityEventPublisher userActivityPublisher;
 
     @Value("${app.name:WorkSphere}")
     private String appName;
+
+    @Value("${spring.mail.username}")
+    private String mailFrom;
 
     @Value("${app.frontend-url:http://localhost:3000}")
     private String frontendUrl;
@@ -245,8 +250,19 @@ public class UserServiceImpl implements UserService {
             "If you did not expect this email, please contact your administrator.\n\n" +
             "— The " + appName + " Team";
 
-        emailService.sendHtmlEmail(to, appName + " — Your account has been created", textFallback, html);
-        log.info("Invitation email sent to {}", to);
+        try {
+            MimeMessage mimeMessage = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
+            helper.setFrom(mailFrom);
+            helper.setTo(to);
+            helper.setSubject(appName + " — Your account has been created");
+            helper.setText(textFallback, html);
+            mailSender.send(mimeMessage);
+            log.info("Invitation email sent to {}", to);
+        } catch (Exception e) {
+            log.error("Failed to send invitation email to {}: {}", to, e.getMessage(), e);
+            throw new RuntimeException("Failed to send invitation email", e);
+        }
     }
 
     @Override

@@ -32,11 +32,8 @@ public class MediaServiceImpl implements MediaService {
     @Value("${minio.bucket}")
     private String bucket;
 
-    // Public base URL of THIS app (gateway URL in prod, localhost in dev).
-    // We build image URLs pointing at our own streaming endpoint since the
-    // B2 bucket itself is private.
-    @Value("${app.public-base-url}")
-    private String publicBaseUrl;
+    @Value("${minio.public-endpoint}")
+    private String publicEndpoint;
 
     @Override
     public MediaResponse upload(MultipartFile file, String context, String uploaderEmail) {
@@ -73,9 +70,7 @@ public class MediaServiceImpl implements MediaService {
         }
 
         // ── Persist metadata ──────────────────────────────────────────────────
-        // Not a direct bucket URL (bucket is private) — routed through our
-        // own streaming endpoint, which fetches from B2 server-side.
-        String url = publicBaseUrl + "/media/file/" + objectKey;
+        String url = publicEndpoint + "/" + bucket + "/" + objectKey;
 
         MediaFile mediaFile = MediaFile.builder()
                 .uploadedBy(uploaderEmail)

@@ -17,10 +17,6 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Declare build argument for API URL
-ARG NEXT_PUBLIC_API_URL
-# Set environment variable from build argument
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 # Disable telemetry (optional)
 ENV NEXT_TELEMETRY_DISABLED=1
 
@@ -45,10 +41,4 @@ USER nextjs
 
 EXPOSE 3000
 
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
-
-# HOSTNAME is force-set inline as well, since some platforms (e.g. Render)
-# inject their own HOSTNAME env var at container start, which would
-# otherwise override the Dockerfile ENV above and break binding.
-CMD ["sh", "-c", "HOSTNAME=0.0.0.0 node server.js"]
+CMD ["node", "server.js"]

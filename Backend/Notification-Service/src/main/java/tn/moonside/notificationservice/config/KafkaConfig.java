@@ -1,18 +1,26 @@
 package tn.moonside.notificationservice.config;
 
+import org.apache.kafka.clients.admin.NewTopic;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.config.TopicBuilder;
 
-/**
- * NOTE: Topic auto-creation via a NewTopic bean was removed.
- * On startup, Spring's KafkaAdmin uses any NewTopic bean to call the
- * broker's admin API and create/verify the topic. Against Aiven this
- * admin call was failing (permissions/replication-factor mismatch),
- * which crashed the whole ApplicationContext before the app could
- * even start (post-service never hit this because it has no NewTopic
- * bean). The "notifications-events" topic already exists — it's
- * created and used by post-service — so notification-service just
- * needs to consume/produce to it, not manage it.
- */
 @Configuration
 public class KafkaConfig {
+
+    @Value("${kafka.topic.notifications:notifications-events}")
+    private String notificationsTopic;
+
+    /**
+     * Auto-create the topic if it doesn't exist yet.
+     * Uses 3 partitions so multiple consumer instances can scale out.
+     */
+    @Bean
+    public NewTopic notificationsTopic() {
+        return TopicBuilder.name(notificationsTopic)
+                .partitions(3)
+                .replicas(1)
+                .build();
+    }
 }
